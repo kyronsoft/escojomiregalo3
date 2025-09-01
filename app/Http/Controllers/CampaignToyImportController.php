@@ -73,7 +73,7 @@ class CampaignToyImportController extends Controller
             campaignId: $campaign->id,
             tmpPath: $tmpPath,
             jobId: $jobId
-        )->onQueue('default');
+        )->onQueue('referencias');
 
         return response()->json([
             'job_id'  => $jobId,

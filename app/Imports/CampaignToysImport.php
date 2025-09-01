@@ -15,9 +15,10 @@ use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
 use Maatwebsite\Excel\Row;
 
-class CampaignToysImport implements OnEachRow, WithHeadingRow, SkipsOnFailure, SkipsEmptyRows, WithBatchInserts, WithChunkReading
+class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFormulas, SkipsOnFailure, SkipsEmptyRows, WithBatchInserts, WithChunkReading
 {
     use Importable, SkipsFailures;
 

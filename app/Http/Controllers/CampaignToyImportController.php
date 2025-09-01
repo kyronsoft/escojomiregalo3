@@ -2,23 +2,30 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ImportAndDownloadCampaignToysJob;
 use App\Models\Campaign;
-use Illuminate\Support\Str;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
-use App\Jobs\ImportAndDownloadCampaignToysJob;
+use Illuminate\Support\Str;
+
+// 👇 PhpSpreadsheet para prevalidación del archivo
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class CampaignToyImportController extends Controller
 {
     public function showForm()
     {
-        return view('campaign_toys.import'); // tu vista con Select2 + formulario
+        return view('campaign_toys.import');
     }
 
     /**
      * Lanza el Job en cola y devuelve jobId para hacer polling.
+     * Prevalida:
+     *  - Solo UNA hoja (XLS/XLSX).
+     *  - NO filas vacías en el bloque de datos (después del encabezado).
      */
     public function importAsync(Request $request)
     {
@@ -29,24 +36,37 @@ class CampaignToyImportController extends Controller
 
         $campaign = Campaign::findOrFail($data['idcampaign']);
 
-        // guardar archivo temporal
-        $jobId   = (string) Str::uuid();
-        $tmpPath = "tmp/imports/{$jobId}.xlsx";
-        Storage::disk('local')->put($tmpPath, file_get_contents($request->file('file')->getRealPath()));
+        // === Prevalidación del archivo ===
+        $realPath = $request->file('file')->getRealPath();
+        $ext      = strtolower($request->file('file')->getClientOriginalExtension());
 
-        // Semilla de progreso en cache (TTL 2 horas)
+        try {
+            $this->prevalidateSpreadsheet($realPath, $ext);
+        } catch (\Throwable $e) {
+            // Mensaje claro al usuario
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        // === Guardar archivo temporal
+        $jobId   = (string) Str::uuid();
+        $tmpPath = "tmp/imports/{$jobId}.{$ext}";
+        Storage::disk('local')->put($tmpPath, file_get_contents($realPath));
+
+        // === Semilla de progreso en cache (TTL 2 horas)
         $key = self::progressKey($jobId);
         Cache::put($key, [
-            'status'   => 'queued',
-            'percent'  => 0,
-            'message'  => 'En cola…',
-            'counts'   => [
+            'status'  => 'queued',
+            'percent' => 0,
+            'message' => 'En cola…',
+            'counts'  => [
                 'import' => ['created' => 0, 'updated' => 0, 'skipped' => 0],
                 'images' => ['ok' => 0, 'fail' => 0, 'toys_marked_S' => 0, 'toys_marked_N' => 0, 'processed' => 0, 'total' => 0],
             ],
         ], now()->addHours(2));
 
-        // Despachar job asíncrono
+        // === Despachar job asíncrono
         ImportAndDownloadCampaignToysJob::dispatch(
             campaignId: $campaign->id,
             tmpPath: $tmpPath,
@@ -59,6 +79,146 @@ class CampaignToyImportController extends Controller
         ]);
     }
 
+    // =========================
+    // Helpers de prevalidación
+    // =========================
+
+    /**
+     * Prevalida el archivo:
+     * - XLS/XLSX: una sola hoja y SIN filas vacías dentro del bloque de datos (desde la fila 2).
+     * - CSV: SIN filas vacías (desde línea 2).
+     *
+     * @throws \RuntimeException si no cumple las reglas
+     */
+    private function prevalidateSpreadsheet(string $realPath, string $ext): void
+    {
+        if ($ext === 'csv') {
+            $this->validateCsvNoEmptyRows($realPath);
+            return;
+        }
+
+        // Excel (xls/xlsx)
+        $reader = IOFactory::createReaderForFile($realPath);
+        $reader->setReadDataOnly(true);
+        $spreadsheet = $reader->load($realPath);
+
+        // 1) Solo una hoja
+        $sheetCount = $spreadsheet->getSheetCount();
+        if ($sheetCount !== 1) {
+            throw new \RuntimeException('El archivo debe contener exactamente UNA hoja. Elimine hojas adicionales.');
+        }
+
+        // 2) Sin filas vacías en el bloque de datos
+        $ws = $spreadsheet->getSheet(0);
+
+        // Encabezados normalizados (fila 1)
+        $highestCol   = $ws->getHighestColumn();
+        $highestIndex = Coordinate::columnIndexFromString($highestCol);
+
+        $headers = [];
+        for ($c = 1; $c <= $highestIndex; $c++) {
+            $raw = (string) $ws->getCellByColumnAndRow($c, 1)->getValue();
+            $headers[$c] = $this->normHeader($raw);
+        }
+
+        // Columnas relevantes de tu import
+        $relevantes = ['codigo', 'nombre', 'descripcion', 'genero', 'desde', 'hasta', 'unidades', 'porcentaje', 'combo'];
+        $cols = [];
+        foreach ($headers as $idx => $h) {
+            if (in_array($h, $relevantes, true)) {
+                $cols[] = $idx;
+            }
+        }
+
+        if (empty($cols)) {
+            throw new \RuntimeException('No se encontraron encabezados válidos. Asegúrese de incluir al menos "codigo" y "nombre".');
+        }
+
+        $firstEmptyRow = $this->findFirstEmptyDataRow($ws, $cols);
+        if ($firstEmptyRow !== null) {
+            throw new \RuntimeException("Se detectó al menos una fila vacía en el bloque de datos (fila {$firstEmptyRow}). Elimine TODAS las filas vacías antes de importar.");
+        }
+    }
+
+    /**
+     * Busca la primera fila vacía (todas las columnas relevantes vacías) a partir de la fila 2.
+     * Devuelve el número de fila o null si no encuentra vacías.
+     */
+    private function findFirstEmptyDataRow(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $cols): ?int
+    {
+        $highestDataRow = $ws->getHighestDataRow(); // último índice con datos
+        for ($r = 2; $r <= $highestDataRow; $r++) {
+            $allEmpty = true;
+            foreach ($cols as $c) {
+                $val = $ws->getCellByColumnAndRow($c, $r)->getCalculatedValue();
+                if (trim((string)$val) !== '') {
+                    $allEmpty = false;
+                    break;
+                }
+            }
+            if ($allEmpty) {
+                return $r;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * CSV: valida que NO haya líneas vacías después del encabezado.
+     */
+    private function validateCsvNoEmptyRows(string $realPath): void
+    {
+        $fh = fopen($realPath, 'rb');
+        if ($fh === false) {
+            throw new \RuntimeException('No se pudo leer el archivo CSV.');
+        }
+
+        // Leer encabezado
+        $header = fgetcsv($fh);
+        if ($header === false) {
+            fclose($fh);
+            throw new \RuntimeException('El CSV no contiene encabezados.');
+        }
+
+        $line = 2;
+        while (($row = fgetcsv($fh)) !== false) {
+            // Consideramos "vacía" si TODAS las celdas están vacías
+            $allEmpty = true;
+            foreach ($row as $cell) {
+                if (trim((string)$cell) !== '') {
+                    $allEmpty = false;
+                    break;
+                }
+            }
+            if ($allEmpty) {
+                fclose($fh);
+                throw new \RuntimeException("Se detectó al menos una fila vacía en el bloque de datos (línea {$line}). Elimine TODAS las filas vacías antes de importar.");
+            }
+            $line++;
+        }
+
+        fclose($fh);
+    }
+
+    /**
+     * Normaliza encabezados: minúsculas, sin tildes, espacios→guiones bajos, solo [a-z0-9_]
+     */
+    private function normHeader(string $v): string
+    {
+        $v = trim(mb_strtolower($v));
+        // reemplaza tildes
+        $v = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $v);
+        // espacios/tabs→_
+        $v = preg_replace('/\s+/', '_', $v);
+        // deja solo a-z0-9_
+        $v = preg_replace('/[^a-z0-9_]/', '', $v);
+        return $v ?: '';
+    }
+
+    // ----------------------
+    // Resto de tu controlador (progress, etc.)
+    // ----------------------
+
     public function progress(string $jobId): JsonResponse
     {
         $state = Cache::get(self::progressKey($jobId));
@@ -67,51 +227,35 @@ class CampaignToyImportController extends Controller
             return response()->json(['status' => 'unknown', 'message' => 'Job no encontrado'], 404);
         }
 
-        // Normaliza estructura
         $status  = $state['status']  ?? 'running';
         $message = $state['message'] ?? '';
         $percent = isset($state['percent']) ? (float) $state['percent'] : null;
         $meta    = is_array($state['meta'] ?? null) ? $state['meta'] : [];
 
-        // Intento de lectura flexible de total y procesados (por si guardaste con otros nombres)
-        $total = $meta['total_records']
-            ?? $state['total_records']
-            ?? $meta['total']
-            ?? $state['total']
-            ?? null;
-
-        $done = $meta['processed_records']
-            ?? $state['processed_records']
-            ?? $meta['done']
-            ?? $state['done']
-            ?? null;
+        $total = $meta['total_records'] ?? $state['total_records'] ?? $meta['total'] ?? $state['total'] ?? null;
+        $done  = $meta['processed_records'] ?? $state['processed_records'] ?? $meta['done'] ?? $state['done'] ?? null;
 
         $total = is_numeric($total) ? (int) $total : null;
         $done  = is_numeric($done)  ? (int) $done  : null;
 
-        // Si no hay percent y sí hay conteos, calcula percent ESCALADO 40→100 (la subida usa 0→40)
         if ($percent === null && $total && $total > 0 && $done !== null && $done >= 0) {
-            $proc = max(0, min(1, $done / $total));    // 0..1
-            $percent = 40 + ($proc * 60);              // 40..100
+            $proc    = max(0, min(1, $done / $total));
+            $percent = 40 + ($proc * 60);
         }
 
-        // Ajustes finales por estado
         $etaSeconds = null;
         if ($status === 'success') {
             $percent    = 100;
             $etaSeconds = 0;
         } else {
-            // ETA = (registros restantes) * 3s
             if ($total !== null && $done !== null && $total >= $done) {
                 $remaining = max(0, $total - $done);
                 $etaSeconds = $remaining * 3;
             }
         }
 
-        // Clamp y redondeo
         $percent = (float) max(0, min(100, round($percent ?? 0)));
 
-        // Ensambla respuesta consistente
         $state['status']  = $status;
         $state['message'] = $message;
         $state['percent'] = $percent;
@@ -128,9 +272,6 @@ class CampaignToyImportController extends Controller
         return response()->json($state);
     }
 
-    /**
-     * Convierte segundos a "1h 05m 03s", "5m 07s" o "12s".
-     */
     private function humanizeSeconds(int $seconds): string
     {
         if ($seconds <= 0) return '0s';
@@ -141,12 +282,8 @@ class CampaignToyImportController extends Controller
 
         $pad = static fn($n) => str_pad((string)$n, 2, '0', STR_PAD_LEFT);
 
-        if ($h > 0) {
-            return sprintf('%dh %sm %ss', $h, $pad($m), $pad($s));
-        }
-        if ($m > 0) {
-            return sprintf('%dm %ss', $m, $pad($s));
-        }
+        if ($h > 0) return sprintf('%dh %sm %ss', $h, $pad($m), $pad($s));
+        if ($m > 0) return sprintf('%dm %ss', $m, $pad($s));
         return sprintf('%ds', $s);
     }
 

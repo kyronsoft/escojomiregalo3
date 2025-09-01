@@ -126,13 +126,12 @@
                     </li>
 
                     <li class="dropdown">
-                        <a class="nav-link menu-title {{ prefixActive('/admin/importerrors') }}"
+                        <a class="nav-link menu-title {{ prefixActive('importerrors.index') }}"
                             href="javascript:void(0)">
                             <i data-feather="layout"></i>
                             <span>Utilidades</span>
                         </a>
-                        <ul class="nav-submenu menu-content"
-                            style="display: {{ prefixBlock('/admin/importerrors') }};">
+                        <ul class="nav-submenu menu-content" style="display: {{ prefixBlock('importerrors.index') }};">
                             {{-- <li>
                                 <a href="{{ route('campaign_toys.create') }}"
                                     class="{{ routeActive('campaign_toys.create') }}">
@@ -140,8 +139,8 @@
                                 </a>
                             </li> --}}
                             <li>
-                                <a href="{{ route('/admin/importerrors') }}"
-                                    class="{{ routeActive('/admin/importerrors') }}">
+                                <a href="{{ route('importerrors.index') }}"
+                                    class="{{ routeActive('importerrors.index') }}">
                                     Errores Importación
                                 </a>
                             </li>

@@ -3,21 +3,21 @@
 namespace App\Imports;
 
 use App\Models\Campaign;
-use Maatwebsite\Excel\Row;
 use App\Models\CampaignToy;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Concerns\OnEachRow;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\Importable;
-use Maatwebsite\Excel\Concerns\SkipsFailures;
+use Maatwebsite\Excel\Concerns\OnEachRow;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
+use Maatwebsite\Excel\Concerns\SkipsFailures;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Row;
 
 class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFormulas, SkipsOnFailure, SkipsEmptyRows, WithBatchInserts, WithChunkReading
 {
@@ -35,12 +35,11 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         $this->jobId    = $jobId;
     }
 
-    /** ============== Helpers ============== */
+    /** ================= Helpers ================= */
 
     private function rowIndex(Row $row): int
     {
-        // Con WithHeadingRow, getIndex() ya devuelve el número real en Excel
-        return (int)$row->getIndex();
+        return (int) $row->getIndex();
     }
 
     /** Busca el primer valor no vacío entre alias de encabezados (normaliza como string) */
@@ -50,7 +49,7 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
             if (!array_key_exists($k, $arr)) continue;
             $v = $arr[$k];
             if ($v === null) continue;
-            $s = is_string($v) ? trim($v) : trim((string)$v);
+            $s = is_string($v) ? trim($v) : trim((string) $v);
             if ($s !== '') return $s;
         }
         return '';
@@ -61,11 +60,11 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
     {
         if ($v === null || $v === '') return null;
         if (is_int($v)) return $v;
-        if (is_float($v)) return (int)round($v);
-        $s = is_string($v) ? trim($v) : (string)$v;
+        if (is_float($v)) return (int) round($v);
+        $s = is_string($v) ? trim($v) : (string) $v;
         if ($s === '') return null;
         if (!preg_match('/^-?\d+$/', $s)) return null;
-        return (int)$s;
+        return (int) $s;
     }
 
     /** Registra error en importerrors (máx 255 chars en `values`) */
@@ -80,7 +79,7 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         ]);
     }
 
-    /** Normaliza género a F/M/UNISEX, registrando si vino algo inesperado */
+    /** Normaliza género a F/M/UNISEX */
     private function normalizeGenero(string $generoRaw, int $excelRow, string $codigo): string
     {
         $g = Str::lower(trim($generoRaw));
@@ -93,15 +92,14 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
             return strtoupper($g);
         }
 
-        // Desconocido → UNISEX y lo registramos
         $this->logError($excelRow, 'genero', 'Valor de género no reconocido, se usó UNISEX.', [
-            'codigo'  => $codigo,
-            'genero'  => $generoRaw,
+            'codigo' => $codigo,
+            'genero' => $generoRaw,
         ]);
         return 'UNISEX';
     }
 
-    /** Asegura ".jpg" por parte; combos con '+' son manejados afuera */
+    /** Asegura ".jpg" por parte */
     private function ensureJpg(string $name): string
     {
         $name = trim($name);
@@ -110,7 +108,6 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         $lower = Str::lower($name);
         if (Str::endsWith($lower, '.jpg')) return $name;
 
-        // Si tiene extensión distinta, reemplazar
         if (Str::contains($name, '.')) {
             $base = substr($name, 0, strrpos($name, '.'));
             return $base . '.jpg';
@@ -118,7 +115,7 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         return $name . '.jpg';
     }
 
-    /** Construye imagenppal asegurando .jpg; retorna cadena y arreglo de partes */
+    /** Construye imagenppal asegurando .jpg; retorna [cadena, partes[]] */
     private function buildImagenPpalFromCodigo(string $codigo): array
     {
         $codigo = trim($codigo);
@@ -145,7 +142,7 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         return "campaign_toys/{$this->campaign->id}/{$file}";
     }
 
-    /** Verifica existencia de TODAS las imágenes; devuelve [allExist, missing[], checked[]] */
+    /** Verifica existencia de TODAS las imágenes */
     private function checkImages(array $files): array
     {
         $checked = [];
@@ -161,14 +158,102 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         return [count($missing) === 0, $missing, $checked];
     }
 
-    /** ============== Import logic ============== */
+    /**
+     * Normaliza el porcentaje:
+     * - No combo: devuelve "NN" (0..100) como string. Si inválido, 0 y log.
+     * - Combo: acepta "n1+n2+...". Valida cantidad = #partes; corrige tamaño (trunca/pad con 0) y valida cada valor 0..100.
+     *   Devuelve "n1+...+nk" normalizado como string. Registra errores cuando aplique.
+     */
+    private function normalizePorcentaje(
+        string $porcentajeRaw,
+        bool $isCombo,
+        int $partsCount,
+        int $excelRow,
+        string $codigo
+    ): string {
+        $raw = trim($porcentajeRaw);
+
+        // Helper para parsear un valor a 0..100 (int), default 0 con log
+        $parseOne = function (string $val, int $idx = null) use ($excelRow, $codigo): int {
+            $val = trim($val);
+            // quitar posibles símbolos %
+            $val = rtrim($val, " \t\n\r\0\x0B%");
+
+            $n = null;
+            if ($val !== '' && preg_match('/^-?\d+(\.\d+)?$/', $val)) {
+                // aceptamos decimal pero redondeamos a int
+                $f = (float) $val;
+                $n = (int) round($f);
+            }
+
+            if ($n === null || $n < 0 || $n > 100) {
+                $this->logError(
+                    $excelRow,
+                    'porcentaje',
+                    'Valor de porcentaje inválido, se usó 0.',
+                    ['codigo' => $codigo, 'input' => $val, 'parte' => $idx]
+                );
+                return 0;
+            }
+
+            return $n;
+        };
+
+        if (!$isCombo) {
+            // 1 solo valor
+            if ($raw === '') {
+                $this->logError($excelRow, 'porcentaje', 'Porcentaje vacío, se usó 0.', ['codigo' => $codigo]);
+                return '0';
+            }
+            $n = $parseOne($raw);
+            return (string) $n;
+        }
+
+        // Es combo
+        $vals = array_map('trim', explode('+', $raw));
+        $vals = array_values(array_filter($vals, fn($v) => $v !== '')); // quita vacíos explícitos
+
+        if ($partsCount <= 0) {
+            // Debería no ocurrir; por si acaso, tratamos como no-combo
+            if ($raw === '') return '0';
+            $n = $parseOne($raw);
+            return (string) $n;
+        }
+
+        // Ajuste de tamaño: debe coincidir con #partes
+        if (count($vals) !== $partsCount) {
+            $this->logError(
+                $excelRow,
+                'porcentaje',
+                "Cantidad de porcentajes no coincide con las partes del combo. Se ajustó a {$partsCount}.",
+                ['codigo' => $codigo, 'porcentaje_raw' => $porcentajeRaw, 'partes' => $partsCount]
+            );
+            if (count($vals) > $partsCount) {
+                $vals = array_slice($vals, 0, $partsCount);
+            } else {
+                // pad con "0" hasta partsCount
+                while (count($vals) < $partsCount) {
+                    $vals[] = '0';
+                }
+            }
+        }
+
+        // Normalizar cada parte 0..100
+        $norm = [];
+        foreach ($vals as $i => $v) {
+            $norm[] = (string) $parseOne($v, $i + 1);
+        }
+
+        return implode('+', $norm);
+    }
+
+    /** ================= Import logic ================= */
 
     public function onRow(Row $row)
     {
-        $excelRow = (int)$row->getIndex();
+        $excelRow = $this->rowIndex($row);
 
         try {
-            // --- tu misma lógica de normalización y upsert (sin cambios) ---
             $raw = $row->toArray();
             $R = [];
             foreach ($raw as $k => $v) {
@@ -195,8 +280,8 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
             $unidadesV   = $this->firstString($R, ['unidades', 'cantidad', 'stock', 'existencias']);
             $porcentajeV = $this->firstString($R, ['porcentaje', 'porc', 'porcentaje_descuento']);
 
-            $desde      = $this->toIntOrNull($desdeV) ?? 0;
-            $hasta      = $this->toIntOrNull($hastaV) ?? 0;
+            $desde = $this->toIntOrNull($desdeV) ?? 0;
+            $hasta = $this->toIntOrNull($hastaV) ?? 0;
             if ($this->toIntOrNull($desdeV) === null) $this->logError($excelRow, 'desde', 'Valor no numérico, se usó 0.', ['input' => $desdeV, 'codigo' => $codigo]);
             if ($this->toIntOrNull($hastaV) === null) $this->logError($excelRow, 'hasta', 'Valor no numérico, se usó 0.', ['input' => $hastaV, 'codigo' => $codigo]);
             if ($desde > $hasta) {
@@ -204,21 +289,25 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
                 [$desde, $hasta] = [$hasta, $desde];
             }
 
-            $unidades   = $this->toIntOrNull($unidadesV);
+            $unidades = $this->toIntOrNull($unidadesV);
             if ($unidades === null || $unidades < 0) {
                 $unidades = 0;
                 $this->logError($excelRow, 'unidades', 'Valor inválido, se usó 0.', ['input' => $unidadesV, 'codigo' => $codigo]);
-            }
-            $porcentaje = $this->toIntOrNull($porcentajeV);
-            if ($porcentaje === null || $porcentaje < 0 || $porcentaje > 100) {
-                $porcentaje = 0;
-                $this->logError($excelRow, 'porcentaje', 'Valor inválido, se usó 0.', ['input' => $porcentajeV, 'codigo' => $codigo]);
             }
 
             $isCombo = Str::contains($codigo, '+');
             [$imagenppal, $partes] = $this->buildImagenPpalFromCodigo($codigo);
 
-            // No forzamos existencia aquí, porque las descargará el Job MS Graph
+            // Porcentaje STRING (maneja combos con "+")
+            $porcentajeStr = $this->normalizePorcentaje(
+                porcentajeRaw: $porcentajeV,
+                isCombo: $isCombo,
+                partsCount: count($partes),
+                excelRow: $excelRow,
+                codigo: $codigo
+            );
+
+            // No forzamos existencia aquí; las descargará el Job de Microsoft Graph
             $payload = [
                 'combo'           => $isCombo ? 'COM' : 'NC',
                 'idcampaign'      => $this->campaign->id,
@@ -226,18 +315,21 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
                 'nombre'          => $nombre,
                 'imagenppal'      => $imagenppal,
                 'genero'          => $genero,
-                'desde'           => (string)$desde,
-                'hasta'           => (string)$hasta,
+                'desde'           => (string) $desde,
+                'hasta'           => (string) $hasta,
                 'unidades'        => $unidades,
                 'precio_unitario' => 0,
-                'porcentaje'      => (string)$porcentaje,
+                'porcentaje'      => $porcentajeStr,   // <-- SIEMPRE string, con "+" para combos
                 'seleccionadas'   => 0,
-                'imgexists'       => 'N', // será actualizado por DownloadCampaignToyImagesJob
+                'imgexists'       => 'N',              // será actualizado por DownloadCampaignToyImagesJob
                 'descripcion'     => $descripcion,
                 'escogidos'       => 0,
             ];
 
-            $existing = CampaignToy::where('idcampaign', $this->campaign->id)->where('referencia', $codigo)->first();
+            $existing = CampaignToy::where('idcampaign', $this->campaign->id)
+                ->where('referencia', $codigo)
+                ->first();
+
             if ($existing) {
                 $existing->update($payload);
                 $this->updated++;
@@ -247,9 +339,12 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
             }
         } catch (\Throwable $e) {
             $this->skipped++;
-            $this->logError($excelRow, 'exception', Str::limit($e->getMessage(), 255, ''), [
-                'trace' => Str::limit($e->getFile() . ':' . $e->getLine(), 255, ''),
-            ]);
+            $this->logError(
+                $excelRow,
+                'exception',
+                Str::limit($e->getMessage(), 255, ''),
+                ['trace' => Str::limit($e->getFile() . ':' . $e->getLine(), 255, '')]
+            );
         } finally {
             $this->tick(1);
         }
@@ -262,7 +357,7 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         $key   = self::progressKey($this->jobId);
         $state = Cache::get($key, []);
         $meta  = $state['meta'] ?? [];
-        $done  = (int)($meta['processed_records'] ?? 0);
+        $done  = (int) ($meta['processed_records'] ?? 0);
         $meta['processed_records'] = $done + $n;
 
         $state['meta'] = $meta;

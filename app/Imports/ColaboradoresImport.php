@@ -55,9 +55,21 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     public function rules(): array
     {
         return [
-            'documento' => ['required', 'string', 'max:15'],
+            // Validamos 'documento' con una regla cerrada que acepta string o numérico
+            'documento' => [
+                'required',
+                function (string $attribute, $value, \Closure $fail) {
+                    $doc = $this->normalizeDocumento($value);
+                    if ($doc === '') {
+                        $fail('El documento es obligatorio.');
+                        return;
+                    }
+                    if (mb_strlen($doc) > 15) {
+                        $fail('El documento no puede exceder 15 caracteres.');
+                    }
+                },
+            ],
             'nombre'    => ['required', 'string', 'max:150'],
-            // OJO: quitamos unique:users,email para permitir repetición en el archivo del MISMO colaborador
             'email'     => ['required', 'email:rfc,dns', 'max:150'],
             'direccion' => ['nullable', 'string', 'max:150'],
             'telefono'  => ['nullable', 'string', 'max:40'],
@@ -65,6 +77,38 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
             'sucursal'  => ['nullable', 'string', 'max:100'],
         ];
     }
+
+    /**
+     * Normaliza el valor del "documento" (acepta string o numérico de Excel) a string.
+     * - Si viene numérico, lo formatea sin decimales.
+     * - Si Excel lo entrega en notación científica, intenta expandirlo.
+     * - Mantiene letras si ya viene como string.
+     */
+    private function normalizeDocumento($value): string
+    {
+        if ($value === null) return '';
+
+        // Si ya es string, solo trim
+        if (is_string($value)) {
+            return trim($value);
+        }
+
+        // Si es entero, cast directo a string
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        // Si es float (Excel puede traerlo así), evitar decimales/exp. científica
+        if (is_float($value)) {
+            // sprintf a 0 decimales para quitar .0; si hubiera notación científica, la expande
+            // (puede haber pérdida de precisión en números extremadamente largos)
+            return rtrim(sprintf('%.0f', $value), '.');
+        }
+
+        // Para cualquier otro tipo, convertir y recortar
+        return trim((string) $value);
+    }
+
 
     public function customValidationAttributes(): array
     {

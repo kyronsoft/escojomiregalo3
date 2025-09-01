@@ -26,7 +26,7 @@
                     var(--secondary) 100%);
             opacity: .5;
             /* 50% */
-            z-index: 0;
+            z-index: -1;
             /* detrás */
             pointer-events: none;
             /* no interfiere */
@@ -35,7 +35,6 @@
         /* Capa de contenido por encima del fondo */
         .site-content {
             position: relative;
-            z-index: 1;
         }
 
         /* Botones por género (forzar colores) */
@@ -305,33 +304,33 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        {{-- Modal Política de Datos --}}
-        <div class="modal fade" id="modalPoliticaDatos" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
-            data-bs-keyboard="false">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content">
+    {{-- Modal Política de Datos --}}
+    <div class="modal fade" id="modalPoliticaDatos" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+        data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
 
-                    <div class="modal-header">
-                        <h5 class="modal-title">Política de tratamiento de datos</h5>
-                    </div>
-
-                    <div class="modal-body">
-                        <div style="max-height:60vh; overflow:auto;">
-                            {!! $politicaHtml !!}
-                        </div>
-                    </div>
-
-                    <div class="modal-footer">
-                        <form action="{{ route('product.aceptarPolitica') }}" method="POST" class="ms-auto">
-                            @csrf
-                            <button type="submit" class="btn btn-primary">
-                                Acepto la política
-                            </button>
-                        </form>
-                    </div>
-
+                <div class="modal-header">
+                    <h5 class="modal-title">Política de tratamiento de datos</h5>
                 </div>
+
+                <div class="modal-body">
+                    <div style="max-height:60vh; overflow:auto;">
+                        {!! $politicaHtml !!}
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <form action="{{ route('product.aceptarPolitica') }}" method="POST" class="ms-auto">
+                        @csrf
+                        <button type="submit" class="btn btn-primary">
+                            Acepto la política
+                        </button>
+                    </form>
+                </div>
+
             </div>
         </div>
     </div>

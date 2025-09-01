@@ -124,6 +124,30 @@
                             </li>
                         </ul>
                     </li>
+
+                    <li class="dropdown">
+                        <a class="nav-link menu-title {{ prefixActive('/admin/importerrors') }}"
+                            href="javascript:void(0)">
+                            <i data-feather="layout"></i>
+                            <span>Utilidades</span>
+                        </a>
+                        <ul class="nav-submenu menu-content"
+                            style="display: {{ prefixBlock('/admin/importerrors') }};">
+                            {{-- <li>
+                                <a href="{{ route('campaign_toys.create') }}"
+                                    class="{{ routeActive('campaign_toys.create') }}">
+                                    Crear Referencia
+                                </a>
+                            </li> --}}
+                            <li>
+                                <a href="{{ route('/admin/importerrors') }}"
+                                    class="{{ routeActive('/admin/importerrors') }}">
+                                    Errores Importación
+                                </a>
+                            </li>
+
+                        </ul>
+                    </li>
                 </ul>
             </div>
             <div class="right-arrow" id="right-arrow"><i data-feather="arrow-right"></i></div>

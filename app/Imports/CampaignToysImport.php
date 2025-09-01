@@ -3,33 +3,36 @@
 namespace App\Imports;
 
 use App\Models\Campaign;
+use Maatwebsite\Excel\Row;
 use App\Models\CampaignToy;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Maatwebsite\Excel\Concerns\Importable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Concerns\OnEachRow;
-use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
+use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\SkipsFailures;
+use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
+use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
-use Maatwebsite\Excel\Row;
 
 class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFormulas, SkipsOnFailure, SkipsEmptyRows, WithBatchInserts, WithChunkReading
 {
     use Importable, SkipsFailures;
 
     protected Campaign $campaign;
+    protected ?string $jobId;
     protected int $created = 0;
     protected int $updated = 0;
     protected int $skipped = 0;
 
-    public function __construct(Campaign $campaign)
+    public function __construct(Campaign $campaign, ?string $jobId = null)
     {
         $this->campaign = $campaign;
+        $this->jobId    = $jobId;
     }
 
     /** ============== Helpers ============== */
@@ -162,91 +165,60 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
 
     public function onRow(Row $row)
     {
-        $excelRow = $this->rowIndex($row);
+        $excelRow = (int)$row->getIndex();
 
         try {
-            // Normalizamos headers: Laravel Excel mantiene las llaves tal como el encabezado (saneadas).
-            // Para soportar distintos archivos, buscamos por alias.
+            // --- tu misma lógica de normalización y upsert (sin cambios) ---
             $raw = $row->toArray();
-            // Bajamos todas las llaves a snake/trim para facilitar (sin perder valores originales)
             $R = [];
             foreach ($raw as $k => $v) {
                 $key = Str::of($k)->lower()->replace(' ', '_')->replace('__', '_')->value();
                 $R[$key] = $v;
             }
 
-            // Aliases comunes (e.g. archivo "Referencias Agrosavia")
             $codigo      = $this->firstString($R, ['codigo', 'referencia', 'cod_ref', 'cod_referencia', 'sku', 'codigo_referencia']);
             $nombre      = $this->firstString($R, ['nombre', 'nombre_producto', 'producto', 'descripcion_corta', 'titulo']);
             $descripcion = $this->firstString($R, ['descripcion', 'descripcion_larga', 'detalle', 'caracteristicas', 'observaciones']);
 
             if ($codigo === '' || $nombre === '') {
                 $this->skipped++;
-                $this->logError($excelRow, 'fila', 'Faltan campos obligatorios (codigo y/o nombre).', [
-                    'codigo' => $codigo,
-                    'nombre' => $nombre,
-                ]);
+                $this->logError($excelRow, 'fila', 'Faltan campos obligatorios (codigo y/o nombre).', compact('codigo', 'nombre'));
+                $this->tick(1);
                 return;
             }
 
-            // Género (aceptamos "niña", "niño", F/M, unisex, etc.)
             $generoRaw = $this->firstString($R, ['genero', 'sexo', 'genero_nino', 'genero_niño', 'genero_objetivo']);
             $genero    = $this->normalizeGenero($generoRaw, $excelRow, $codigo);
 
-            // Rango edad y otros numéricos (acepta alias y valores no numéricos -> log + default)
             $desdeV      = $this->firstString($R, ['desde', 'edad_desde', 'edad_min', 'inicio']);
             $hastaV      = $this->firstString($R, ['hasta', 'edad_hasta', 'edad_max', 'fin']);
             $unidadesV   = $this->firstString($R, ['unidades', 'cantidad', 'stock', 'existencias']);
             $porcentajeV = $this->firstString($R, ['porcentaje', 'porc', 'porcentaje_descuento']);
 
-            $desde      = $this->toIntOrNull($desdeV);
-            $hasta      = $this->toIntOrNull($hastaV);
-            $unidades   = $this->toIntOrNull($unidadesV);
-            $porcentaje = $this->toIntOrNull($porcentajeV);
-
-            if ($desde === null) {
-                $this->logError($excelRow, 'desde', 'Valor no numérico, se usó 0.', ['input' => $desdeV, 'codigo' => $codigo]);
-                $desde = 0;
-            }
-            if ($hasta === null) {
-                $this->logError($excelRow, 'hasta', 'Valor no numérico, se usó 0.', ['input' => $hastaV, 'codigo' => $codigo]);
-                $hasta = 0;
-            }
+            $desde      = $this->toIntOrNull($desdeV) ?? 0;
+            $hasta      = $this->toIntOrNull($hastaV) ?? 0;
+            if ($this->toIntOrNull($desdeV) === null) $this->logError($excelRow, 'desde', 'Valor no numérico, se usó 0.', ['input' => $desdeV, 'codigo' => $codigo]);
+            if ($this->toIntOrNull($hastaV) === null) $this->logError($excelRow, 'hasta', 'Valor no numérico, se usó 0.', ['input' => $hastaV, 'codigo' => $codigo]);
             if ($desde > $hasta) {
-                $this->logError($excelRow, 'rango', 'Rango inválido (desde > hasta). Se intercambió.', [
-                    'desde' => $desde,
-                    'hasta' => $hasta,
-                    'codigo' => $codigo
-                ]);
+                $this->logError($excelRow, 'rango', 'Rango inválido (desde > hasta). Se intercambió.', compact('desde', 'hasta', 'codigo'));
                 [$desde, $hasta] = [$hasta, $desde];
             }
 
+            $unidades   = $this->toIntOrNull($unidadesV);
             if ($unidades === null || $unidades < 0) {
-                $this->logError($excelRow, 'unidades', 'Valor inválido, se usó 0.', ['input' => $unidadesV, 'codigo' => $codigo]);
                 $unidades = 0;
+                $this->logError($excelRow, 'unidades', 'Valor inválido, se usó 0.', ['input' => $unidadesV, 'codigo' => $codigo]);
             }
+            $porcentaje = $this->toIntOrNull($porcentajeV);
             if ($porcentaje === null || $porcentaje < 0 || $porcentaje > 100) {
-                $this->logError($excelRow, 'porcentaje', 'Valor inválido, se usó 0.', ['input' => $porcentajeV, 'codigo' => $codigo]);
                 $porcentaje = 0;
+                $this->logError($excelRow, 'porcentaje', 'Valor inválido, se usó 0.', ['input' => $porcentajeV, 'codigo' => $codigo]);
             }
 
-            // ¿Combo?
             $isCombo = Str::contains($codigo, '+');
-
-            // Imagen principal desde el código (asegurando .jpg)
             [$imagenppal, $partes] = $this->buildImagenPpalFromCodigo($codigo);
 
-            // Verificar existencia de imágenes en storage público
-            [$allExist, $missing, $checked] = $this->checkImages($partes);
-            if (!$allExist) {
-                foreach ($missing as $m) {
-                    $this->logError($excelRow, 'imagenppal', 'Imagen no encontrada en storage.', [
-                        'codigo' => $codigo,
-                        'path'   => $m,
-                    ]);
-                }
-            }
-
+            // No forzamos existencia aquí, porque las descargará el Job MS Graph
             $payload = [
                 'combo'           => $isCombo ? 'COM' : 'NC',
                 'idcampaign'      => $this->campaign->id,
@@ -260,16 +232,12 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
                 'precio_unitario' => 0,
                 'porcentaje'      => (string)$porcentaje,
                 'seleccionadas'   => 0,
-                'imgexists'       => $allExist ? 'Y' : 'N',
+                'imgexists'       => 'N', // será actualizado por DownloadCampaignToyImagesJob
                 'descripcion'     => $descripcion,
                 'escogidos'       => 0,
             ];
 
-            // UPSERT por (idcampaign + referencia)
-            $existing = CampaignToy::where('idcampaign', $this->campaign->id)
-                ->where('referencia', $codigo)
-                ->first();
-
+            $existing = CampaignToy::where('idcampaign', $this->campaign->id)->where('referencia', $codigo)->first();
             if ($existing) {
                 $existing->update($payload);
                 $this->updated++;
@@ -279,13 +247,31 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
             }
         } catch (\Throwable $e) {
             $this->skipped++;
-            $this->logError(
-                $excelRow,
-                'exception',
-                Str::limit($e->getMessage(), 255, ''),
-                ['trace' => Str::limit($e->getFile() . ':' . $e->getLine(), 255, '')]
-            );
+            $this->logError($excelRow, 'exception', Str::limit($e->getMessage(), 255, ''), [
+                'trace' => Str::limit($e->getFile() . ':' . $e->getLine(), 255, ''),
+            ]);
+        } finally {
+            $this->tick(1);
         }
+    }
+
+    private function tick(int $n): void
+    {
+        if (!$this->jobId) return;
+
+        $key   = self::progressKey($this->jobId);
+        $state = Cache::get($key, []);
+        $meta  = $state['meta'] ?? [];
+        $done  = (int)($meta['processed_records'] ?? 0);
+        $meta['processed_records'] = $done + $n;
+
+        $state['meta'] = $meta;
+        Cache::put($key, $state, now()->addHours(2));
+    }
+
+    public static function progressKey(string $jobId): string
+    {
+        return "campaign_toys:import:progress:{$jobId}";
     }
 
     public function batchSize(): int

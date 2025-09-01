@@ -119,12 +119,26 @@
             const CSRF = '{{ csrf_token() }}';
             const importUrl = '{{ route('campaign_toys.import.async') }}';
             const progUrl = '{{ route('campaign_toys.import.progress', ['jobId' => '___ID___']) }}';
-            const apiCamp = '{{ route('api.campaigns') }}'; // <<-- endpoint JSON campañas activas
+            const apiCamp = '{{ route('api.campaigns') }}';
+
             const $form = $('#form-import');
             const $camp = $('#idcampaign');
 
-            // ========== Select2: Campañas activas ==========
-            // Requiere tener los assets de Select2 cargados (CSS + JS).
+            // ---------- Util: formatear segundos a "1h 5m 03s" ----------
+            function fmtETA(totalSeconds) {
+                if (!isFinite(totalSeconds) || totalSeconds <= 0) return '—';
+                let s = Math.round(totalSeconds);
+                const h = Math.floor(s / 3600);
+                s -= h * 3600;
+                const m = Math.floor(s / 60);
+                s -= m * 60;
+                const pad = n => String(n).padStart(2, '0');
+                if (h > 0) return `${h}h ${pad(m)}m ${pad(s)}s`;
+                if (m > 0) return `${m}m ${pad(s)}s`;
+                return `${s}s`;
+            }
+
+            // ---------- Select2 campañas (igual que antes) ----------
             $camp.select2({
                 theme: 'bootstrap-5',
                 width: '100%',
@@ -138,7 +152,7 @@
                             data: params.data,
                             headers: {
                                 'Accept': 'application/json'
-                            }, // fuerza JSON
+                            },
                             cache: true
                         });
                         req.then(success);
@@ -162,7 +176,7 @@
                             q: params.term || '',
                             page: params.page || 1,
                             per_page: 20,
-                            only_active: 1 // << solo activas hoy (fechaini <= hoy <= fechafin)
+                            only_active: 1
                         };
                     },
                     processResults: function(data) {
@@ -176,40 +190,40 @@
                         };
                     }
                 }
-                // Si está dentro de modal: dropdownParent: $('#miModal')
             });
 
-            // (Opcional) Re-seleccionar si vienes de validación fallida
-            @if (old('idcampaign')) (function(){
-        const oldId = @json(old('idcampaign'));
-        const oldText = @json(old('idcampaign_text', null));
-        if (oldId) {
-          const opt = new Option(oldText || ('Campaña #' + oldId), oldId, true, true);
-          $camp.append(opt).trigger('change');
-        }
-      })(); @endif
+            @if (old('idcampaign'))
+                (function() {
+                    const oldId = @json(old('idcampaign'));
+                    const oldText = @json(old('idcampaign_text', null));
+                    if (oldId) {
+                        const opt = new Option(oldText || ('Campaña #' + oldId), oldId, true, true);
+                        $camp.append(opt).trigger('change');
+                    }
+                })();
+            @endif
 
-            // ========== BlockUI + ETA ==========
+            // ---------- BlockUI ----------
             function blockWithProgress(msg = 'En cola…', percent = 0) {
                 $.blockUI({
                     message: `
-          <div style="width:320px;max-width:92vw;">
-            <div class="text-center mb-2">
-              <div class="spinner-border" role="status" style="width:1.75rem;height:1.75rem;"></div>
+        <div style="width:320px;max-width:92vw;">
+          <div class="text-center mb-2">
+            <div class="spinner-border" role="status" style="width:1.75rem;height:1.75rem;"></div>
+          </div>
+          <div class="fw-bold text-center mb-2" id="blk-msg">${msg}</div>
+          <div class="text-center small" id="blk-eta">ETA: —</div>
+          <div class="progress" style="height:14px;">
+            <div id="blk-bar" class="progress-bar" role="progressbar" style="width:${percent}%;">
+              ${Math.round(percent)}%
             </div>
-            <div class="fw-bold text-center mb-2" id="blk-msg">${msg}</div>
-            <div class="text-center small text-light opacity-75" id="blk-eta">ETA: —</div>
-            <div class="progress" style="height:14px;">
-              <div id="blk-bar" class="progress-bar" role="progressbar" style="width:${percent}%;">
-                ${Math.round(percent)}%
-              </div>
-            </div>
-          </div>`,
+          </div>
+        </div>`,
                     css: {
                         border: 'none',
                         padding: '15px',
                         backgroundColor: '#000',
-                        opacity: 0.65,
+                        opacity: 0.75,
                         color: '#fff',
                         borderRadius: '10px'
                     },
@@ -225,12 +239,29 @@
                 }
             }
 
+            function setETA(seconds) {
+                $('#blk-eta').text('ETA: ' + fmtETA(seconds));
+            }
+
             function unblock() {
                 $.unblockUI();
             }
 
-            // ========== Polling de progreso + ETA ==========
+            // ---------- Polling + ETA ----------
             let pollTimer = null;
+            let importStartTs = null; // timestamp cuando arrancó el procesamiento
+            let knownTotal = null; // total de registros (si el backend lo expone)
+            const SECONDS_PER_RECORD = 3; // regla pedida
+
+            function pick(n, ...alts) {
+                // toma el primer número válido
+                const pool = [n, ...alts];
+                for (const v of pool) {
+                    const num = Number(v);
+                    if (isFinite(num) && num >= 0) return num;
+                }
+                return null;
+            }
 
             function startPolling(jobId) {
                 const url = progUrl.replace('___ID___', jobId);
@@ -244,9 +275,44 @@
                         }
                     }).done(function(state) {
                         updateProgress(state.message || '', state.percent ?? null);
-                        const etaText = (state && state.timing && state.timing.eta_human) ?
-                            `ETA: ${state.timing.eta_human}` : 'ETA: —';
-                        $('#blk-eta').text(etaText);
+
+                        // -------- ETA basado en total y procesados (preferido) --------
+                        const m = state.meta || {};
+                        // Trata diferentes nombres que podrías usar en el backend
+                        const total = pick(m.total_records, m.total, m.rows_total, state
+                            .total_records, state.total);
+                        const done = pick(m.processed_records, m.done, m.rows_done, state
+                            .processed_records, state.done);
+
+                        if (total !== null) knownTotal =
+                        total; // memoriza el total si llega una vez
+
+                        if (knownTotal !== null && done !== null) {
+                            const remaining = Math.max(knownTotal - done, 0);
+                            const etaSec = remaining * SECONDS_PER_RECORD;
+                            setETA(etaSec);
+                            if (!importStartTs && done > 0) importStartTs = Date
+                        .now(); // fija inicio real al primer avance
+                        } else {
+                            // -------- Fallback (aprox) si no tenemos counts del backend --------
+                            // Si hay percent, extrapola desde el primer tick en que vemos progreso
+                            const p = Number(state.percent);
+                            if (isFinite(p) && p > 0) {
+                                if (!importStartTs) importStartTs = Date.now();
+                                const elapsed = (Date.now() - importStartTs) / 1000; // s
+                                // Evita usar tramo de subida (0–40%). Considera procesamiento en 40–100%.
+                                const procP = Math.max(0, Math.min(100, p)) - 40;
+                                if (procP > 0) {
+                                    const remainingRatio = (100 - (40 + procP)) /
+                                    procP; // (restante / avanzado)
+                                    setETA(elapsed * remainingRatio);
+                                } else {
+                                    setETA(null);
+                                }
+                            } else {
+                                setETA(null);
+                            }
+                        }
 
                         if (state.status === 'success' || state.status === 'error') {
                             clearInterval(pollTimer);
@@ -257,20 +323,20 @@
                             const ttl = state.status === 'success' ? 'Proceso finalizado' :
                                 'Proceso con errores';
                             const html = `
-              <div class="text-start">
-                <p><strong>${state.message || ttl}</strong></p>
-                <ul>
-                  <li>Importación — Creados: <b>${sum.creados ?? 0}</b></li>
-                  <li>Importación — Actualizados: <b>${sum.actualizados ?? 0}</b></li>
-                  <li>Importación — Omitidos: <b>${sum.omitidos ?? 0}</b></li>
-                </ul>
-                <ul>
-                  <li>Imágenes — Descargadas (ok): <b>${img.ok ?? 0}</b></li>
-                  <li>Imágenes — No encontradas / error (fail): <b>${img.fail ?? 0}</b></li>
-                  ${img.toys_marked_S !== undefined ? `<li>Registros imgexists='S': <b>${img.toys_marked_S}</b></li>` : ''}
-                  ${img.toys_marked_N !== undefined ? `<li>Registros imgexists='N': <b>${img.toys_marked_N}</b></li>` : ''}
-                </ul>
-              </div>`;
+            <div class="text-start">
+              <p><strong>${state.message || ttl}</strong></p>
+              <ul>
+                <li>Importación — Creados: <b>${sum.creados ?? 0}</b></li>
+                <li>Importación — Actualizados: <b>${sum.actualizados ?? 0}</b></li>
+                <li>Importación — Omitidos: <b>${sum.omitidos ?? 0}</b></li>
+              </ul>
+              <ul>
+                <li>Imágenes — Descargadas (ok): <b>${img.ok ?? 0}</b></li>
+                <li>Imágenes — No encontradas / error (fail): <b>${img.fail ?? 0}</b></li>
+                ${img.toys_marked_S !== undefined ? `<li>Registros imgexists='S': <b>${img.toys_marked_S}</b></li>` : ''}
+                ${img.toys_marked_N !== undefined ? `<li>Registros imgexists='N': <b>${img.toys_marked_N}</b></li>` : ''}
+              </ul>
+            </div>`;
                             Swal.fire({
                                 icon,
                                 title: ttl,
@@ -289,7 +355,7 @@
                 }, 1200);
             }
 
-            // ========== Submit AJAX ==========
+            // ---------- Submit AJAX ----------
             $form.on('submit', function(e) {
                 e.preventDefault();
                 if (!$camp.val()) {
@@ -303,6 +369,8 @@
 
                 const fd = new FormData(this);
                 blockWithProgress('Subiendo archivo…', 5);
+                importStartTs = null;
+                knownTotal = null;
 
                 $.ajax({
                     url: importUrl,
@@ -320,7 +388,7 @@
                             xhr.upload.addEventListener('progress', function(ev) {
                                 if (ev.lengthComputable) {
                                     updateProgress('Subiendo archivo…', (ev.loaded / ev
-                                        .total) * 40); // 0→40
+                                        .total) * 40); // 0→40%
                                 }
                             });
                         }
@@ -328,6 +396,14 @@
                     }
                 }).done(function(res) {
                     updateProgress('En cola…', 40);
+                    // Si el backend ya conoce cuántas filas tiene el archivo al encolarlo, puede devolverlo aquí:
+                    // res.total_records, res.meta.total_records, etc.
+                    const tr = Number(res?.meta?.total_records ?? res?.total_records);
+                    if (isFinite(tr) && tr > 0) {
+                        knownTotal = tr;
+                        // Muestra ETA inicial (asumiendo que aún no hay procesados)
+                        setETA(tr * SECONDS_PER_RECORD);
+                    }
                     startPolling(res.job_id);
                 }).fail(function(xhr) {
                     unblock();

@@ -142,7 +142,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
         foreach ($rows as $index => $row) {
             $row = is_array($row) ? $row : $row->toArray();
             $excelRow  = $index + 2; // encabezados ocupan la fila 1
-            $documento = trim((string)($row['documento'] ?? ''));
+            $documento = $this->normalizeDocumento($row['documento'] ?? null);
             $nombre    = trim((string)($row['nombre']    ?? ''));
             $email     = trim((string)($row['email']     ?? ''));
             $direccion = trim((string)($row['direccion'] ?? ''));
@@ -282,10 +282,11 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                             'idcampaign'     => (int)$this->campaignId,
                         ],
                         [
-                            'genero'     => $child['genero'] ? (string)$child['genero'] : null,
-                            'rango_edad' => $child['rango_edad'] ? (string)$child['rango_edad'] : null,
+                            'genero'     => $this->normalizeGenero($child['genero'] ?? null), // 👈
+                            'rango_edad' => ($child['rango_edad'] ?? '') !== '' ? (string)$child['rango_edad'] : null, // 👈
                         ]
                     );
+
 
                     $this->stats['hijos']['upserts']++;
                 }
@@ -314,6 +315,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     /** Igual que antes: normaliza columnas de hijos si vienen en el archivo */
     protected function extractChildrenFromRow(array $row): array
     {
+        // Normaliza llaves a minúsculas con _ (por si no usaran HeadingRow slug)
         $lower = [];
         foreach ($row as $k => $v) {
             $key = strtolower(trim((string)$k));
@@ -323,38 +325,53 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
 
         $children = [];
 
-        $hasDirect = !empty($lower['nombre_hijo'])
-            || !empty($lower['genero'])
-            || !empty($lower['sexo'])
+        // Si viene todo en la misma fila (formato simple): hijo + edad + genero
+        $hasDirect = !empty($lower['hijo'])            // 👈 alias de nombre_hijo
+            || !empty($lower['nombre_hijo'])
+            || !empty($lower['edad'])            // 👈 alias de rango_edad
             || !empty($lower['rango_edad'])
-            || !empty($lower['rango']);
+            || !empty($lower['rango'])
+            || !empty($lower['genero'])
+            || !empty($lower['sexo']);
 
         if ($hasDirect) {
+            $nombreHijo = (string)($lower['nombre_hijo'] ?? $lower['hijo'] ?? '');
+            $rangoEdad  = (string)($lower['rango_edad']  ?? $lower['edad'] ?? $lower['rango'] ?? '');
+            $generoRaw  = (string)($lower['genero'] ?? $lower['sexo'] ?? '');
+
             $children[] = [
                 'identificacion' => (string)($lower['hijo_identificacion'] ?? $lower['hijo_documento'] ?? $lower['identificacion'] ?? $lower['documento'] ?? ''),
-                'nombre_hijo'    => (string)($lower['nombre_hijo'] ?? ''),
-                'genero'         => (string)($lower['genero'] ?? $lower['sexo'] ?? ''),
-                'rango_edad'     => (string)($lower['rango_edad'] ?? $lower['rango'] ?? ''),
+                'nombre_hijo'    => $nombreHijo,
+                'genero'         => $this->normalizeGenero($generoRaw), // 👈 normalizado
+                'rango_edad'     => $rangoEdad,
             ];
         }
 
+        // Buckets tipo nombre_hijo_1, genero_1, edad_1 ...
         $buckets = [];
         foreach ($lower as $key => $value) {
-            if (preg_match('/^(nombre_hijo|genero|sexo|rango_edad|rango)_(\d+)$/', $key, $m)) {
+            // Caso: <campo>_<n>
+            if (preg_match('/^(nombre_hijo|hijo|genero|sexo|rango_edad|edad|rango)_(\d+)$/', $key, $m)) { // 👈 añadimos hijo/edad
                 $fld = $m[1];
                 $idx = (int)$m[2];
                 $map = [
                     'nombre_hijo' => 'nombre_hijo',
+                    'hijo'        => 'nombre_hijo', // 👈 alias
                     'genero'      => 'genero',
                     'sexo'        => 'genero',
                     'rango_edad'  => 'rango_edad',
+                    'edad'        => 'rango_edad',  // 👈 alias
                     'rango'       => 'rango_edad',
                 ];
-                $buckets[$idx][$map[$fld]] = is_string($value) ? trim($value) : $value;
+                $target = $map[$fld] ?? null;
+                if ($target) {
+                    $buckets[$idx][$target] = is_string($value) ? trim($value) : $value;
+                }
                 continue;
             }
 
-            if (preg_match('/^hijo_?(\d+)_(identificacion|documento|nombre|genero|sexo|rango(?:_edad)?)$/', $key, $m)) {
+            // Caso: hijo_<n>_<campo>
+            if (preg_match('/^hijo_?(\d+)_(identificacion|documento|nombre|genero|sexo|edad|rango(?:_edad)?)$/', $key, $m)) { // 👈 añadimos edad
                 $idx = (int)$m[1];
                 $fld = $m[2];
                 $map = [
@@ -363,6 +380,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     'nombre'         => 'nombre_hijo',
                     'genero'         => 'genero',
                     'sexo'           => 'genero',
+                    'edad'           => 'rango_edad', // 👈 alias
                     'rango'          => 'rango_edad',
                     'rango_edad'     => 'rango_edad',
                 ];
@@ -376,19 +394,43 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
         if (!empty($buckets)) {
             ksort($buckets);
             foreach ($buckets as $idx => $data) {
-                $c = array_merge(['identificacion' => '', 'nombre_hijo' => '', 'genero' => '', 'rango_edad' => ''], $data);
+                $c = array_merge(
+                    ['identificacion' => '', 'nombre_hijo' => '', 'genero' => null, 'rango_edad' => ''],
+                    $data
+                );
+
+                // Normaliza género bucket
+                $c['genero'] = $this->normalizeGenero($c['genero'] ?? null);
+
                 if (($c['nombre_hijo'] ?? '') !== '') $children[] = $c;
             }
         }
 
+        // Limpieza final
         foreach ($children as &$c) {
-            $c['identificacion'] = (string)($c['identificacion'] ?? '');
-            $c['nombre_hijo']    = (string)($c['nombre_hijo'] ?? '');
-            $c['genero']         = $c['genero'] === null ? '' : (string)$c['genero'];
-            $c['rango_edad']     = $c['rango_edad'] === null ? '' : (string)$c['rango_edad'];
+            $c['identificacion'] = (string)($c['identificacion'] ?: '');
+            $c['nombre_hijo']    = (string)($c['nombre_hijo']    ?: '');
+            // $c['genero'] ya viene normalizado a 'F'/'M'/null
+            $c['rango_edad']     = ($c['rango_edad'] ?? '') === '' ? '' : (string)$c['rango_edad'];
         }
         unset($c);
 
+        // Solo hijos con nombre
         return array_values(array_filter($children, fn($c) => $c['nombre_hijo'] !== ''));
+    }
+
+
+    /** Normaliza género a 'F', 'M' o null (unisex) */
+    private function normalizeGenero($value): ?string
+    {
+        if ($value === null) return null;
+        $g = strtoupper(trim((string)$value));
+
+        // Alternativas comunes
+        if (in_array($g, ['F', 'FEMENINO', 'FEMENINA', 'NIÑA', 'NINA', 'GIRL'], true)) return 'F';
+        if (in_array($g, ['M', 'MASCULINO', 'MASCULINA', 'NIÑO', 'NINO', 'BOY'], true)) return 'M';
+
+        // 'BEBÉ', vacío u otros => unisex
+        return null;
     }
 }

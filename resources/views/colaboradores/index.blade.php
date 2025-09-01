@@ -14,7 +14,7 @@
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3 class="mb-0">Colaboradores</h3>
-            <a href="{{ route('colaboradores.create') }}" class="btn btn-primary">Nuevo colaborador</a>
+            {{-- <a href="{{ route('colaboradores.create') }}" class="btn btn-primary">Nuevo colaborador</a> --}}
         </div>
 
         {{-- Flash (también saldrá en SweetAlert2) --}}

@@ -12,6 +12,7 @@ use App\Http\Controllers\CampaignToyController;
 use App\Http\Controllers\ColaboradorController;
 use App\Http\Controllers\CustomLoginController;
 use App\Http\Controllers\ImportErrorController;
+use App\Http\Controllers\CampaignToysController;
 use App\Http\Controllers\Api\CampaignApiController;
 use App\Http\Controllers\ColaboradorHijoController;
 use App\Http\Controllers\CampaignToyImportController;

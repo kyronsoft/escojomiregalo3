@@ -36,37 +36,39 @@ class CampaignToyImportController extends Controller
 
         $campaign = Campaign::findOrFail($data['idcampaign']);
 
-        // === Prevalidación del archivo ===
         $realPath = $request->file('file')->getRealPath();
         $ext      = strtolower($request->file('file')->getClientOriginalExtension());
 
         try {
             $this->prevalidateSpreadsheet($realPath, $ext);
         } catch (\Throwable $e) {
-            // Mensaje claro al usuario
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 422);
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        // === Guardar archivo temporal
+        // NUEVO: cuenta filas de datos para sembrar total_records
+        $rowsTotal = $this->countDataRows($realPath, $ext);
+
         $jobId   = (string) Str::uuid();
         $tmpPath = "tmp/imports/{$jobId}.{$ext}";
         Storage::disk('local')->put($tmpPath, file_get_contents($realPath));
 
-        // === Semilla de progreso en cache (TTL 2 horas)
         $key = self::progressKey($jobId);
         Cache::put($key, [
             'status'  => 'queued',
             'percent' => 0,
             'message' => 'En cola…',
+            'meta'    => [
+                'total_records'     => $rowsTotal,   // 👈 sembrado
+                'processed_records' => 0,
+            ],
             'counts'  => [
                 'import' => ['created' => 0, 'updated' => 0, 'skipped' => 0],
                 'images' => ['ok' => 0, 'fail' => 0, 'toys_marked_S' => 0, 'toys_marked_N' => 0, 'processed' => 0, 'total' => 0],
             ],
+            // opcional: marca de tiempo si la quieres usar
+            'started_at' => null,
         ], now()->addHours(2));
 
-        // === Despachar job asíncrono
         ImportAndDownloadCampaignToysJob::dispatch(
             campaignId: $campaign->id,
             tmpPath: $tmpPath,
@@ -76,7 +78,73 @@ class CampaignToyImportController extends Controller
         return response()->json([
             'job_id'  => $jobId,
             'message' => 'Importación encolada',
+            // opcional, por si quieres que el front lo muestre de una:
+            'meta' => ['total_records' => $rowsTotal],
         ]);
+    }
+
+    /**
+     * Cuenta las filas con datos (excluye encabezado) respetando la misma
+     * lógica de columnas relevantes usada en la prevalidación.
+     */
+    private function countDataRows(string $realPath, string $ext): int
+    {
+        if ($ext === 'csv') {
+            $fh = fopen($realPath, 'rb');
+            if ($fh === false) return 0;
+            $count = 0;
+            $header = fgetcsv($fh);
+            if ($header === false) {
+                fclose($fh);
+                return 0;
+            }
+            while (($row = fgetcsv($fh)) !== false) {
+                $allEmpty = true;
+                foreach ($row as $cell) {
+                    if (trim((string)$cell) !== '') {
+                        $allEmpty = false;
+                        break;
+                    }
+                }
+                if (!$allEmpty) $count++;
+            }
+            fclose($fh);
+            return $count;
+        }
+
+        // xls/xlsx
+        $reader = IOFactory::createReaderForFile($realPath);
+        $reader->setReadDataOnly(true);
+        $spreadsheet = $reader->load($realPath);
+        $ws = $spreadsheet->getSheet(0);
+
+        $highestCol   = $ws->getHighestColumn();
+        $highestIndex = Coordinate::columnIndexFromString($highestCol);
+        $headers = [];
+        for ($c = 1; $c <= $highestIndex; $c++) {
+            $raw = (string) $ws->getCellByColumnAndRow($c, 1)->getValue();
+            $headers[$c] = $this->normHeader($raw);
+        }
+        $relevantes = ['codigo', 'nombre', 'descripcion', 'genero', 'desde', 'hasta', 'unidades', 'porcentaje', 'combo'];
+        $cols = [];
+        foreach ($headers as $idx => $h) if (in_array($h, $relevantes, true)) $cols[] = $idx;
+
+        if (empty($cols)) return 0;
+
+        $highestDataRow = $ws->getHighestDataRow();
+        $count = 0;
+        for ($r = 2; $r <= $highestDataRow; $r++) {
+            $allEmpty = true;
+            foreach ($cols as $c) {
+                $val = $ws->getCellByColumnAndRow($c, $r)->getCalculatedValue();
+                if (trim((string)$val) !== '') {
+                    $allEmpty = false;
+                    break;
+                }
+            }
+            if (!$allEmpty) $count++;
+        }
+        return $count;
     }
 
     // =========================

@@ -263,6 +263,19 @@
                 return null;
             }
 
+            function showETAFromState(state) {
+                const t = state && state.timing ? state.timing : {};
+                if (t.eta_human) {
+                    $('#blk-eta').text('ETA: ' + t.eta_human);
+                    return true;
+                }
+                if (t.eta_seconds != null) {
+                    $('#blk-eta').text('ETA: ' + fmtETA(Number(t.eta_seconds)));
+                    return true;
+                }
+                return false;
+            }
+
             function startPolling(jobId) {
                 const url = progUrl.replace('___ID___', jobId);
                 pollTimer = setInterval(function() {
@@ -276,35 +289,29 @@
                     }).done(function(state) {
                         updateProgress(state.message || '', state.percent ?? null);
 
-                        // -------- ETA basado en total y procesados (preferido) --------
                         const m = state.meta || {};
-                        // Trata diferentes nombres que podrías usar en el backend
                         const total = pick(m.total_records, m.total, m.rows_total, state
                             .total_records, state.total);
                         const done = pick(m.processed_records, m.done, m.rows_done, state
                             .processed_records, state.done);
 
-                        if (total !== null) knownTotal =
-                        total; // memoriza el total si llega una vez
+                        if (total !== null) knownTotal = total;
 
                         if (knownTotal !== null && done !== null) {
                             const remaining = Math.max(knownTotal - done, 0);
                             const etaSec = remaining * SECONDS_PER_RECORD;
                             setETA(etaSec);
-                            if (!importStartTs && done > 0) importStartTs = Date
-                        .now(); // fija inicio real al primer avance
+                            if (!importStartTs && done > 0) importStartTs = Date.now();
                         } else {
-                            // -------- Fallback (aprox) si no tenemos counts del backend --------
-                            // Si hay percent, extrapola desde el primer tick en que vemos progreso
+                            // Fallback con percent…
                             const p = Number(state.percent);
                             if (isFinite(p) && p > 0) {
                                 if (!importStartTs) importStartTs = Date.now();
-                                const elapsed = (Date.now() - importStartTs) / 1000; // s
-                                // Evita usar tramo de subida (0–40%). Considera procesamiento en 40–100%.
-                                const procP = Math.max(0, Math.min(100, p)) - 40;
+                                const elapsed = (Date.now() - importStartTs) / 1000;
+                                const procP = Math.max(0, Math.min(100, p)) -
+                                40; // 40–100% = procesamiento
                                 if (procP > 0) {
-                                    const remainingRatio = (100 - (40 + procP)) /
-                                    procP; // (restante / avanzado)
+                                    const remainingRatio = (100 - (40 + procP)) / procP;
                                     setETA(elapsed * remainingRatio);
                                 } else {
                                     setETA(null);

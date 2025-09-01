@@ -81,6 +81,9 @@ Route::prefix('empresas')->name('empresas.')->group(function () {
     Route::delete('/{empresa}', [EmpresaController::class, 'destroy'])->name('destroy');
 });
 
+Route::get('/campaigns/{campaign}/toys',       [CampaignToysController::class, 'index'])->name('campaigns.toys');
+Route::get('/campaigns/{campaign}/toys/data',  [CampaignToysController::class, 'data'])->name('campaigns.toys.data');
+
 Route::prefix('campaigns')->name('campaigns.')->group(function () {
     Route::get('/data', [CampaignController::class, 'data'])->name('data'); // ANTES
 

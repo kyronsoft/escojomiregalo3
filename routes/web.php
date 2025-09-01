@@ -11,6 +11,7 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CampaignToyController;
 use App\Http\Controllers\ColaboradorController;
 use App\Http\Controllers\CustomLoginController;
+use App\Http\Controllers\ImportErrorController;
 use App\Http\Controllers\Api\CampaignApiController;
 use App\Http\Controllers\ColaboradorHijoController;
 use App\Http\Controllers\CampaignToyImportController;
@@ -162,3 +163,5 @@ Route::post('/campaigns/generate-url', function (Request $request) {
     $url = url('custom-login/' . $encrypted);
     return response()->json(['url' => $url]);
 })->name('campaigns.generateCustomUrl');
+
+Route::get('/admin/importerrors', [ImportErrorController::class, 'index'])->name('importerrors.index');

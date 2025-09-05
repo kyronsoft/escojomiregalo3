@@ -38,4 +38,9 @@ class Empresa extends Model
     {
         $this->attributes['nit'] = trim((string)$value);
     }
+
+    public function users()
+    {
+        return $this->hasMany(\App\Models\User::class, 'nit', 'nit');
+    }
 }

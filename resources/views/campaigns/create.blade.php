@@ -138,7 +138,7 @@
                             </div>
 
                             <div class="col-12">
-                                <label class="form-label" for="subject">Asunto</label>
+                                <label class="form-label" for="subject">Asunto Correo Invitación</label>
                                 <input type="text" class="form-control @error('subject') is-invalid @enderror"
                                     id="subject" name="subject" maxlength="150" value="{{ old('subject') }}"
                                     required>

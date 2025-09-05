@@ -13,7 +13,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -43,12 +42,12 @@ class ImportAndDownloadCampaignToysJob implements ShouldQueue
         // -------------------------
         [$rowsTotal, $headerCols] = $this->countDataRows($absPath);
 
-        // Si ya venías sembrando algo en cache desde el controller, lo respetamos y parcheamos
+        // Semilla / parche de progreso
         $this->patchProgress([
             'status'  => 'running',
             'message' => 'Importando referencias…',
             'meta'    => [
-                'total_records'     => $rowsTotal,   // se sumarán las imágenes después
+                'total_records'     => $rowsTotal,   // + imágenes se suma luego
                 'processed_records' => 0,
             ],
             'counts'  => [
@@ -75,14 +74,19 @@ class ImportAndDownloadCampaignToysJob implements ShouldQueue
             ],
         ]);
 
+        // Referencias realmente tocadas en ESTA importación
+        $onlyRefs = $import->getTouchedRefs(); // <<-- CLAVE
+
         // -------------------------
         // 3) DESCARGA DE IMÁGENES (Microsoft Graph) + progress
         // -------------------------
-        // Calculamos total de imágenes por campaña (sumando partes de combos)
-        $imagesTotal = $this->countImagesToDownload();
-        // Sumamos al total global (filas + imágenes)
-        $state = $this->getState();
+        // Calcula total de imágenes SOLO de esas referencias
+        $imagesTotal = $this->countImagesToDownload($onlyRefs); // <<-- AJUSTE
+
+        // Suma al total global (filas + imágenes a descargar)
+        $state    = $this->getState();
         $prevTotal = (int)($state['meta']['total_records'] ?? 0);
+
         $this->patchProgress([
             'message' => 'Descargando imágenes…',
             'meta'    => [
@@ -98,8 +102,9 @@ class ImportAndDownloadCampaignToysJob implements ShouldQueue
             ],
         ]);
 
-        // Ejecuta el job de descarga (sincrónico dentro del mismo worker para continuar actualizando el progreso)
-        DownloadCampaignToyImagesJob::dispatchSync($this->campaignId, $this->jobId);
+        // Ejecuta el job de descarga SOLO para esas referencias
+        // (Asegúrate de que DownloadCampaignToyImagesJob soporte (int $campaignId, array $onlyRefs, ?string $jobId))
+        DownloadCampaignToyImagesJob::dispatchSync($this->campaignId, $onlyRefs, $this->jobId);
 
         // -------------------------
         // 4) FINAL
@@ -107,7 +112,6 @@ class ImportAndDownloadCampaignToysJob implements ShouldQueue
         $this->patchProgress([
             'status'  => 'success',
             'message' => 'Proceso finalizado.',
-            // percent lo puede calcular el controlador; si quieres, puedes forzarlo a 100 aquí también
             'percent' => 100,
         ]);
 
@@ -115,6 +119,9 @@ class ImportAndDownloadCampaignToysJob implements ShouldQueue
         Storage::disk('local')->delete($this->tmpPath);
     }
 
+    /**
+     * Cuenta filas NO vacías desde la fila 2.
+     */
     private function countDataRows(string $absPath): array
     {
         $reader = IOFactory::createReaderForFile($absPath);
@@ -125,7 +132,6 @@ class ImportAndDownloadCampaignToysJob implements ShouldQueue
         $highestCol   = $ws->getHighestColumn();
         $highestIndex = Coordinate::columnIndexFromString($highestCol);
 
-        // cuenta filas no vacías desde la 2
         $rows = 0;
         $last = $ws->getHighestDataRow();
         for ($r = 2; $r <= $last; $r++) {
@@ -142,9 +148,17 @@ class ImportAndDownloadCampaignToysJob implements ShouldQueue
         return [$rows, $highestIndex];
     }
 
-    private function countImagesToDownload(): int
+    /**
+     * Cuenta imágenes a descargar SOLO de las referencias indicadas.
+     */
+    private function countImagesToDownload(array $onlyRefs): int
     {
-        $items = CampaignToy::where('idcampaign', $this->campaignId)->get(['imagenppal', 'combo']);
+        $q = CampaignToy::where('idcampaign', $this->campaignId);
+        if (!empty($onlyRefs)) {
+            $q->whereIn('referencia', $onlyRefs);
+        }
+        $items = $q->get(['imagenppal', 'combo']);
+
         $total = 0;
         foreach ($items as $t) {
             $img = trim((string)$t->imagenppal);

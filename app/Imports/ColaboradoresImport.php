@@ -9,9 +9,7 @@ use App\Models\ColaboradorHijo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use App\Jobs\SendWelcomeCredentialsMail;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
@@ -275,15 +273,16 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                         continue;
                     }
 
+                    // en el updateOrCreate de hijos
                     ColaboradorHijo::updateOrCreate(
                         [
                             'identificacion' => $identificacion,
                             'nombre_hijo'    => (string)$child['nombre_hijo'],
-                            'idcampaign'     => (int)$this->campaignId,
+                            'idcampaing'     => (int)$this->campaignId,
                         ],
                         [
-                            'genero'     => $this->normalizeGenero($child['genero'] ?? null), // 👈
-                            'rango_edad' => ($child['rango_edad'] ?? '') !== '' ? (string)$child['rango_edad'] : null, // 👈
+                            'genero'     => $this->normalizeGenero($child['genero'] ?? null),
+                            'rango_edad' => $this->normalizeEdad($child['rango_edad'] ?? null), // <- entero o null
                         ]
                     );
 
@@ -420,17 +419,51 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     }
 
 
-    /** Normaliza género a 'F', 'M' o null (unisex) */
-    private function normalizeGenero($value): ?string
+    /** Normaliza género a 'NIÑO', 'NIÑA' o 'UNISEX' */
+    private function normalizeGenero($value): string
     {
-        if ($value === null) return null;
+        if ($value === null) return 'UNISEX';
+
         $g = strtoupper(trim((string)$value));
 
-        // Alternativas comunes
-        if (in_array($g, ['F', 'FEMENINO', 'FEMENINA', 'NIÑA', 'NINA', 'GIRL'], true)) return 'F';
-        if (in_array($g, ['M', 'MASCULINO', 'MASCULINA', 'NIÑO', 'NINO', 'BOY'], true)) return 'M';
+        // Variantes comunes para niña
+        $nina = ['F', 'FEMENINO', 'FEMENINA', 'NIÑA', 'NINA', 'GIRL', 'MUJER', 'FEMALE'];
+        // Variantes comunes para niño
+        $nino = ['M', 'MASCULINO', 'MASCULINA', 'NIÑO', 'NINO', 'BOY', 'HOMBRE', 'MALE'];
+        // Variantes de unisex
+        $uni  = ['UNISEX', 'UNI', 'U', 'AMBOS', 'MIXTO', 'BEBE', 'BEBÉ', 'BEBE/NIÑO', 'BEBE/NIÑA'];
 
-        // 'BEBÉ', vacío u otros => unisex
+        if (in_array($g, $nina, true)) return 'NIÑA';
+        if (in_array($g, $nino, true)) return 'NIÑO';
+        if (in_array($g, $uni,  true)) return 'UNISEX';
+
+        // Si llega cualquier otra cosa, considera UNISEX
+        return 'UNISEX';
+    }
+
+    /** Devuelve un entero 0–14 o NULL. Acepta "7", "7-9", "0–3", "8 años", "12+" ... */
+    private function normalizeEdad($value): ?int
+    {
+        if ($value === null) return null;
+
+        // Si viene numérico puro (int/float)
+        if (is_int($value) || is_float($value)) {
+            $n = (int)floor($value);
+            return ($n < 0) ? 0 : (($n > 14) ? 14 : $n);
+        }
+
+        // Si viene como string, busca el primer número y úsalo
+        $s = trim((string)$value);
+        if ($s === '') return null;
+
+        // Caso "7-9" / "0–3": toma el primer número encontrado
+        if (preg_match('/\d+/', $s, $m)) {
+            $n = (int)$m[0];
+            if ($n < 0) $n = 0;
+            if ($n > 14) $n = 14;
+            return $n;
+        }
+
         return null;
     }
 }

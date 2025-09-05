@@ -62,10 +62,10 @@
 
                             {{-- Campaña --}}
                             <div class="col-12 col-md-6">
-                                <label class="form-label" for="idcampaign">Campaña</label>
-                                <select id="idcampaign" name="idcampaign"
-                                    class="form-control @error('idcampaign') is-invalid @enderror"></select>
-                                @error('idcampaign')
+                                <label class="form-label" for="idcampaing">Campaña</label>
+                                <select id="idcampaing" name="idcampaing"
+                                    class="form-control @error('idcampaing') is-invalid @enderror"></select>
+                                @error('idcampaing')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
@@ -86,35 +86,31 @@
                                 <label class="form-label" for="genero">Género</label>
                                 @php $g = old('genero'); @endphp
                                 <select id="genero" name="genero"
-                                    class="form-select @error('genero') is-invalid @enderror">
-                                    <option value="" @selected($g === '')>Seleccione</option>
-                                    <option value="M" @selected($g === 'M')>Masculino</option>
-                                    <option value="F" @selected($g === 'F')>Femenino</option>
-                                    <option value="Otro" @selected($g === 'Otro')>Otro</option>
+                                    class="form-select @error('genero') is-invalid @enderror" required>
+                                    <option value="" @selected($g === '' || $g === null)>Seleccione</option>
+                                    <option value="NIÑO" @selected($g === 'NIÑO')>NIÑO</option>
+                                    <option value="NIÑA" @selected($g === 'NIÑA')>NIÑA</option>
+                                    <option value="UNISEX" @selected($g === 'UNISEX')>UNISEX</option>
                                 </select>
                                 @error('genero')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
 
-                            {{-- Rango de edad --}}
+
+                            {{-- Rango de edad (años) --}}
                             <div class="col-12 col-md-3">
-                                <label class="form-label" for="rango_edad">Rango de edad</label>
-                                @php $re = old('rango_edad'); @endphp
-                                <select id="rango_edad" name="rango_edad"
-                                    class="form-select @error('rango_edad') is-invalid @enderror">
-                                    <option value="">Seleccione</option>
-                                    <option value="0-3" @selected($re === '0-3')>0-3</option>
-                                    <option value="4-6" @selected($re === '4-6')>4-6</option>
-                                    <option value="7-9" @selected($re === '7-9')>7-9</option>
-                                    <option value="10-12" @selected($re === '10-12')>10-12</option>
-                                    <option value="13-15" @selected($re === '13-15')>13-15</option>
-                                    <option value="16-18" @selected($re === '16-18')>16-18</option>
-                                </select>
+                                <label class="form-label" for="rango_edad">Rango de edad (años)</label>
+                                <input type="number" id="rango_edad" name="rango_edad"
+                                    class="form-control @error('rango_edad') is-invalid @enderror" inputmode="numeric"
+                                    min="0" max="14" step="1" placeholder="0 - 14"
+                                    value="{{ old('rango_edad') }}" required>
+                                <small class="text-muted">Ingrese un número entre 0 y 14.</small>
                                 @error('rango_edad')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+
 
                             <div class="col-12 d-flex justify-content-end">
                                 <a href="{{ route('colaborador_hijos.index', ['identificacion' => request('identificacion')]) }}"
@@ -199,8 +195,16 @@
                 });
             })();
 
+            const $Edad = $('#rango_edad');
+            $Edad.on('input', function() {
+                let v = parseInt($(this).val(), 10);
+                if (Number.isNaN(v)) return;
+                if (v < 0) $(this).val(0);
+                if (v > 14) $(this).val(14);
+            });
+
             // --- Select2 Campaign ---
-            const $camp = $('#idcampaign');
+            const $camp = $('#idcampaing');
             $camp.select2({
                 theme: 'bootstrap-5',
                 width: '100%',
@@ -227,10 +231,10 @@
 
             // Si hubo validación fallida y tenías old('idcampaign'), lo resolvemos:
             (function preselectCampaign() {
-                const id = @json(old('idcampaign'));
+                const id = @json(old('idcampaing'));
                 if (!id) return;
 
-                const text = @json(old('idcampaign_text'));
+                const text = @json(old('idcampaing_text'));
                 if (text) {
                     const opt = new Option(text, id, true, true);
                     $camp.append(opt).trigger('change');

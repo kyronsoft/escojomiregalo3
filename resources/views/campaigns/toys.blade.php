@@ -1,18 +1,28 @@
 @extends('layouts.admin.master')
 
-@section('title', 'Juguetes de campaña')
+@section('title', 'Juguetes / Combos de campaña')
 
 @push('css')
-    <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css">
     <style>
-        .thumb img {
-            max-height: 70px;
-            max-width: 120px;
-            object-fit: contain;
+        #toys-table .tabulator-row {
+            min-height: 68px;
         }
 
-        #toys-table .tabulator-row {
-            min-height: 80px;
+        .toy-thumb {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: .5rem;
+            background: #f5f5f5;
+        }
+
+        .toy-thumb-sm {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: .5rem;
+            background: #f5f5f5;
         }
     </style>
 @endpush
@@ -20,8 +30,8 @@
 @section('content')
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
-            <h3 class="mb-0">Juguetes — {{ $campaign->nombre }} (ID {{ $campaign->id }})</h3>
-            <a href="{{ route('campaigns.index') }}" class="btn btn-outline-secondary btn-sm">Volver</a>
+            <h3 class="mb-0">Juguetes / Combos — {{ $campaign->nombre }} (ID {{ $campaign->id }})</h3>
+            <a href="{{ route('campaigns.index') }}" class="btn btn-outline-secondary btn-sm">Volver a campañas</a>
         </div>
 
         <div id="toys-table"></div>
@@ -30,143 +40,156 @@
 
 @push('scripts')
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="{{ asset('assets/js/blockui/jquery.blockUI.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
     <script>
         (function() {
-            const STORAGE_BASE = @json(asset('storage'));
-            const FALLBACK_IMAGE = @json(asset('assets/images/placeholder.png'));
-            const DATA_URL = @json(route('campaigns.toys.data', $campaign->id));
-
-            function buildImgUrl(imagenppal) {
-                if (!imagenppal) return FALLBACK_IMAGE;
-
-                // Si hay combo "a.jpg+b.jpg+...": tomar la primera parte
-                const first = String(imagenppal).split('+')[0].trim();
-
-                // Absoluta
-                if (/^https?:\/\//i.test(first)) return first;
-
-                // Ya viene con 'campaign_toys/...'
-                if (/^campaign_toys\//i.test(first)) return `${STORAGE_BASE}/${first}`;
-
-                // Si llega un path relativo genérico, igual intenta por storage
-                return `${STORAGE_BASE}/${first}`;
-            }
+            const dataUrl = @json(route('campaigns.toys.data', $campaign));
+            const placeholder = @json(asset('assets/images/placeholder.png'));
 
             const columns = [{
                     title: "ID",
                     field: "id",
-                    width: 80,
-                    headerFilter: "input"
+                    width: 80
                 },
                 {
-                    title: "Imagen",
-                    field: "imagenppal",
-                    width: 140,
-                    headerSort: false,
-                    hozAlign: "center",
-                    formatter: (cell) => {
-                        const url = buildImgUrl(cell.getValue());
-                        return `<div class="thumb"><img src="${url}" alt="thumb" onerror="this.src='${FALLBACK_IMAGE}'"></div>`;
-                    }
-                },
-                {
-                    title: "Referencia",
+                    title: "Ref.",
                     field: "referencia",
-                    width: 160,
+                    width: 140,
                     headerFilter: "input"
                 },
                 {
                     title: "Nombre",
                     field: "nombre",
-                    minWidth: 220,
-                    headerFilter: "input"
+                    minWidth: 240,
+                    headerFilter: "input",
+                    formatter: cell => {
+                        const v = cell.getValue() || '';
+                        return `<div class="text-truncate" title="${v}">${v}</div>`;
+                    }
+                },
+                {
+                    title: "Imagen",
+                    field: "image_urls",
+                    width: 160,
+                    hozAlign: "center",
+                    headerSort: false,
+                    formatter: function(cell) {
+                        const row = cell.getRow().getData();
+                        const urls = Array.isArray(row.image_urls) ? row.image_urls : [];
+                        const partsCount = Number(row.image_parts_count || 0);
+
+                        // === Caso 2 imágenes: mostrar 2 miniaturas ===
+                        if (partsCount === 2) {
+                            const src1 = urls[0] || placeholder;
+                            const src2 = urls[1] || placeholder;
+                            return `
+                      <div class="d-inline-flex align-items-center gap-1">
+                          <img src="${src1}" class="toy-thumb-sm" alt="img1"
+                               onerror="this.onerror=null; this.src='${placeholder}';">
+                          <img src="${src2}" class="toy-thumb-sm" alt="img2"
+                               onerror="this.onerror=null; this.src='${placeholder}';">
+                      </div>
+                  `;
+                        }
+
+                        // === Caso 3 o más: solo primera + badge ===
+                        if (partsCount >= 3) {
+                            const first = urls[0] || placeholder;
+                            const badge =
+                                `<span class="badge bg-secondary ms-1 align-middle">+${partsCount - 1}</span>`;
+                            return `
+                      <div class="d-inline-flex align-items-center">
+                          <img src="${first}" class="toy-thumb" alt="thumb"
+                               onerror="this.onerror=null; this.src='${placeholder}';">
+                          ${badge}
+                      </div>
+                  `;
+                        }
+
+                        // === Caso 1 o 0: una sola miniatura ===
+                        const one = (urls[0] || placeholder);
+                        return `
+                  <div class="d-inline-flex align-items-center">
+                      <img src="${one}" class="toy-thumb" alt="thumb"
+                           onerror="this.onerror=null; this.src='${placeholder}';">
+                  </div>
+              `;
+                    }
                 },
                 {
                     title: "Género",
                     field: "genero",
                     width: 110,
-                    headerFilter: "input",
-                    formatter: (c) => {
-                        const g = String(c.getValue() || '').toUpperCase();
-                        let badge = 'Unisex';
-                        let cls = 'bg-secondary';
-                        if (g === 'M') {
-                            badge = 'Niño';
-                            cls = 'bg-primary';
-                        } else if (g === 'F') {
-                            badge = 'Niña';
-                            cls = 'bg-pink';
-                        }
-                        return `<span class="badge ${cls}">${badge}</span>`;
-                    }
-                },
-                {
-                    title: "Rango",
-                    field: "desde",
-                    width: 140,
-                    headerSort: false,
-                    formatter: (cell) => {
-                        const r = cell.getRow().getData();
-                        const d = r.desde ?? '';
-                        const h = r.hasta ?? '';
-                        return (d || h) ? `${d} - ${h}` : '';
-                    }
-                },
-                {
-                    title: "Unidades",
-                    field: "unidades",
-                    width: 110,
-                    hozAlign: "right",
                     headerFilter: "input"
                 },
                 {
-                    title: "% Selección",
-                    field: "porcentaje",
-                    width: 120,
-                    hozAlign: "right",
-                    headerFilter: "input",
-                    formatter: (c) => c.getValue() ? `${c.getValue()}%` : ''
-                },
-                {
-                    title: "Img",
-                    field: "imgexists",
+                    title: "Unid.",
+                    field: "unidades",
                     width: 90,
-                    hozAlign: "center",
-                    formatter: (c) => String(c.getValue() || 'N').toUpperCase() === 'S' ?
-                        '<span class="badge bg-success">S</span>' :
-                        '<span class="badge bg-secondary">N</span>'
-                },
-                {
-                    title: "Escogidos",
-                    field: "escogidos",
-                    width: 110,
                     hozAlign: "right"
                 },
                 {
-                    title: "Actualizado",
-                    field: "updated_at",
-                    width: 170,
-                    formatter: (v) => {
-                        const d = new Date(v.getValue());
-                        return isNaN(d) ? (v.getValue() || '') : d.toLocaleString();
-                    }
+                    title: "Precio",
+                    field: "precio_unitario",
+                    width: 110,
+                    hozAlign: "right",
+                    formatter: cell => new Intl.NumberFormat().format(cell.getValue() ?? 0)
                 },
+                {
+                    title: "% / Sel.",
+                    field: "porcentaje",
+                    width: 110,
+                    headerFilter: "input",
+                    formatter: cell => cell.getValue() || '0'
+                },
+                // {
+                //     title: "Actualizado",
+                //     field: "updated_at",
+                //     width: 170,
+                //     formatter: c => {
+                //         const v = c.getValue();
+                //         const d = new Date(v);
+                //         return isNaN(d) ? (v || '') : d.toLocaleString();
+                //     }
+                // },
+                {
+                    title: "Acciones",
+                    field: "id",
+                    hozAlign: "center",
+                    headerSort: false,
+                    width: 120,
+                    formatter: function(cell) {
+                        const id = cell.getValue();
+                        const editUrl =
+                            `{{ route('campaigns.toys.edit', ['campaign' => $campaign->id, 'toy' => ':id']) }}`
+                            .replace(':id', id);
+                        return `
+        <div class="d-flex gap-1 justify-content-center">
+          <a href="${editUrl}" class="btn btn-sm btn-primary" title="Editar juguete">
+            <i class="fa fa-edit"></i>
+          </a>
+        </div>
+      `;
+                    }
+                }
             ];
 
             const table = new Tabulator("#toys-table", {
                 layout: "fitColumns",
-                height: "650px",
-                rowHeight: 80,
-                placeholder: "No hay referencias asignadas a esta campaña",
-                ajaxURL: DATA_URL,
+                height: "600px",
+                rowHeight: 68,
+                responsiveLayout: "collapse",
+                placeholder: "No hay registros",
+                ajaxURL: dataUrl,
                 ajaxConfig: "GET",
                 ajaxResponse: (url, params, resp) => Array.isArray(resp) ? resp : [],
+                columns,
                 initialSort: [{
                     column: "updated_at",
                     dir: "desc"
                 }],
-                columns,
             });
 
             window.addEventListener('resize', () => table.redraw(true));

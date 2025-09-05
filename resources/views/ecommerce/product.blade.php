@@ -25,19 +25,69 @@
                     var(--secondary) 50%,
                     var(--secondary) 100%);
             opacity: .5;
-            /* 50% */
             z-index: -1;
-            /* detrás */
             pointer-events: none;
-            /* no interfiere */
         }
 
-        /* Capa de contenido por encima del fondo */
+        /* Contenedor topbar por defecto: flex en pantallas medias/grandes */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+            min-height: 100px;
+            /* mobile base */
+            padding-top: .25rem;
+            padding-bottom: .25rem;
+        }
+
+        /* En pantallas ≥992px incrementa altura para logo 200px */
+        @media (min-width: 992px) {
+            .topbar {
+                min-height: 120px;
+                padding-top: .5rem;
+                padding-bottom: .5rem;
+            }
+        }
+
+        .topbar .btn {
+            --bs-btn-padding-y: .35rem;
+            --bs-btn-padding-x: .75rem;
+            --bs-btn-font-size: .9rem;
+        }
+
+        /* Imagen de logo responsive */
+        .topbar-logo-img {
+            height: 100px;
+            width: auto;
+            object-fit: contain;
+            display: block;
+        }
+
+        @media (min-width: 992px) {
+            .topbar-logo-img {
+                height: 100px;
+            }
+        }
+
+        .btn-top {
+            background-color: var(--secondary) !important;
+            border-color: var(--secondary) !important;
+            color: #fff !important;
+        }
+
+        .btn-top:hover,
+        .btn-top:focus {
+            filter: brightness(0.92);
+            color: #fff !important;
+        }
+
         .site-content {
             position: relative;
         }
 
-        /* Botones por género (forzar colores) */
         .btn-kid-girl {
             background-color: #e91e63 !important;
             border-color: #e91e63 !important;
@@ -76,14 +126,11 @@
             border-color: #111 !important;
             color: #fff !important;
         }
-    </style>
-    <style>
-        /* El contenedor del banner debe ser relativo para poder posicionar el overlay */
+
         .campaign-banner-bleed {
             position: relative;
         }
 
-        /* Caja flotante en la esquina inferior derecha */
         .banner-welcome {
             position: absolute;
             right: 1rem;
@@ -94,13 +141,11 @@
 
         .banner-welcome__box {
             background: rgba(0, 0, 0, .65);
-            /* fondo semitransparente para buena lectura */
             color: #fff;
             padding: 12px 16px;
             border-radius: 14px;
             font-weight: 700;
             line-height: 1.2;
-            /* 2em en desktop; más pequeño en móviles automáticamente */
             font-size: clamp(1.1rem, 2.5vw, 2em);
             box-shadow: 0 8px 20px rgba(0, 0, 0, .25);
         }
@@ -109,11 +154,96 @@
             margin: 0;
         }
 
-        /* si el texto viene envuelto en <p> */
+        .topbar-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: .5rem;
+        }
+
+        .badge-gender {
+            background-color: #FFCD01 !important;
+            color: #fff !important;
+        }
+
+        @media (max-width: 499px) {
+            .topbar {
+                min-height: 70px;
+            }
+
+            .topbar-container {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                align-items: center;
+                gap: .5rem;
+            }
+
+            .topbar-slot {
+                width: 100%;
+            }
+
+            .topbar-logo-img {
+                height: 50px;
+            }
+
+            .topbar .btn,
+            .topbar form,
+            .topbar a {
+                width: 100%;
+            }
+
+            .topbar-cart-label {
+                display: none;
+            }
+
+            .topbar-cart-btn .icon-shopping-cart {
+                margin-right: 0 !important;
+            }
+
+            .topbar-slot.text-end {
+                text-align: center !important;
+            }
+        }
     </style>
 @endpush
 
 @section('content')
+    {{-- Barra superior con Logo + Ver carrito / Salir --}}
+    <div class="topbar">
+        <div class="container topbar-container">
+            {{-- 1) Logo empresa (izquierda) --}}
+            <div class="topbar-slot">
+                @php
+                    $logoUrl = !empty($empresaLogoUrl) ? $empresaLogoUrl : asset('assets/images/placeholder.png');
+                @endphp
+                <img src="{{ $logoUrl }}" alt="Logo empresa" class="topbar-logo-img">
+            </div>
+
+            {{-- 2) Botón Ver carrito (texto se oculta <500px) --}}
+            <div class="topbar-slot">
+                <a href="{{ route('ecommerce.cart.index') }}" class="btn btn-top w-100 topbar-cart-btn">
+                    <i class="icon-shopping-cart me-1"></i>
+                    <span class="topbar-cart-label">Ver carrito</span>
+                </a>
+            </div>
+
+            {{-- 3) Botón Salir --}}
+            <div class="topbar-slot">
+                <form action="{{ route('logout') }}" method="POST" class="d-inline w-100">
+                    @csrf
+                    <button type="submit" class="btn btn-top w-100">
+                        <i class="icon-power me-1"></i> Salir
+                    </button>
+                </form>
+            </div>
+
+            {{-- 4) Logo fijo (derecha) --}}
+            <div class="topbar-slot text-end">
+                <img src="{{ asset('assets/images/moreproducts/loginpage.png') }}" alt="Logo fijo" class="topbar-logo-img">
+            </div>
+        </div>
+    </div>
+
     <div class="site-content">
         @if (!empty($campaignBannerUrl))
             <style>
@@ -122,14 +252,12 @@
                     margin-left: calc(50% - 50vw);
                     margin-right: calc(50% - 50vw);
                     position: relative;
-                    /* importante para el overlay */
                 }
 
                 .campaign-banner-bleed img {
                     display: block;
                     width: 100%;
                     height: 25vh;
-                    /* mobile: 1/4 de alto de pantalla */
                     object-fit: cover;
                 }
 
@@ -137,14 +265,11 @@
                     .campaign-banner-bleed img {
                         height: 33.333vh;
                     }
-
-                    /* desktop: 1/3 */
                 }
             </style>
 
             <div class="campaign-banner-bleed">
                 <img src="{{ $campaignBannerUrl }}" alt="Banner campaña" loading="lazy">
-
                 @if (!empty($welcomeMsg))
                     <div class="banner-welcome">
                         <div class="banner-welcome__box">
@@ -154,11 +279,13 @@
                 @endif
             </div>
         @endif
+
         <div class="container product-wrapper">
-            <div id="hintSelect" class="alert alert-info mt-3">
+            <div id="hintSelect" class="alert alert-info mt-3" style="background: black;">
                 Selecciona un hijo o hija para ver los juguetes que puedes escoger.
             </div>
-            {{-- Botones por hijo(a) con género F/M/NULL (NULL => neutro) --}}
+
+            {{-- Botones por hijo(a) --}}
             <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
                 @foreach ($resultado as $grupo)
                     @php
@@ -174,12 +301,6 @@
                 @endforeach
             </div>
 
-            <div class="d-flex justify-content-end mt-2">
-                <a href="{{ route('ecommerce.cart.index') }}" class="btn btn-primary">
-                    <i class="icon-shopping-cart me-2"></i> Ver carrito
-                </a>
-            </div>
-
             <div class="product-grid mt-5">
                 <div class="product-wrapper-grid">
                     <div id="toyGrid" class="row">
@@ -188,40 +309,66 @@
                                 @php
                                     $idCampaign = $grupo['hijo']['idcampaign'] ?? null;
 
-                                    // Imagen principal
+                                    // ====== SOPORTE COMBOS (imagenppal con '+') ======
                                     $imgRel = trim((string) ($toy['imagenppal'] ?? ''));
-                                    $imgPath = '';
+                                    $imgRel = str_replace('\\', '/', $imgRel);
+                                    $imgPaths = [];
+
                                     if ($imgRel !== '') {
-                                        $imgRel = ltrim($imgRel, '/');
-                                        $imgPath = Str::startsWith($imgRel, 'campaign_toys/')
-                                            ? $imgRel
-                                            : "campaign_toys/{$idCampaign}/{$imgRel}";
+                                        $parts = preg_split('/\s*\+\s*/', $imgRel); // divide por '+'
+                                        foreach ($parts as $p) {
+                                            if ($p === '') {
+                                                continue;
+                                            }
+                                            $p = ltrim($p, '/');
+                                            $path = Str::startsWith($p, 'campaign_toys/')
+                                                ? $p
+                                                : "campaign_toys/{$idCampaign}/{$p}";
+                                            $imgPaths[] = $path;
+                                        }
                                     }
 
-                                    // ID del modal
+                                    $isCombo = count($imgPaths) > 1;
+
                                     $modalId =
                                         'modalToy_' .
                                         ($grupo['hijo']['id'] ?? 'h') .
                                         '_' .
                                         Str::slug((string) $toy['referencia'], '_');
 
-                                    // Género del juguete: F, M o NULL => Unisex
                                     $tg = strtoupper(trim((string) ($toy['genero'] ?? '')));
                                     $toyGenderBadge = $tg === 'F' ? 'Niña' : ($tg === 'M' ? 'Niño' : 'Unisex');
                                     $toyGenderClass =
                                         $tg === 'F' ? 'bg-pink' : ($tg === 'M' ? 'bg-primary' : 'bg-secondary');
                                 @endphp
 
-                                {{-- Oculta por defecto y etiqueta con el ID del hijo --}}
                                 <div class="col-xl-3 col-sm-6 xl-4 toy-card d-none"
                                     data-child-id="{{ $grupo['hijo']['id'] }}">
                                     <div class="card">
                                         <div class="product-box">
                                             <div class="product-img d-flex justify-content-center position-relative">
-                                                @if ($imgPath !== '')
-                                                    <img src="{{ Storage::url($imgPath) }}" alt="{{ $toy['nombre'] }}"
-                                                        class="img-fluid" style="max-width:180px">
+                                                {{-- ====== Imagen (simple o combo) en tarjeta ====== --}}
+                                                @if (!empty($imgPaths))
+                                                    @if ($isCombo)
+                                                        <div class="d-flex justify-content-center flex-wrap gap-2">
+                                                            @foreach ($imgPaths as $p)
+                                                                @if (Storage::disk('public')->exists($p))
+                                                                    <img src="{{ Storage::disk('public')->url($p) }}"
+                                                                        alt="{{ $toy['nombre'] }}" class="img-fluid"
+                                                                        style="max-width:120px">
+                                                                @endif
+                                                            @endforeach
+                                                        </div>
+                                                    @else
+                                                        @php $p = $imgPaths[0]; @endphp
+                                                        @if (Storage::disk('public')->exists($p))
+                                                            <img src="{{ Storage::disk('public')->url($p) }}"
+                                                                alt="{{ $toy['nombre'] }}" class="img-fluid"
+                                                                style="max-width:180px">
+                                                        @endif
+                                                    @endif
                                                 @endif
+
                                                 <div class="product-hover">
                                                     <ul>
                                                         <li>
@@ -260,13 +407,33 @@
                                                             <button type="button" class="btn-close btn-close-white"
                                                                 data-bs-dismiss="modal" aria-label="Close"></button>
                                                         </div>
+
                                                         <div class="modal-body">
                                                             <div class="row">
                                                                 <div class="col-lg-6 d-flex justify-content-center">
-                                                                    @if ($imgPath !== '')
-                                                                        <img src="{{ Storage::url($imgPath) }}"
-                                                                            alt="{{ $toy['nombre'] }}" class="img-fluid"
-                                                                            style="max-width:180px">
+                                                                    {{-- ====== Imagen (simple o combo) en modal ====== --}}
+                                                                    @if (!empty($imgPaths))
+                                                                        @if ($isCombo)
+                                                                            <div
+                                                                                class="d-flex justify-content-center flex-wrap gap-3">
+                                                                                @foreach ($imgPaths as $p)
+                                                                                    @if (Storage::disk('public')->exists($p))
+                                                                                        <img src="{{ Storage::disk('public')->url($p) }}"
+                                                                                            alt="{{ $toy['nombre'] }}"
+                                                                                            class="img-fluid"
+                                                                                            style="max-width:180px">
+                                                                                    @endif
+                                                                                @endforeach
+                                                                            </div>
+                                                                        @else
+                                                                            @php $p = $imgPaths[0]; @endphp
+                                                                            @if (Storage::disk('public')->exists($p))
+                                                                                <img src="{{ Storage::disk('public')->url($p) }}"
+                                                                                    alt="{{ $toy['nombre'] }}"
+                                                                                    class="img-fluid"
+                                                                                    style="max-width:180px">
+                                                                            @endif
+                                                                        @endif
                                                                     @endif
                                                                 </div>
                                                                 <div class="col-lg-6 text-start">
@@ -278,16 +445,35 @@
                                                                 </div>
                                                             </div>
                                                         </div>
+
+                                                        <div class="modal-footer d-flex justify-content-between">
+                                                            <button type="button" class="btn btn-outline-secondary"
+                                                                data-bs-dismiss="modal">
+                                                                Cerrar
+                                                            </button>
+
+                                                            <form method="POST"
+                                                                action="{{ route('ecommerce.cart.add') }}"
+                                                                class="d-inline">
+                                                                @csrf
+                                                                <input type="hidden" name="idhijo"
+                                                                    value="{{ $grupo['hijo']['id'] }}">
+                                                                <input type="hidden" name="referencia"
+                                                                    value="{{ $toy['referencia'] }}">
+                                                                <button type="submit" class="btn btn-success">
+                                                                    <i class="icon-shopping-cart me-1"></i> Seleccionar
+                                                                </button>
+                                                            </form>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {{-- Card footer --}}
                                             <div class="product-details">
                                                 <a href="javascript:void(0)">
                                                     <h4 class="mb-1">{{ $toy['nombre'] }}</h4>
                                                 </a>
-                                                <span class="badge {{ $toyGenderClass }}">{{ $toyGenderBadge }}</span>
+                                                <span class="badge badge-gender">{{ $toyGenderBadge }}</span>
                                             </div>
 
                                         </div>
@@ -297,7 +483,6 @@
                         @endforeach
                     </div>
 
-                    {{-- Mensaje si no hay juguetes para el hijo seleccionado --}}
                     <div id="noResults" class="text-muted text-center py-5 d-none">
                         No hay juguetes disponibles para este hijo(a).
                     </div>
@@ -362,25 +547,20 @@
             $(function() {
                 $('.js-child-btn').on('click', function(e) {
                     e.preventDefault();
-
                     const id = String($(this).data('child-id'));
 
-                    // Estado visual del botón activo
                     $('.js-child-btn').removeClass('active');
                     $(this).addClass('active');
 
-                    // Filtra tarjetas
                     const $all = $('.toy-card');
                     const $show = $all.filter('[data-child-id="' + id + '"]');
 
                     $all.addClass('d-none');
                     $show.removeClass('d-none');
 
-                    // Mensajes
                     $('#hintSelect').addClass('d-none');
                     $('#noResults').toggleClass('d-none', $show.length > 0);
 
-                    // Scroll al grid (opcional)
                     const $grid = $('#toyGrid');
                     if ($grid.length) {
                         window.scrollTo({
@@ -393,7 +573,6 @@
         </script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                // Reaplicar el hijo activo si viene en sesión
                 @if (session('active_child_id'))
                     (function() {
                         const id = @json(session('active_child_id'));
@@ -402,7 +581,6 @@
                     })();
                 @endif
 
-                // SweetAlert de respuesta del addcart
                 @if (session('swal'))
                     Swal.fire(@json(session('swal')));
                 @endif

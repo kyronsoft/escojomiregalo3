@@ -13,6 +13,7 @@
             height: 60px;
             object-fit: cover;
             border-radius: .5rem;
+            background: #f3f3f3;
         }
     </style>
 @endpush
@@ -21,9 +22,6 @@
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
             <h3 class="mb-0">Juguetes / Combos</h3>
-            {{-- <div>
-                <a href="{{ route('campaign_toys.create') }}" class="btn btn-primary">Nuevo</a>
-            </div> --}}
         </div>
 
         @if (session('success'))
@@ -45,6 +43,87 @@
     <script>
         (function() {
             const CSRF = '{{ csrf_token() }}';
+            const STORAGE_BASE = @json(asset('storage')); // /storage -> public/storage
+            const PLACEHOLDER = @json(asset('assets/images/placeholder.png'));
+
+            // Genera una lista de URLs candidatas para una imagen
+            function buildCandidates(firstName, campaignId) {
+                const name = String(firstName || '').trim();
+                const out = [];
+
+                if (!name) return out;
+
+                // URL absoluta (OneDrive, CDN, etc.)
+                if (/^https?:\/\//i.test(name)) {
+                    out.push(name);
+                    return out;
+                }
+
+                // Si ya viene con prefijo campaign_toys/...
+                if (/^campaign_toys\//i.test(name)) {
+                    out.push(`${STORAGE_BASE}/${encodeTail(name)}`);
+                    // Variante en minúscula del filename
+                    out.push(`${STORAGE_BASE}/${encodeTail(lowercaseFilename(name))}`);
+                    return out;
+                }
+
+                // Si viene "229/archivo.jpg"
+                if (/^\d+\//.test(name)) {
+                    const p = `campaign_toys/${name}`;
+                    out.push(`${STORAGE_BASE}/${encodeTail(p)}`);
+                    out.push(`${STORAGE_BASE}/${encodeTail(lowercaseFilename(p))}`);
+                    return out;
+                }
+
+                // Solo filename: asumimos campaign_toys/{id}/filename
+                const p = `campaign_toys/${campaignId}/${name}`;
+                out.push(`${STORAGE_BASE}/${encodeTail(p)}`);
+                out.push(`${STORAGE_BASE}/${encodeTail(lowercaseFilename(p))}`);
+
+                return out;
+            }
+
+            // Codifica SOLO el último segmento (filename), para no romper las carpetas
+            function encodeTail(path) {
+                const segs = String(path).split('/');
+                if (segs.length === 0) return path;
+                const tail = segs.pop();
+                // encodeURIComponent preserva puntos; bien para "Mi foto 1.jpg"
+                const encTail = encodeURIComponent(tail);
+                segs.push(encTail);
+                return segs.join('/');
+            }
+
+            // Devuelve misma ruta pero con filename en minúscula (por si el FS es case-sensitive)
+            function lowercaseFilename(path) {
+                const segs = String(path).split('/');
+                if (segs.length === 0) return path;
+                const tail = segs.pop();
+                segs.push(tail.toLowerCase());
+                return segs.join('/');
+            }
+
+            // onerror en cadena: va probando candidatos hasta agotar; luego pone placeholder y desactiva onerror
+            function toyImgFallback(img) {
+                try {
+                    const list = JSON.parse(img.dataset.altList || '[]');
+                    let idx = parseInt(img.dataset.altIdx || '0', 10);
+                    if (Number.isNaN(idx)) idx = 0;
+
+                    if (idx < list.length) {
+                        img.dataset.altIdx = String(idx + 1);
+                        img.src = list[idx];
+                        return;
+                    }
+                    // sin más candidatos: placeholder y no más onerror
+                    img.onerror = null;
+                    if (img.src !== PLACEHOLDER) img.src = PLACEHOLDER;
+                } catch (e) {
+                    img.onerror = null;
+                    img.src = PLACEHOLDER;
+                }
+            }
+            window.toyImgFallback = toyImgFallback; // expone para el onerror inline
 
             window.deleteToy = function(id) {
                 Swal.fire({
@@ -100,7 +179,7 @@
             const columns = [{
                     title: "ID",
                     field: "id",
-                    width: 80,
+                    width: 80
                 },
                 {
                     title: "Campaña",
@@ -126,39 +205,24 @@
                 },
                 {
                     title: "Imagen",
-                    field: "imagenppal",
+                    field: "image_url", // <- usa el campo ya listo del backend
                     width: 120,
                     hozAlign: "center",
                     headerSort: false,
                     formatter: function(cell) {
-                        const raw = cell.getValue();
-                        if (!raw) return '';
-
-                        const row = cell.getRow().getData();
-                        const campaignId = row.idcampaign; // <- viene en el dataset
-
-                        // Para combos: "img1.jpg+img2.jpg+..."
-                        const parts = String(raw).split('+').map(s => s.trim()).filter(Boolean);
-                        const first = parts[0];
-
-                        // Construye URL correcta: /storage/campaign_toys/{idcampaign}/{filename}
-                        const base = `{{ asset('storage') }}/campaign_toys/${encodeURIComponent(campaignId)}`;
-                        const src = `${base}/${encodeURIComponent(first)}`;
-
-                        // Mini badge si es combo
-                        const extra = parts.length > 1 ?
-                            `<span class="badge bg-secondary ms-1 align-middle">+${parts.length - 1}</span>` :
-                            '';
-
-                        // Imagen con fallback si no existe el archivo
+                        const src = cell.getValue();
+                        const partsCount = cell.getRow().getData().image_parts_count || 0;
+                        const badge = partsCount > 1 ?
+                            `<span class="badge bg-secondary ms-1 align-middle">+${partsCount-1}</span>` : '';
+                        const placeholder = @json(asset('assets/images/placeholder.png'));
+                        if (!src) return `<img src="${placeholder}" class="toy-thumb" alt="thumb">`;
                         return `
-      <div class="d-inline-flex align-items-center">
-        <img src="${src}" class="toy-thumb"
-             alt="thumb"
-             onerror="this.onerror=null; this.src='{{ asset('assets/images/placeholder.png') }}';">
-        ${extra}
-      </div>
-    `;
+                            <div class="d-inline-flex align-items-center">
+                                <img src="${src}" class="toy-thumb" alt="thumb"
+                                    onerror="this.onerror=null; this.src='${placeholder}';">
+                                ${badge}
+                            </div>
+                            `;
                     }
                 },
                 {
@@ -174,32 +238,20 @@
                     hozAlign: "right",
                     headerFilter: "input"
                 },
+                // {
+                //     title: "Precio",
+                //     field: "precio_unitario",
+                //     width: 110,
+                //     hozAlign: "right",
+                //     headerFilter: "input",
+                //     formatter: cell => new Intl.NumberFormat().format(cell.getValue() ?? 0)
+                // },
                 {
-                    title: "Precio",
-                    field: "precio_unitario",
-                    width: 110,
-                    hozAlign: "right",
-                    headerFilter: "input",
-                    formatter: cell => {
-                        const v = cell.getValue() ?? 0;
-                        return new Intl.NumberFormat().format(v);
-                    }
-                },
-                {
-                    title: "% / Sel.",
+                    title: "Restantes",
                     field: "porcentaje",
                     width: 110,
                     headerFilter: "input",
                     formatter: cell => cell.getValue() || '0'
-                },
-                {
-                    title: "Actualizado",
-                    field: "updated_at",
-                    width: 170,
-                    formatter: c => {
-                        const d = new Date(c.getValue());
-                        return isNaN(d) ? (c.getValue() || '') : d.toLocaleString();
-                    }
                 },
                 {
                     title: "Acciones",
@@ -210,7 +262,6 @@
                     formatter: cell => {
                         const r = cell.getRow().getData();
                         const showUrl = `{{ route('campaign_toys.show', ':id') }}`.replace(':id', r.id);
-                        const editUrl = `{{ route('campaign_toys.edit', ':id') }}`.replace(':id', r.id);
                         return `
           <div class="d-flex gap-1 justify-content-center flex-wrap">
             <a href="${showUrl}" class="btn btn-sm btn-outline-info">Ver</a>
@@ -224,11 +275,11 @@
             const table = new Tabulator("#toys-table", {
                 layout: "fitColumns",
                 height: "600px",
-                responsiveLayout: "collapse", // colapsa columnas en pantallas pequeñas
+                responsiveLayout: "collapse",
                 rowHeight: 68,
                 columns,
                 placeholder: "No hay registros",
-                ajaxURL: "{{ route('campaign_toys.data') }}", // asegúrate de tener este endpoint
+                ajaxURL: "{{ route('campaign_toys.data') }}",
                 ajaxConfig: "GET",
                 pagination: false,
                 sortMode: "local",

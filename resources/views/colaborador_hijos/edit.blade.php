@@ -3,18 +3,39 @@
 @section('title', 'Editar Hijo de Colaborador')
 
 @push('css')
-    {{-- Select2 CSS (y tema Bootstrap 5 opcional) --}}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
     <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 @endpush
 
 @section('content')
+    @php
+        // Nombres para preselección desde relaciones (el controlador ya hizo ->load(['colaborador','campaign']))
+        $colaboradorNombre = optional($colaborador_hijo->colaborador)->nombre;
+        $campaignNombre = optional($colaborador_hijo->campaign)->nombre;
+
+        // Normalización de género a NIÑO/NIÑA/UNISEX
+        $gRaw = old('genero', $colaborador_hijo->genero);
+        $gMap = strtoupper(trim((string) $gRaw));
+        $mapNina = ['F', 'FEMENINO', 'FEMENINA', 'NIÑA', 'NINA', 'GIRL', 'MUJER', 'FEMALE'];
+        $mapNino = ['M', 'MASCULINO', 'MASCULINA', 'NIÑO', 'NINO', 'BOY', 'HOMBRE', 'MALE'];
+        $g = in_array($gMap, $mapNino, true) ? 'NIÑO' : (in_array($gMap, $mapNina, true) ? 'NIÑA' : 'UNISEX');
+
+        // Valor numérico para edad (si viene "7-9", toma 7)
+        $reRaw = old('rango_edad', $colaborador_hijo->rango_edad);
+        if (!is_null($reRaw) && !is_numeric($reRaw)) {
+            if (preg_match('/\d+/', (string) $reRaw, $m)) {
+                $reRaw = (int) $m[0];
+            } else {
+                $reRaw = '';
+            }
+        }
+    @endphp
+
     <div class="container-fluid">
         <div class="row">
             <div class="col-12">
 
-                {{-- Errores de validación (lista) --}}
                 @if ($errors->any())
                     <div class="alert alert-danger">
                         <strong>Hay errores en el formulario:</strong>
@@ -26,7 +47,6 @@
                     </div>
                 @endif
 
-                {{-- Flash messages (también se muestran con SweetAlert2) --}}
                 @if (session('success'))
                     <div class="alert alert-success mb-3">{{ session('success') }}</div>
                 @endif
@@ -58,15 +78,13 @@
                                 <select id="identificacion" name="identificacion"
                                     class="form-control @error('identificacion') is-invalid @enderror">
                                     @php
-                                        // Si el controlador envía (opcionalmente) $colaboradorNombre
                                         $selIdColab = old('identificacion', $colaborador_hijo->identificacion);
-                                        $selTextColab = old('identificacion_text', $colaboradorNombre ?? null);
+                                        $selTextColab = old('identificacion_text', $colaboradorNombre);
                                     @endphp
-                                    @if ($selIdColab && $selTextColab)
-                                        <option value="{{ $selIdColab }}" selected>{{ $selTextColab }}</option>
-                                    @elseif($selIdColab)
-                                        {{-- Fallback: muestra el id si no tienes el texto aún --}}
-                                        <option value="{{ $selIdColab }}" selected>{{ $selIdColab }}</option>
+                                    @if ($selIdColab)
+                                        <option value="{{ $selIdColab }}" selected>
+                                            {{ $selTextColab ?: $selIdColab }}
+                                        </option>
                                     @endif
                                 </select>
                                 @error('identificacion')
@@ -74,19 +92,19 @@
                                 @enderror
                             </div>
 
-                            {{-- Campaña --}}
+                            {{-- Campaña (usar idcampaing desde BD para preselección) --}}
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="idcampaign">Campaña</label>
                                 <select id="idcampaign" name="idcampaign"
                                     class="form-control @error('idcampaign') is-invalid @enderror">
                                     @php
-                                        $selIdCamp = old('idcampaign', $colaborador_hijo->idcampaign);
-                                        $selTextCamp = old('idcampaign_text', $campaignNombre ?? null);
+                                        $selIdCamp = old('idcampaign', $colaborador_hijo->idcampaing);
+                                        $selTextCamp = old('idcampaign_text', $campaignNombre);
                                     @endphp
-                                    @if ($selIdCamp && $selTextCamp)
-                                        <option value="{{ $selIdCamp }}" selected>{{ $selTextCamp }}</option>
-                                    @elseif($selIdCamp)
-                                        <option value="{{ $selIdCamp }}" selected>{{ $selIdCamp }}</option>
+                                    @if ($selIdCamp)
+                                        <option value="{{ $selIdCamp }}" selected>
+                                            {{ $selTextCamp ?: $selIdCamp }}
+                                        </option>
                                     @endif
                                 </select>
                                 @error('idcampaign')
@@ -105,36 +123,27 @@
                                 @enderror
                             </div>
 
-                            {{-- Género --}}
+                            {{-- Género (NIÑO/NIÑA/UNISEX) --}}
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="genero">Género</label>
                                 <select id="genero" name="genero"
                                     class="form-select @error('genero') is-invalid @enderror">
-                                    @php $g = old('genero', $colaborador_hijo->genero); @endphp
-                                    <option value="" @selected($g === '')>Seleccione</option>
-                                    <option value="M" @selected($g === 'M')>Masculino</option>
-                                    <option value="F" @selected($g === 'F')>Femenino</option>
-                                    <option value="Otro" @selected($g === 'Otro')>Otro</option>
+                                    <option value="NIÑO" @selected($g === 'NIÑO')>NIÑO</option>
+                                    <option value="NIÑA" @selected($g === 'NIÑA')>NIÑA</option>
+                                    <option value="UNISEX" @selected($g === 'UNISEX' || $g === null || $g === '')>UNISEX</option>
                                 </select>
                                 @error('genero')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
 
-                            {{-- Rango edad --}}
+                            {{-- Edad (0–14) --}}
                             <div class="col-12 col-md-3">
-                                <label class="form-label" for="rango_edad">Rango de edad</label>
-                                <select id="rango_edad" name="rango_edad"
-                                    class="form-select @error('rango_edad') is-invalid @enderror">
-                                    @php $re = old('rango_edad', $colaborador_hijo->rango_edad); @endphp
-                                    <option value="">Seleccione</option>
-                                    <option value="0-3" @selected($re === '0-3')>0-3</option>
-                                    <option value="4-6" @selected($re === '4-6')>4-6</option>
-                                    <option value="7-9" @selected($re === '7-9')>7-9</option>
-                                    <option value="10-12" @selected($re === '10-12')>10-12</option>
-                                    <option value="13-15" @selected($re === '13-15')>13-15</option>
-                                    <option value="16-18" @selected($re === '16-18')>16-18</option>
-                                </select>
+                                <label class="form-label" for="rango_edad">Edad (años)</label>
+                                <input type="number" id="rango_edad" name="rango_edad"
+                                    class="form-control @error('rango_edad') is-invalid @enderror" min="0"
+                                    max="14" step="1" value="{{ is_numeric($reRaw) ? (int) $reRaw : '' }}">
+                                <div class="form-text">De 0 a 14 años</div>
                                 @error('rango_edad')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -156,17 +165,13 @@
 
 @push('scripts')
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    {{-- BlockUI --}}
     <script src="{{ asset('assets/js/blockui/jquery.blockUI.js') }}"></script>
-    {{-- SweetAlert2 --}}
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    {{-- Select2 --}}
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
         $(function() {
-
-            // --- Select2: Colaborador (buscar por documento/nombre) ---
+            // --- Select2: Colaborador ---
             const $ident = $('#identificacion');
             $ident.select2({
                 theme: 'bootstrap-5',
@@ -174,7 +179,7 @@
                 placeholder: 'Buscar colaborador',
                 allowClear: true,
                 ajax: {
-                    url: '{{ route('api.colaboradores') }}', // <-- Ajusta si usas otra ruta
+                    url: '{{ route('api.colaboradores') }}',
                     dataType: 'json',
                     delay: 250,
                     data: params => ({
@@ -182,7 +187,7 @@
                         page: params.page || 1,
                         per_page: 20
                     }),
-                    processResults: (data, params) => ({
+                    processResults: (data) => ({
                         results: data.results,
                         pagination: {
                             more: data.pagination?.more
@@ -191,21 +196,24 @@
                 }
             });
 
-            // Si tenemos solo el ID (y no el texto), resolverlo por AJAX
+            // Si vino id + texto desde servidor, no hace falta prefetch.
             (function preselectColaborador() {
-                const id = @json(old('identificacion', $colaborador_hijo->identificacion));
-                const text = @json(old('identificacion_text', $colaboradorNombre ?? null));
-                if (id && !text) {
-                    $.get('{{ route('api.colaboradores') }}', {
-                        q: id,
-                        page: 1,
-                        per_page: 1
-                    }).then(resp => {
-                        const match = (resp.results || []).find(r => String(r.id) === String(id));
-                        const label = match ? match.text : id;
-                        const opt = new Option(label, id, true, true);
-                        $ident.empty().append(opt).trigger('change');
-                    });
+                const hasOption = $ident.find('option[selected]').length > 0;
+                if (!hasOption) {
+                    const id = @json(old('identificacion', $colaborador_hijo->identificacion));
+                    if (id) {
+                        $.get('{{ route('api.colaboradores') }}', {
+                                q: id,
+                                page: 1,
+                                per_page: 1
+                            })
+                            .then(resp => {
+                                const match = (resp.results || []).find(r => String(r.id) === String(id));
+                                const label = match ? match.text : id;
+                                const opt = new Option(label, id, true, true);
+                                $ident.empty().append(opt).trigger('change');
+                            });
+                    }
                 }
             })();
 
@@ -217,7 +225,7 @@
                 placeholder: 'Buscar campaña',
                 allowClear: true,
                 ajax: {
-                    url: '{{ route('api.campaigns') }}', // <-- Ajusta si usas otra ruta
+                    url: '{{ route('api.campaigns') }}',
                     dataType: 'json',
                     delay: 250,
                     data: params => ({
@@ -225,7 +233,7 @@
                         page: params.page || 1,
                         per_page: 20
                     }),
-                    processResults: (data, params) => ({
+                    processResults: (data) => ({
                         results: data.results,
                         pagination: {
                             more: data.pagination?.more
@@ -235,19 +243,22 @@
             });
 
             (function preselectCampaign() {
-                const id = @json(old('idcampaign', $colaborador_hijo->idcampaign));
-                const text = @json(old('idcampaign_text', $campaignNombre ?? null));
-                if (id && !text) {
-                    $.get('{{ route('api.campaigns') }}', {
-                        q: id,
-                        page: 1,
-                        per_page: 1
-                    }).then(resp => {
-                        const match = (resp.results || []).find(r => String(r.id) === String(id));
-                        const label = match ? match.text : id;
-                        const opt = new Option(label, id, true, true);
-                        $camp.empty().append(opt).trigger('change');
-                    });
+                const hasOption = $camp.find('option[selected]').length > 0;
+                if (!hasOption) {
+                    const id = @json(old('idcampaign', $colaborador_hijo->idcampaing));
+                    if (id) {
+                        $.get('{{ route('api.campaigns') }}', {
+                                q: id,
+                                page: 1,
+                                per_page: 1
+                            })
+                            .then(resp => {
+                                const match = (resp.results || []).find(r => String(r.id) === String(id));
+                                const label = match ? match.text : id;
+                                const opt = new Option(label, id, true, true);
+                                $camp.empty().append(opt).trigger('change');
+                            });
+                    }
                 }
             })();
 
@@ -267,7 +278,6 @@
                 });
             });
 
-            // SweetAlerts por flash
             @if (session('success'))
                 Swal.fire({
                     icon: 'success',
@@ -283,7 +293,6 @@
                 });
             @endif
 
-            // Errores de validación en modal (opcional)
             @if ($errors->any())
                 Swal.fire({
                     icon: 'error',

@@ -55,58 +55,28 @@
     <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
     <script>
-        // Datos provenientes del controlador
+        // Datos del servidor tal cual te llegan
         const EMPRESAS = @json($empresas);
 
-        // Helpers para construir URLs de imágenes
-        const STORAGE_BASE = @json(asset('storage')); // => /storage
-        const FALLBACK_IMG = @json(asset('assets/images/placeholder.png')); // ajusta un placeholder si tienes
+        // Base absoluta hacia /storage/empresas (respeta host/puerto actual)
+        const EMP_BASE = @json(url('storage/empresas'));
+        const FALLBACK_IMG = @json(asset('assets/images/placeholder.png'));
 
-        function imageUrl(path) {
-            if (!path) return FALLBACK_IMG;
-            // Si ya viene una URL absoluta (por ejemplo si migraste a S3 y guardas URL completa)
-            if (/^https?:\/\//i.test(path)) return path;
-            // Si es ruta relativa tipo "images/xxx.jpg" (lo que guarda store('images','public'))
-            return `${STORAGE_BASE}/${path}`;
-        }
-
-        // Formatter de miniatura
-        function thumbFormatter(cell) {
-            const val = cell.getValue();
-            const url = imageUrl(val);
-            return `<div class="thumb-cell">
-                    <img src="${url}" alt="img" onerror="this.src='${FALLBACK_IMG}'">
-                </div>`;
-        }
-
-        // Formatter color (muestra chip + valor)
-        function colorFormatter(cell) {
-            const v = cell.getValue() || '';
-            const safe = String(v).replace(/"/g, '&quot;');
-            return v ?
-                `<span class="color-chip" style="background:${safe}"></span><span>${safe}</span>` :
-                '';
-        }
-
-        // Botón Editar
-        function actionsFormatter(cell) {
-            const data = cell.getRow().getData();
-            const nit = encodeURIComponent(data.nit);
-            const editUrl = `{{ route('empresas.edit', ':nit') }}`.replace(':nit', nit);
+        function imgCell(src, fallbackPath) {
+            const bust = Date.now(); // o usa un timestamp del registro si lo tienes
             return `
-            <a href="${editUrl}" class="btn btn-sm btn-outline-primary">
-                Editar
-            </a>
-        `;
+    <div class="thumb-cell">
+      <img src="${src}?v=${bust}" alt="img"
+           onerror="this.onerror=null;this.src='${FALLBACK_IMG}'">
+    </div>`;
         }
 
-        // Definición de columnas
+        // Columnas
         const columns = [{
                 title: "NIT",
                 field: "nit",
                 headerFilter: "input",
                 width: 140,
-                hozAlign: "left",
                 frozen: true
             },
             {
@@ -128,108 +98,135 @@
                 minWidth: 220
             },
 
+            // Usamos el NIT de la fila para construir la URL de la imagen
             {
                 title: "Logo",
                 field: "logo",
-                formatter: thumbFormatter,
                 hozAlign: "center",
                 width: 120,
-                headerSort: false
+                headerSort: false,
+                formatter: cell => {
+                    const r = cell.getRow().getData();
+                    const url = r.logo && /^https?:\/\//i.test(r.logo) ?
+                        r.logo :
+                        `${EMP_BASE}/${encodeURIComponent(r.nit)}/logo.png`;
+                    return imgCell(url, 'logo.png');
+                }
             },
             {
                 title: "Banner",
                 field: "banner",
-                formatter: thumbFormatter,
                 hozAlign: "center",
                 width: 120,
-                headerSort: false
+                headerSort: false,
+                formatter: cell => {
+                    const r = cell.getRow().getData();
+                    const url = r.banner && /^https?:\/\//i.test(r.banner) ?
+                        r.banner :
+                        `${EMP_BASE}/${encodeURIComponent(r.nit)}/banner.jpeg`;
+                    return imgCell(url, 'banner.jpeg');
+                }
             },
             {
                 title: "Login",
                 field: "imagen_login",
-                formatter: thumbFormatter,
                 hozAlign: "center",
                 width: 120,
-                headerSort: false
+                headerSort: false,
+                formatter: cell => {
+                    const r = cell.getRow().getData();
+                    const url = r.imagen_login && /^https?:\/\//i.test(r.imagen_login) ?
+                        r.imagen_login :
+                        `${EMP_BASE}/${encodeURIComponent(r.nit)}/imagen_login.jpg`;
+                    return imgCell(url, 'imagen_login.jpg');
+                }
             },
 
             {
                 title: "Primario",
                 field: "color_primario",
-                formatter: colorFormatter,
                 width: 140,
-                headerSort: false
+                headerSort: false,
+                formatter: c => {
+                    const v = c.getValue() || '';
+                    return v ? `<span class="color-chip" style="background:${v}"></span> ${v}` : '';
+                }
             },
             {
                 title: "Secundario",
                 field: "color_secundario",
-                formatter: colorFormatter,
                 width: 140,
-                headerSort: false
+                headerSort: false,
+                formatter: c => {
+                    const v = c.getValue() || '';
+                    return v ? `<span class="color-chip" style="background:${v}"></span> ${v}` : '';
+                }
             },
             {
                 title: "Terciario",
                 field: "color_terciario",
-                formatter: colorFormatter,
                 width: 140,
-                headerSort: false
-            },
-
-            {
-                title: "Username",
-                field: "username",
-                headerFilter: "input",
-                width: 160
-            },
-            {
-                title: "Cod. Vendedor",
-                field: "codigoVendedor",
-                headerFilter: "input",
-                width: 140
-            },
-
-            {
-                title: "Actualizado",
-                field: "updated_at",
-                width: 170,
-                formatter: function(cell) {
-                    const v = cell.getValue();
-                    if (!v) return '';
-                    // Formato legible
-                    const d = new Date(v);
-                    if (isNaN(d)) return v;
-                    return d.toLocaleString();
+                headerSort: false,
+                formatter: c => {
+                    const v = c.getValue() || '';
+                    return v ? `<span class="color-chip" style="background:${v}"></span> ${v}` : '';
                 }
             },
-
             {
                 title: "Acciones",
                 field: "_actions",
                 width: 120,
                 hozAlign: "center",
-                formatter: actionsFormatter,
-                headerSort: false
+                headerSort: false,
+                formatter: cell => {
+                    const nit = encodeURIComponent(cell.getRow().getData().nit);
+                    const editUrl = `{{ route('empresas.edit', ':nit') }}`.replace(':nit', nit);
+                    return `<a href="${editUrl}" class="btn btn-sm btn-outline-primary">Editar</a>`;
+                }
             }
         ];
 
-        // Inicializar Tabulator
+        // Inicializa Tabulator
         const table = new Tabulator("#empresas-table", {
             data: EMPRESAS,
-            layout: "fitColumns",
-            height: "550px", // para virtual DOM; ajusta a gusto
-            responsiveLayout: "collapse", // colapsa columnas en pantallas pequeñas
+            layout: "fitDataFill", // <- autoajuste por datos + relleno
+            layoutColumnsOnNewData: true, // <- recalcula al cargar/cambiar datos
+            height: "550px",
+            responsiveLayout: "collapse",
             pagination: true,
             paginationSize: 10,
+            paginationCounter: "rows",
             placeholder: "No hay empresas registradas",
-            columns: columns,
+            columns,
             initialSort: [{
                 column: "updated_at",
                 dir: "desc"
             }],
-            locale: true,
+            locale: "es",
+            langs: {
+                es: {
+                    pagination: {
+                        first: "Primera",
+                        first_title: "Primera página",
+                        last: "Última",
+                        last_title: "Última página",
+                        prev: "Anterior",
+                        prev_title: "Página anterior",
+                        next: "Siguiente",
+                        next_title: "Página siguiente",
+                        page_size: "Registros por página",
+                    },
+                    headerFilters: {
+                        default: "filtrar columna..."
+                    },
+                    ajax: {
+                        loading: "Cargando...",
+                        error: "Error al cargar"
+                    },
+                },
+            },
         });
 
-        // Opcional: ajustar tamaño al contenedor cuando cambia la ventana
         window.addEventListener('resize', () => table.redraw(true));
     </script>
 @endpush

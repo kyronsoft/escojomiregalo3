@@ -5,14 +5,18 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\UsersController;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ErrorEmailController;
 use App\Http\Controllers\CampaignToyController;
 use App\Http\Controllers\ColaboradorController;
 use App\Http\Controllers\CustomLoginController;
 use App\Http\Controllers\ImportErrorController;
 use App\Http\Controllers\CampaignToysController;
+use App\Http\Controllers\SeleccionadosController;
 use App\Http\Controllers\Api\CampaignApiController;
 use App\Http\Controllers\ColaboradorHijoController;
 use App\Http\Controllers\CampaignToyImportController;
@@ -31,8 +35,6 @@ use App\Http\Controllers\CampaignCollaboratorController;
 |
 */
 
-@include_once('admin_web.php');
-
 Auth::routes();
 
 Route::get('/', function () {
@@ -49,22 +51,31 @@ Route::get('/post-login', function () {
     if (!auth()->check()) {
         return redirect()->route('login');
     }
-    return auth()->user()->hasRole('colaborador')
+    return auth()->user()->hasRole('Colaborador')
         ? redirect()->route('product')
-        : redirect()->route('dashboard');
+        : redirect()->route('dashboard.index');
 })->name('post-login');
+
+Route::middleware(['auth', 'role:Admin'])->group(function () {
+    Route::resource('users', UsersController::class);
+});
 
 Route::get('/home', fn() => redirect()->route('post-login'))->name('home');
 
-Route::view('dashboard', 'admin.dashboard.default')->name('dashboard')->middleware(['auth', 'role:admin']);
+// Route::view('dashboard', 'admin.dashboard.default')->name('dashboard')->middleware(['auth', 'role:admin']);
+
+Route::middleware(['auth', 'role:Admin|Ejecutiva-Empresas|RRHH-Cliente'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
+});
+
 
 Route::get('/product', [ProductController::class, 'index'])
     ->name('product')
-    ->middleware(['auth', 'role:colaborador']);
+    ->middleware(['auth', 'role:Colaborador']);
 
 Route::post('/product/aceptar-politica-datos', [ProductController::class, 'aceptarPolitica'])
     ->name('product.aceptarPolitica')
-    ->middleware('role:colaborador');
+    ->middleware('role:Colaborador');
 
 Route::get('/custom-login/{token}', [CustomLoginController::class, 'show'])
     ->name('custom.login');
@@ -97,13 +108,27 @@ Route::prefix('campaigns')->name('campaigns.')->group(function () {
     Route::put('/{campaign}',      [CampaignController::class, 'update'])->whereNumber('campaign')->name('update');
     Route::delete('/{campaign}',   [CampaignController::class, 'destroy'])->whereNumber('campaign')->name('destroy');
 });
-Route::middleware(['auth', 'role:admin|colaborador'])->group(function () {
+
+Route::prefix('campaigns/{campaign}')->group(function () {
+    // Editar / actualizar
+    Route::get('toys/{toy}/edit', [CampaignToyController::class, 'edit'])->name('campaigns.toys.edit');
+    Route::put('toys/{toy}',      [CampaignToyController::class, 'update'])->name('campaigns.toys.update');
+    Route::post('toys/{toy}/image/fetch', [CampaignToyController::class, 'fetchImageFromSharePoint'])
+        ->name('campaigns.toys.image.fetch');
+});
+
+Route::middleware(['auth', 'role:Admin|Colaborador'])->group(function () {
     Route::get('/campaigns/{campaign}/collaborators', [CampaignCollaboratorController::class, 'index'])
         ->name('campaigns.collaborators');
 
     Route::get('/campaigns/{campaign}/collaborators/data', [CampaignCollaboratorController::class, 'data'])
         ->name('campaigns.collaborators.data');
 });
+
+Route::post('/campaigns/{campaign}/collaborators/email-all', [CampaignCollaboratorController::class, 'emailAll'])->name('campaigns.collaborators.emailAll');
+
+Route::post('/campaigns/{campaign}/collaborators/email-one', [CampaignCollaboratorController::class, 'emailOne'])->name('campaigns.collaborators.emailOne');
+
 Route::prefix('colaboradores')->name('colaboradores.')->group(function () {
     Route::get('/data', [ColaboradorController::class, 'data'])->name('data');
     Route::get('/import',  [ColaboradorImportController::class, 'showForm'])->name('import');
@@ -136,9 +161,14 @@ Route::prefix('colaborador-hijos')->name('colaborador_hijos.')->group(function (
         ->whereNumber('colaborador_hijo')->name('destroy');
 });
 
-Route::post('/campaigns/{campaign}/collaborators/email-all', [CampaignCollaboratorController::class, 'emailAll'])->name('campaigns.collaborators.emailAll');
+Route::get('/seleccionados', [SeleccionadosController::class, 'index'])
+    ->name('seleccionados.index')
+    ->middleware(['auth']);
 
-Route::post('/campaigns/{campaign}/collaborators/email-one', [CampaignCollaboratorController::class, 'emailOne'])->name('campaigns.collaborators.emailOne');
+Route::middleware(['auth'])->group(function () {
+    Route::get('/seleccionados',        [SeleccionadosController::class, 'index'])->name('seleccionados.index');
+    Route::get('/seleccionados/export', [SeleccionadosController::class, 'export'])->name('seleccionados.export');
+});
 
 Route::prefix('campaign-toys')->name('campaign_toys.')->group(function () {
     Route::get('data', [CampaignToyController::class, 'data'])->name('data');
@@ -169,3 +199,43 @@ Route::post('/campaigns/generate-url', function (Request $request) {
 })->name('campaigns.generateCustomUrl');
 
 Route::get('/admin/importerrors', [ImportErrorController::class, 'index'])->name('importerrors.index');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/erroremails', [ErrorEmailController::class, 'index'])->name('erroremails.index');
+});
+
+Route::get('/debug/roles', function () {
+    $u = auth()->user();
+    return response()->json([
+        'user_id'     => $u?->id,
+        'guard'       => auth()->getDefaultDriver(),  // debería ser "web"
+        'role_names'  => $u?->getRoleNames(),         // ¿incluye "Admin" exactamente?
+        'has_Admin'   => $u?->hasRole('Admin'),
+    ]);
+})->middleware('auth');
+
+Route::prefix('ecommerce')->name('ecommerce.')->group(function () {
+    Route::view('product-page',    'admin.apps.ecommerce.product-page')->name('product-page');
+    Route::view('list-products',   'admin.apps.ecommerce.list-products')->name('list-products');
+    Route::view('payment-details', 'admin.apps.ecommerce.payment-details')->name('payment-details');
+    Route::view('order-history',   'admin.apps.ecommerce.order-history')->name('order-history');
+    Route::view('invoice-template', 'admin.apps.ecommerce.invoice-template')->name('invoice-template');
+
+    Route::get('cart',  [CartController::class, 'index'])->name('cart.index');
+    Route::post('cart', [CartController::class, 'addcart'])->name('cart.add');
+    Route::delete('cart', [CartController::class, 'remove'])->name('cart.remove');
+    Route::post('finish', [CartController::class, 'finish'])->name('cart.finish');
+    Route::get('finish-review', [CartController::class, 'finishReview'])
+        ->name('cart.finish.review')
+        ->middleware(['auth', 'role:Colaborador']);
+    Route::post('finish-update', [CartController::class, 'finishUpdate'])
+        ->name('cart.finish.update')
+        ->middleware(['auth', 'role:Colaborador']);
+    // Asegúrate que el path de la vista coincide con el archivo Blade que creaste:
+    Route::get('/checkout', [CartController::class, 'checkout'])
+        ->name('checkout')
+        ->middleware(['auth', 'role:Colaborador']);
+
+    Route::view('list-wish', 'admin.apps.ecommerce.list-wish')->name('list-wish');
+    Route::view('pricing',   'admin.apps.ecommerce.pricing')->name('pricing');
+});

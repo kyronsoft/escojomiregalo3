@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers\Auth;
 
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
+use Illuminate\Http\Request;
 
 class LoginController extends Controller
 {
     use AuthenticatesUsers;
 
-    // Esta propiedad ya no es relevante cuando usamos 'authenticated()'
     protected $redirectTo = '/dashboard';
 
     public function __construct()
@@ -19,10 +18,37 @@ class LoginController extends Controller
         $this->middleware('auth')->only('logout');
     }
 
-    protected function authenticated(\Illuminate\Http\Request $request, $user)
+    // Usaremos el campo 'documento' para ingresar
+    public function username()
     {
-        return $user->hasRole('colaborador')
-            ? redirect()->route('product')
-            : redirect()->route('dashboard');
+        return 'documento';
+    }
+
+    // Credenciales exactas
+    protected function credentials(Request $request)
+    {
+        return [
+            'documento' => $request->input('documento'),
+            'password'  => $request->input('password'),
+        ];
+    }
+
+    // app/Http/Controllers/Auth/LoginController.php
+
+    protected function authenticated(Request $request, $user)
+    {
+        // Usa SIEMPRE el mismo texto/case de los roles
+        if ($user->hasRole('Colaborador')) {
+            return redirect()->route('product');
+        }
+
+        if ($user->hasAnyRole(['Admin', 'Ejecutiva-Empresas', 'RRHH-Cliente'])) {
+            return redirect()->route('dashboard.index');
+        }
+
+        auth()->logout();
+        return redirect()->route('login')->withErrors([
+            'documento' => 'Tu cuenta no tiene un rol válido para ingresar.',
+        ]);
     }
 }

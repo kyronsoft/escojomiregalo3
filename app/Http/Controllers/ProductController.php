@@ -7,7 +7,6 @@ use App\Models\Campaign;
 use App\Models\Parametro;
 use App\Models\Colaborador;
 use Illuminate\Http\Request;
-use App\Models\ColaboradorHijo;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -36,25 +35,36 @@ class ProductController extends Controller
 
         if (!$pertenece) abort(403, 'No estás asignado a esta campaña.');
 
-        // Campaña
+        // Campaña y empresa
         $campaign = Campaign::with('empresa')->find($campaignId);
 
-        // Banner
-        $campaignBannerUrl = null;
-        if ($campaign && !empty($campaign->banner) && $campaign->banner !== 'ND') {
-            $campaignBannerUrl = url(Storage::disk('public')->url($campaign->banner));
-        }
-
-        // Empresa (por relación o por NIT defensivo)
+        // Empresa por relación o, si falta, por NIT de campaña / sesión / pivot
         $empresa = $campaign?->empresa;
-        if (!$empresa && $campaign?->nit) {
-            $empresa = Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$campaign->nit)])->first();
+        if (!$empresa) {
+            $nitEmpresa = $campaign?->nit
+                ?? $nitSesion
+                ?? DB::table('campaing_colaboradores')
+                ->where('documento', $documento)
+                ->where('idcampaing', $campaignId)
+                ->value('nit');
+
+            if ($nitEmpresa) {
+                $empresa = Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$nitEmpresa)])->first();
+            }
         }
 
-        // Colores (fallbacks seguros)
+        // Banner (normalizado, con fallback null permitido en la vista)
+        $campaignBannerUrl = $this->publicUrlIfExists($campaign?->banner);
+
+        // ✅ Logo empresa SIEMPRE con valor (placeholder si no hay archivo)
+        $empresaLogoUrl = $this->publicUrlLoose($empresa?->logo)
+            ?? $this->publicUrlLoose($empresa ? "images/{$empresa->nit}/logo.png" : null)
+            ?? asset('assets/images/placeholder.png');
+
+        // Colores / welcome
         $primaryColor   = $empresa?->color_primario   ?: '#ffffff';
         $secondaryColor = $empresa?->color_secundario ?: '#f2f2f2';
-        $welcomeMsg  = (string) ($empresa->welcome_msg ?? '');
+        $welcomeMsg     = (string) ($empresa->welcome_msg ?? '');
 
         // Lógica existente
         $colaborador  = Colaborador::where('documento', $documento)->first();
@@ -71,7 +81,63 @@ class ProductController extends Controller
             'primaryColor'      => $primaryColor,
             'secondaryColor'    => $secondaryColor,
             'welcomeMsg'        => $welcomeMsg,
+            'empresaLogoUrl'    => $empresaLogoUrl,  // ← ya NO es null
         ]);
+    }
+
+    private function publicUrlLoose(?string $path): ?string
+    {
+        if (!$path) return null;
+
+        // URL absoluta
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        // Normaliza separadores
+        $p = str_replace('\\', '/', $path);
+        $p = ltrim($p, '/');
+
+        // Corrige prefijos viejos
+        $p = preg_replace('#^storage/app/public/#', '', $p);
+        $p = preg_replace('#^app/public/#', '', $p);
+        $p = preg_replace('#^public/#', '', $p);
+
+        // 🚀 Ajuste clave: si viene "images/{nit}/..." => usar "campaigns/{nit}/..."
+        if (preg_match('#^images/(\d+)/(.+)$#', $p, $m)) {
+            $p = "campaigns/{$m[1]}/{$m[2]}";
+        }
+
+        // Si ya viene como storage/...
+        if (preg_match('#^storage/#i', $p)) {
+            return '/' . $p;
+        }
+
+        // Genera URL pública en el disco "public"
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($p);
+    }
+
+
+    /**
+     * URL pública si existe en disco 'public'.
+     * Acepta:
+     *  - URL absoluta → retorna igual
+     *  - /storage/... → retorna igual
+     *  - rutas relativas (normaliza y verifica existencia)
+     */
+    private function publicUrlIfExists(?string $path): ?string
+    {
+        if (!$path) return null;
+
+        if (preg_match('#^https?://#i', $path)) return $path;
+
+        $p = str_replace('\\', '/', $path);
+        $p = ltrim($p, '/');
+        $p = preg_replace('#^(storage/app/public/|app/public/|public/)#', '', $p);
+
+        if (preg_match('#^storage/#i', $p)) return '/' . ltrim($p, '/');
+
+        return Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : null;
     }
 
     private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId = null)
@@ -86,7 +152,7 @@ class ProductController extends Controller
                 'colaborador_hijos.nombre_hijo',
                 'colaborador_hijos.genero     as genero_hijo',
                 DB::raw('CAST(colaborador_hijos.rango_edad AS UNSIGNED) as edad_int'),
-                'colaborador_hijos.idcampaign',
+                'colaborador_hijos.idcampaing',
                 DB::raw("
                 CASE
                   WHEN UPPER(TRIM(colaborador_hijos.genero)) IN ('F','FEM','FEMENINO','NIÑA') THEN 'F'
@@ -98,13 +164,13 @@ class ProductController extends Controller
             "),
             ])
             ->where('colaborador_hijos.identificacion', $documento)
-            ->when($campaignId, fn($q) => $q->where('colaborador_hijos.idcampaign', $campaignId));
+            ->when($campaignId, fn($q) => $q->where('colaborador_hijos.idcampaing', $campaignId));
 
         // Juguetes normalizados (género vacío/NULL => 'U')
         $toysSub = DB::table($toysTable)
             ->select([
                 "$toysTable.id            as toy_id",
-                "$toysTable.idcampaign    as idcampaign",
+                "$toysTable.idcampaign    as idcampaing",
                 "$toysTable.referencia    as referencia",
                 "$toysTable.nombre        as toy_nombre",
                 "$toysTable.imagenppal    as imagenppal",
@@ -126,7 +192,7 @@ class ProductController extends Controller
         $rows = DB::query()
             ->fromSub($childrenSub, 'ch')
             ->joinSub($toysSub, 'ct', function ($join) {
-                $join->on('ct.idcampaign', '=', 'ch.idcampaign')
+                $join->on('ct.idcampaing', '=', 'ch.idcampaing')
                     ->whereRaw('ch.edad_int BETWEEN ct.desde_int AND ct.hasta_int')
                     ->where(function ($w) {
                         // Regla de género:
@@ -146,7 +212,7 @@ class ProductController extends Controller
                 'ch.nombre_hijo',
                 'ch.genero_hijo',
                 'ch.edad_int      as rango_edad',
-                'ch.idcampaign',
+                'ch.idcampaing',
                 'ct.toy_id        as toy_id',
                 'ct.referencia',
                 'ct.toy_nombre    as toy_nombre',
@@ -167,7 +233,7 @@ class ProductController extends Controller
                     'nombre'         => $f->nombre_hijo,
                     'genero'         => $f->genero_hijo,
                     'rango_edad'     => $f->rango_edad,
-                    'idcampaign'     => $f->idcampaign,
+                    'idcampaign'     => $f->idcampaing,
                 ],
                 'juguetes' => $items->map(fn($r) => [
                     'id'          => $r->toy_id,

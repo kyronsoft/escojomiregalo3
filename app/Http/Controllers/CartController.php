@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Campaign;
 use App\Models\CampaignToy;
 use App\Models\Colaborador;
+use Illuminate\Support\Str;
 use App\Models\Seleccionado;
 use Illuminate\Http\Request;
 use App\Models\ColaboradorHijo;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Mail\SelectionCompletedMail;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use App\Jobs\SendSelectionCompletedMail;
@@ -207,7 +209,7 @@ class CartController extends Controller
             ]);
         }
 
-        // === Validación: todos los hijos deben tener 1 juguete ===
+        // === Hijos del colaborador en la campaña ===
         $children = ColaboradorHijo::where('identificacion', $documento)
             ->where('idcampaign', $campaignId)
             ->get(['id', 'nombre_hijo']);
@@ -220,12 +222,28 @@ class CartController extends Controller
             ]);
         }
 
+        // === Selecciones realizadas ===
         $selectedIds = Seleccionado::where('documento', $documento)
             ->where('idcampaing', $campaignId)
             ->where('selected', 'Y')
             ->pluck('idhijo')
             ->unique();
 
+        // ⚠️ Caso 1: NO hay ninguna selección aún
+        if ($selectedIds->isEmpty()) {
+            $primero = optional($children->first())->id;
+
+            return redirect()
+                ->route('product')
+                ->with('active_child_id', $primero)
+                ->with('swal', [
+                    'icon'  => 'error',
+                    'title' => 'Sin selección',
+                    'text'  => 'No puedes finalizar sin haber seleccionado al menos un juguete.',
+                ]);
+        }
+
+        // ⚠️ Caso 2: Hay selecciones, pero faltan hijos por escoger
         if ($selectedIds->count() < $children->count()) {
             $faltantes = $children->whereNotIn('id', $selectedIds)->pluck('nombre_hijo')->values();
             $primero   = optional($children->whereNotIn('id', $selectedIds)->first())->id;
@@ -282,19 +300,31 @@ class CartController extends Controller
             DB::table('colaboradores')->where('documento', $documento)->update(['enviado' => 'Y']);
         }
 
+        /**
+         * 🔒 Deshabilitar usuario para futuros logins
+         * - Contraseña aleatoria
+         * - Limpiar remember_token
+         */
+        DB::table('users')->where('id', $user->id)->update([
+            'password'       => Hash::make(Str::random(64)),
+            'remember_token' => null,
+            'updated_at'     => now(),
+        ]);
+
         // Revisión por tipo de campaña
         $campaign = Campaign::find($campaignId);
         if ($campaign && (int)$campaign->idtipo === 1) {
+            // En este flujo necesitas al usuario autenticado para el modal,
+            // pero ya quedó deshabilitado para futuros logins.
             session(['_finish_campaign_id' => $campaign->id]);
             return redirect()->route('ecommerce.cart.finish.review');
         }
 
-        // 🚫 NO cerrar sesión aquí. Vamos a checkout autenticados.
+        // 🚫 NO cerramos sesión aquí: checkout() ya la cierra tras armar el resumen.
         return redirect()
             ->route('ecommerce.checkout')
             ->with('status', 'Tu selección ha sido registrada. Te mostraremos el resumen.');
     }
-
 
 
     public function finishReview(Request $request)
@@ -335,6 +365,13 @@ class CartController extends Controller
         // Actualiza solo los campos provistos
         $colaborador->fill($data);
         $colaborador->save();
+
+        // 🔒 Asegurar deshabilitación (idempotente)
+        DB::table('users')->where('id', $user->id)->update([
+            'password'       => Hash::make(Str::random(64)),
+            'remember_token' => null,
+            'updated_at'     => now(),
+        ]);
 
         // Limpia flag de campaña usada para finish
         $request->session()->forget('_finish_campaign_id');

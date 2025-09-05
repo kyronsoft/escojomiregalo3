@@ -289,18 +289,21 @@
                     }).done(function(state) {
                         updateProgress(state.message || '', state.percent ?? null);
 
-                        const m = state.meta || {};
-                        const total = pick(m.total_records, m.total, m.rows_total, state
-                            .total_records, state.total);
-                        const done = pick(m.processed_records, m.done, m.rows_done, state
-                            .processed_records, state.done);
+                        const m = state?.meta || {};
+                        const total = [m.total_records, m.total, m.rows_total, state?.total_records,
+                                state?.total
+                            ]
+                            .map(Number).find(v => Number.isFinite(v) && v >= 0);
+                        const done = [m.processed_records, m.done, m.rows_done, state
+                                ?.processed_records, state?.done
+                            ]
+                            .map(Number).find(v => Number.isFinite(v) && v >= 0);
 
-                        if (total !== null) knownTotal = total;
+                        if (Number.isFinite(total)) knownTotal = total;
 
-                        if (knownTotal !== null && done !== null) {
+                        if (Number.isFinite(knownTotal) && Number.isFinite(done)) {
                             const remaining = Math.max(knownTotal - done, 0);
-                            const etaSec = remaining * SECONDS_PER_RECORD;
-                            setETA(etaSec);
+                            setETA(remaining * SECONDS_PER_RECORD);
                             if (!importStartTs && done > 0) importStartTs = Date.now();
                         } else {
                             // Fallback con percent…
@@ -324,26 +327,41 @@
                         if (state.status === 'success' || state.status === 'error') {
                             clearInterval(pollTimer);
                             unblock();
-                            const sum = state.counts?.import || {};
-                            const img = state.counts?.images || {};
+
+                            // ⬇⬇⬇ CLAVES BILINGÜES (ES/EN) ⬇⬇⬇
+                            const sum = state?.counts?.import || {};
+                            const img = state?.counts?.images || {};
+
+                            const created = sum.creados ?? sum.created ?? 0;
+                            const updated = sum.actualizados ?? sum.updated ?? 0;
+                            const skipped = sum.omitidos ?? sum.skipped ?? 0;
+
+                            const imgOk = img.ok ?? img.downloaded ?? 0;
+                            const imgFail = img.fail ?? img.errors ?? 0;
+                            const imgS = img.toys_marked_S;
+                            const imgN = img.toys_marked_N;
+                            // ⬆⬆⬆ CLAVES BILINGÜES (ES/EN) ⬆⬆⬆
+
                             const icon = state.status === 'success' ? 'success' : 'error';
                             const ttl = state.status === 'success' ? 'Proceso finalizado' :
                                 'Proceso con errores';
+
                             const html = `
             <div class="text-start">
               <p><strong>${state.message || ttl}</strong></p>
               <ul>
-                <li>Importación — Creados: <b>${sum.creados ?? 0}</b></li>
-                <li>Importación — Actualizados: <b>${sum.actualizados ?? 0}</b></li>
-                <li>Importación — Omitidos: <b>${sum.omitidos ?? 0}</b></li>
+                <li>Importación — Creados: <b>${created}</b></li>
+                <li>Importación — Actualizados: <b>${updated}</b></li>
+                <li>Importación — Omitidos: <b>${skipped}</b></li>
               </ul>
               <ul>
-                <li>Imágenes — Descargadas (ok): <b>${img.ok ?? 0}</b></li>
-                <li>Imágenes — No encontradas / error (fail): <b>${img.fail ?? 0}</b></li>
-                ${img.toys_marked_S !== undefined ? `<li>Registros imgexists='S': <b>${img.toys_marked_S}</b></li>` : ''}
-                ${img.toys_marked_N !== undefined ? `<li>Registros imgexists='N': <b>${img.toys_marked_N}</b></li>` : ''}
+                <li>Imágenes — Descargadas (ok): <b>${imgOk}</b></li>
+                <li>Imágenes — No encontradas / error (fail): <b>${imgFail}</b></li>
+                ${imgS !== undefined ? `<li>Registros imgexists='S': <b>${imgS}</b></li>` : ''}
+                ${imgN !== undefined ? `<li>Registros imgexists='N': <b>${imgN}</b></li>` : ''}
               </ul>
             </div>`;
+
                             Swal.fire({
                                 icon,
                                 title: ttl,

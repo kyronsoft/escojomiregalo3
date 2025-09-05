@@ -13,6 +13,35 @@
 @endpush
 
 @section('content')
+    @php
+        use Illuminate\Support\Str;
+
+        $nit = $empresa->nit;
+        $bust = optional($empresa->updated_at)->timestamp ?? time();
+        $empBase = url('storage/empresas'); // /storage/empresas
+        $storageFn = fn($path) => asset('storage/' . ltrim($path, '/')); // asset('storage/...')
+
+        // Normaliza una ruta de imagen: usa absoluta si ya viene; si es relativa "empresas/..." usa asset('storage/...');
+        // si viene solo el nombre del archivo, lo arma como /storage/empresas/{nit}/{archivo}; si no viene, usa fallback.
+        $normImg = function ($val, string $fallback) use ($nit, $bust, $empBase, $storageFn) {
+            $val = trim((string) $val);
+            if ($val !== '' && Str::startsWith($val, ['http://', 'https://', '//'])) {
+                return $val . '?v=' . $bust;
+            }
+            if ($val !== '' && Str::startsWith($val, 'empresas/')) {
+                return $storageFn($val) . '?v=' . $bust;
+            }
+            $file = $val !== '' ? ltrim($val, '/') : $fallback;
+            return "{$empBase}/" . rawurlencode($nit) . "/{$file}?v={$bust}";
+        };
+
+        $placeholder = asset('assets/images/placeholder.png');
+
+        $logoUrl = $normImg($empresa->logo, 'logo.png');
+        $bannerUrl = $normImg($empresa->banner, 'banner.jpeg'); // ajusta si usas .jpg/.png
+        $imagenLoginUrl = $normImg($empresa->imagen_login, 'imagen_login.jpg');
+    @endphp
+
     <div class="container-fluid">
         <div class="row">
             <div class="col-12">
@@ -44,7 +73,6 @@
 
                         <div class="col-12 mb-3 d-flex justify-content-end">
                             <a href="{{ route('empresas.index') }}" class="btn btn-outline-secondary me-2">Cancelar</a>
-                            {{-- Este botón está fuera del form: se asocia con form="form-empresas" --}}
                             <button class="btn btn-primary" type="submit" form="form-empresas">Guardar cambios</button>
                         </div>
 
@@ -95,7 +123,6 @@
                                                 <option value="{{ $selectedId }}" selected>{{ $selectedText }}</option>
                                             @endif
                                         </select>
-                                        {{-- Guardamos también el texto seleccionado para reuso en validaciones/old --}}
                                         <input type="hidden" name="ciudad_text" id="ciudad_text"
                                             value="{{ $selectedText ?? '' }}">
                                         @error('ciudad')
@@ -130,13 +157,12 @@
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
                                                 @enderror
                                                 <div class="mt-2">
-                                                    @if ($empresa->logo)
-                                                        <div class="mb-2">
-                                                            <small class="text-muted d-block">Actual:</small>
-                                                            <img src="{{ asset('storage/' . $empresa->logo) }}"
-                                                                alt="Logo actual" style="max-width:200px; display:block;">
-                                                        </div>
-                                                    @endif
+                                                    <div class="mb-2">
+                                                        <small class="text-muted d-block">Actual:</small>
+                                                        <img src="{{ $empresa->logo }}" alt="Logo actual"
+                                                            style="max-width:200px; display:block;"
+                                                            onerror="this.onerror=null;this.src='{{ $placeholder }}'">
+                                                    </div>
                                                     <img id="preview_logo" src="" alt="Vista previa del logo"
                                                         style="max-width:200px; display:none;">
                                                 </div>
@@ -158,14 +184,12 @@
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
                                                 @enderror
                                                 <div class="mt-2">
-                                                    @if ($empresa->banner)
-                                                        <div class="mb-2">
-                                                            <small class="text-muted d-block">Actual:</small>
-                                                            <img src="{{ asset('storage/' . $empresa->banner) }}"
-                                                                alt="Banner actual"
-                                                                style="max-width:200px; display:block;">
-                                                        </div>
-                                                    @endif
+                                                    <div class="mb-2">
+                                                        <small class="text-muted d-block">Actual:</small>
+                                                        <img src="{{ $empresa->banner }}" alt="Banner actual"
+                                                            style="max-width:200px; display:block;"
+                                                            onerror="this.onerror=null;this.src='{{ $placeholder }}'">
+                                                    </div>
                                                     <img id="preview_banner" src="" alt="Vista previa del banner"
                                                         style="max-width:200px; display:none;">
                                                 </div>
@@ -187,14 +211,12 @@
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
                                                 @enderror
                                                 <div class="mt-2">
-                                                    @if ($empresa->imagen_login)
-                                                        <div class="mb-2">
-                                                            <small class="text-muted d-block">Actual:</small>
-                                                            <img src="{{ asset('storage/' . $empresa->imagen_login) }}"
-                                                                alt="Imagen login actual"
-                                                                style="max-width:200px; display:block;">
-                                                        </div>
-                                                    @endif
+                                                    <div class="mb-2">
+                                                        <small class="text-muted d-block">Actual:</small>
+                                                        <img src="{{ $empresa->imagen_login }}" alt="Imagen login actual"
+                                                            style="max-width:200px; display:block;"
+                                                            onerror="this.onerror=null;this.src='{{ $placeholder }}'">
+                                                    </div>
                                                     <img id="preview_login" src=""
                                                         alt="Vista previa de la imagen de login"
                                                         style="max-width:200px; display:none;">
@@ -383,7 +405,6 @@
                 }),
                 processResults: (data, params) => {
                     params.page = params.page || 1;
-                    // Soporta {results:[], pagination:{more}} o {items:[], more:true}
                     const results = (data && (data.results || data.items)) || [];
                     const more = (data && (data.more || (data.pagination && data.pagination.more))) || false;
                     return {
@@ -398,14 +419,12 @@
             templateSelection: item => item.text || item.id
         });
 
-        // Sincroniza hidden con el texto seleccionado
         $ciudad.on('select2:select', function(e) {
             $ciudadText.val(e.params.data.text || '');
         }).on('select2:clear', function() {
             $ciudadText.val('');
         });
 
-        // Precarga (si no vino el texto, intenta obtenerlo por AJAX)
         (function preloadCiudad() {
             const selectedId = @json(old('ciudad', $empresa->ciudad));
             const selectedText = @json(old('ciudad_text', $ciudadTexto ?? null));

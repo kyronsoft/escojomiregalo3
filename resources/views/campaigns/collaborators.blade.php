@@ -30,14 +30,14 @@
         <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
             <div>
                 <h3 class="mb-0">Colaboradores asignados</h3>
-                <div class="text-muted">
+                <div class="text-muted mt-3">
                     Campaña: <strong>#{{ $campaign->id }}</strong> ·
                     Nombre: <strong>{{ $campaign->nombre }}</strong> ·
                     NIT: <strong>{{ $campaign->nit }}</strong>
                 </div>
             </div>
 
-            <div class="d-flex align-items-center actions-bar">
+            <div class="d-flex align-items-center actions-bar mt-5">
                 {{-- Select Plantilla --}}
                 <div class="d-flex align-items-center">
                     <label for="plantilla" class="me-2 mb-0">Plantilla</label>
@@ -140,18 +140,6 @@
                     field: "nit",
                     width: 110,
                     headerFilter: "input"
-                },
-                {
-                    title: "Asignado",
-                    field: "created_at",
-                    width: 170,
-                    formatter: c => formatDate(c.getValue())
-                },
-                {
-                    title: "Actualizado",
-                    field: "updated_at",
-                    width: 170,
-                    formatter: c => formatDate(c.getValue())
                 },
                 {
                     title: "Acciones",

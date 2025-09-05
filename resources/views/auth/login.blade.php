@@ -39,14 +39,14 @@
                             <h4>Ingreso al Sistema</h4>
                             <h6>Bienvenido!</h6>
                             <div class="form-group">
-                                <label>Correo Electrónico</label>
+                                <label>Documento</label>
                                 <div class="input-group">
-                                    <span class="input-group-text"><i class="icon-email"></i></span>
-                                    <input class="form-control @error('email') is-invalid @enderror" type="email"
-                                        id="email" name="email" value="{{ old('email') }}"
+                                    <span class="input-group-text"><i class="icon-user"></i></span>
+                                    <input class="form-control @error('documento') is-invalid @enderror" type="documento"
+                                        id="documento" name="documento" value="{{ old('documento') }}"
                                         placeholder="Correo Registrado" autofocus />
 
-                                    @error('email')
+                                    @error('documento')
                                         <span class="invalid-feedback" role="alert">
                                             <strong>{{ $message }}</strong>
                                         </span>

@@ -15,8 +15,13 @@
     <meta name="keywords"
         content="admin template, viho admin template, dashboard template, flat admin template, responsive admin template, web app">
     <meta name="author" content="pixelstrap">
-    <link rel="icon" href="{{ asset('assets/images/favicon.png') }}" type="image/x-icon">
-    <link rel="shortcut icon" href="{{ asset('assets/images/favicon.png') }}" type="image/x-icon">
+    <link rel="icon" sizes="any" href="{{ asset('assets/images/moreproducts/favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="{{ asset('assets/images/moreproducts/png/favicon-login-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192"
+        href="{{ asset('assets/images/moreproducts/png/favicon-login-192x192.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180"
+        href="{{ asset('assets/images/moreproducts/png/favicon-login-180x180.png') }}">
     <title>@yield('title')</title>
     <!-- Google font-->
     <link rel="preconnect" href="https://fonts.gstatic.com">

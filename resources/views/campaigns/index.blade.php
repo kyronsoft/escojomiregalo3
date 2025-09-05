@@ -66,7 +66,8 @@
                 }
 
                 window.deleteCampaign = function(id) {
-                    /* … igual que tu código … */ };
+                    /* … igual que tu código … */
+                };
 
                 const columns = [{
                         title: "ID",
@@ -124,15 +125,6 @@
                         formatter: c => c.getValue() ? '<span class="badge bg-success">Sí</span>' :
                             '<span class="badge bg-secondary">No</span>',
                         headerSort: false
-                    },
-                    {
-                        title: "Actualizado",
-                        field: "updated_at",
-                        width: 170,
-                        formatter: v => {
-                            const d = new Date(v.getValue());
-                            return isNaN(d) ? (v.getValue() || '') : d.toLocaleString();
-                        }
                     },
                     {
                         title: "Acciones",

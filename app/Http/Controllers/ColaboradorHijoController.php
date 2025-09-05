@@ -35,9 +35,9 @@ class ColaboradorHijoController extends Controller
         $data = $request->validate([
             'identificacion' => ['required', 'string', 'max:15', 'exists:colaboradores,documento'],
             'nombre_hijo'    => ['nullable', 'string', 'max:100'],
-            'genero'         => ['nullable', 'string', 'max:10'],   // p. ej. 'M','F','Otro'
-            'rango_edad'     => ['nullable', 'string', 'max:15'],   // p. ej. '0-3','4-6'
-            'idcampaign'     => ['required', 'integer', 'exists:campaigns,id'],
+            'genero'      => ['required', 'in:NIÑO,NIÑA,UNISEX'],
+            'rango_edad'  => ['required', 'integer', 'min:0', 'max:14'],
+            'idcampaing'     => ['required', 'integer', 'exists:campaigns,id'],
         ]);
 
         ColaboradorHijo::create($data);
@@ -64,22 +64,52 @@ class ColaboradorHijoController extends Controller
         $data = $request->validate([
             'identificacion' => ['required', 'string', 'max:15', 'exists:colaboradores,documento'],
             'nombre_hijo'    => ['nullable', 'string', 'max:100'],
-            'genero'         => ['nullable', 'string', 'max:10'],
-            'rango_edad'     => ['nullable', 'string', 'max:15'],
+            'genero'         => ['nullable', 'string', 'in:NIÑO,NIÑA,UNISEX'],
+            'rango_edad'     => ['nullable', 'integer', 'min:0', 'max:14'],
             'idcampaign'     => ['required', 'integer', 'exists:campaigns,id'],
         ]);
 
+        // Género por defecto: UNISEX (si viene vacío o valor no permitido)
+        $genero = strtoupper($data['genero'] ?? 'UNISEX');
+        if (!in_array($genero, ['NIÑO', 'NIÑA', 'UNISEX'], true)) {
+            $genero = 'UNISEX';
+        }
+        $data['genero'] = $genero;
+
+        // Mapear al nombre real de la columna en BD
+        $data['idcampaing'] = $data['idcampaign'];
+        unset($data['idcampaign']);
+
+        // Normalizar rango_edad: entero o null
+        $data['rango_edad'] = array_key_exists('rango_edad', $data) && $data['rango_edad'] !== null && $data['rango_edad'] !== ''
+            ? (int) $data['rango_edad']
+            : null;
+        sleep(1);
         $colaborador_hijo->update($data);
 
         return redirect()
-            ->route('colaborador_hijos.index')
+            ->route('colaborador_hijos.index', ['identificacion' => $data['identificacion'] ?? null])
             ->with('success', 'Hijo(a) actualizado correctamente.');
     }
 
-    public function destroy(ColaboradorHijo $colaborador_hijo)
+
+    public function destroy(\App\Models\ColaboradorHijo $colaborador_hijo, \Illuminate\Http\Request $request)
     {
         $colaborador_hijo->delete();
 
+        // Si el cliente espera JSON (fetch/AJAX), no redirigir
+        if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
+            // Puedes devolver 204 sin cuerpo…
+            // return response()->noContent();
+
+            // …o 200 con un JSON sencillo:
+            return response()->json([
+                'ok'      => true,
+                'message' => 'Hijo(a) eliminado correctamente.',
+            ], 200);
+        }
+
+        // Flujo normal de navegador (full page)
         return redirect()
             ->route('colaborador_hijos.index')
             ->with('success', 'Hijo(a) eliminado correctamente.');

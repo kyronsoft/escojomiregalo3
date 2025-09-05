@@ -19,7 +19,14 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Row;
 
-class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFormulas, SkipsOnFailure, SkipsEmptyRows, WithBatchInserts, WithChunkReading
+class CampaignToysImport implements
+    OnEachRow,
+    WithHeadingRow,
+    WithCalculatedFormulas,
+    SkipsOnFailure,
+    SkipsEmptyRows,
+    WithBatchInserts,
+    WithChunkReading
 {
     use Importable, SkipsFailures;
 
@@ -29,10 +36,13 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
     protected int $updated = 0;
     protected int $skipped = 0;
 
+    /** Referencias realmente tocadas en esta importación */
+    protected array $touchedRefs = []; // <<-- NUEVO
+
     public function __construct(Campaign $campaign, ?string $jobId = null)
     {
-        $this->campaign = $campaign;
-        $this->jobId    = $jobId;
+        $this->campaign  = $campaign;
+        $this->jobId     = $jobId;
     }
 
     /** ================= Helpers ================= */
@@ -121,8 +131,8 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         $codigo = trim($codigo);
         if ($codigo === '') return ['', []];
 
-        if (Str::contains($codigo, '+')) {
-            $parts = array_filter(array_map('trim', explode('+', $codigo)));
+        $parts = $this->splitPlus($codigo);
+        if (count($parts) > 1) {
             $parts = array_slice($parts, 0, 6);
             $parts = array_map(fn($p) => $this->ensureJpg($p), $parts);
             return [implode('+', $parts), $parts];
@@ -159,10 +169,10 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
     }
 
     /**
-     * Normaliza el porcentaje:
-     * - No combo: devuelve "NN" (0..100) como string. Si inválido, 0 y log.
-     * - Combo: acepta "n1+n2+...". Valida cantidad = #partes; corrige tamaño (trunca/pad con 0) y valida cada valor 0..100.
-     *   Devuelve "n1+...+nk" normalizado como string. Registra errores cuando aplique.
+     * Normaliza el porcentaje a STRING:
+     * - No combo: "NN" (0..100).
+     * - Combo: "n1+n2+...+nk" (cada n 0..100). Ajusta cantidad de términos a #partes.
+     *   Acepta "%", decimales (., ,) y plus ancho "＋".
      */
     private function normalizePorcentaje(
         string $porcentajeRaw,
@@ -173,17 +183,15 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
     ): string {
         $raw = trim($porcentajeRaw);
 
-        // Helper para parsear un valor a 0..100 (int), default 0 con log
+        // parser de un valor: admite "44", "44.5", "44,5", "44%"
         $parseOne = function (string $val, int $idx = null) use ($excelRow, $codigo): int {
             $val = trim($val);
-            // quitar posibles símbolos %
-            $val = rtrim($val, " \t\n\r\0\x0B%");
+            $val = rtrim($val, " \t\n\r\0\x0B%");    // quita %
+            $val = str_replace(',', '.', $val);      // coma decimal -> punto
 
             $n = null;
             if ($val !== '' && preg_match('/^-?\d+(\.\d+)?$/', $val)) {
-                // aceptamos decimal pero redondeamos a int
-                $f = (float) $val;
-                $n = (int) round($f);
+                $n = (int) round((float) $val);
             }
 
             if ($n === null || $n < 0 || $n > 100) {
@@ -195,50 +203,43 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
                 );
                 return 0;
             }
-
             return $n;
         };
 
         if (!$isCombo) {
-            // 1 solo valor
             if ($raw === '') {
                 $this->logError($excelRow, 'porcentaje', 'Porcentaje vacío, se usó 0.', ['codigo' => $codigo]);
                 return '0';
             }
-            $n = $parseOne($raw);
-            return (string) $n;
+            return (string) $parseOne($raw);
         }
 
         // Es combo
-        $vals = array_map('trim', explode('+', $raw));
-        $vals = array_values(array_filter($vals, fn($v) => $v !== '')); // quita vacíos explícitos
+        $vals = $this->splitPlus($raw);
 
         if ($partsCount <= 0) {
-            // Debería no ocurrir; por si acaso, tratamos como no-combo
-            if ($raw === '') return '0';
-            $n = $parseOne($raw);
-            return (string) $n;
+            // Degradación segura: trata como no combo
+            return (string) ($raw === '' ? 0 : $parseOne($raw));
         }
 
-        // Ajuste de tamaño: debe coincidir con #partes
+        // Ajusta cantidad de términos
         if (count($vals) !== $partsCount) {
             $this->logError(
                 $excelRow,
                 'porcentaje',
                 "Cantidad de porcentajes no coincide con las partes del combo. Se ajustó a {$partsCount}.",
-                ['codigo' => $codigo, 'porcentaje_raw' => $porcentajeRaw, 'partes' => $partsCount]
+                ['codigo' => $codigo, 'porcentaje_raw' => $raw, 'partes' => $partsCount]
             );
             if (count($vals) > $partsCount) {
                 $vals = array_slice($vals, 0, $partsCount);
             } else {
-                // pad con "0" hasta partsCount
                 while (count($vals) < $partsCount) {
                     $vals[] = '0';
                 }
             }
         }
 
-        // Normalizar cada parte 0..100
+        // Normaliza cada parte (0..100)
         $norm = [];
         foreach ($vals as $i => $v) {
             $norm[] = (string) $parseOne($v, $i + 1);
@@ -255,6 +256,8 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
 
         try {
             $raw = $row->toArray();
+
+            // normaliza keys
             $R = [];
             foreach ($raw as $k => $v) {
                 $key = Str::of($k)->lower()->replace(' ', '_')->replace('__', '_')->value();
@@ -295,19 +298,31 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
                 $this->logError($excelRow, 'unidades', 'Valor inválido, se usó 0.', ['input' => $unidadesV, 'codigo' => $codigo]);
             }
 
-            $isCombo = Str::contains($codigo, '+');
+            // Detección de combo por código y/o porcentaje
+            $codeParts    = $this->splitPlus($codigo);
+            $isComboCode  = count($codeParts) > 1;
+
+            $porcParts    = $this->splitPlus($porcentajeV);
+            $isComboPorc  = count($porcParts) > 1;
+
+            $isCombo = $isComboCode || $isComboPorc;
+
+            // Imagen principal (partes desde código)
             [$imagenppal, $partes] = $this->buildImagenPpalFromCodigo($codigo);
 
-            // Porcentaje STRING (maneja combos con "+")
+            // Cantidad de partes para porcentaje (código si >1; si no, porcentaje si >1; si no, 1)
+            $partsCountForPct = count($partes) > 1 ? count($partes) : ($isComboPorc ? count($porcParts) : 1);
+
+            // Normaliza porcentaje (SIEMPRE STRING)
             $porcentajeStr = $this->normalizePorcentaje(
                 porcentajeRaw: $porcentajeV,
                 isCombo: $isCombo,
-                partsCount: count($partes),
+                partsCount: $partsCountForPct,
                 excelRow: $excelRow,
                 codigo: $codigo
             );
 
-            // No forzamos existencia aquí; las descargará el Job de Microsoft Graph
+            // (No comprobamos existencia aquí; la descargará el Job MS Graph)
             $payload = [
                 'combo'           => $isCombo ? 'COM' : 'NC',
                 'idcampaign'      => $this->campaign->id,
@@ -319,13 +334,14 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
                 'hasta'           => (string) $hasta,
                 'unidades'        => $unidades,
                 'precio_unitario' => 0,
-                'porcentaje'      => $porcentajeStr,   // <-- SIEMPRE string, con "+" para combos
+                'porcentaje'      => $porcentajeStr,   // <-- SIEMPRE string
                 'seleccionadas'   => 0,
-                'imgexists'       => 'N',              // será actualizado por DownloadCampaignToyImagesJob
+                'imgexists'       => 'N',              // lo actualizará DownloadCampaignToyImagesJob
                 'descripcion'     => $descripcion,
                 'escogidos'       => 0,
             ];
 
+            // Upsert por (idcampaign + referencia)
             $existing = CampaignToy::where('idcampaign', $this->campaign->id)
                 ->where('referencia', $codigo)
                 ->first();
@@ -337,6 +353,10 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
                 CampaignToy::create($payload);
                 $this->created++;
             }
+
+            // Marca referencia tocada (para filtrar descarga a solo estas)
+            $this->touchedRefs[$codigo] = true; // <<-- NUEVO
+
         } catch (\Throwable $e) {
             $this->skipped++;
             $this->logError(
@@ -348,6 +368,12 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         } finally {
             $this->tick(1);
         }
+    }
+
+    /** Devuelve las referencias tocadas (sin duplicados) */
+    public function getTouchedRefs(): array // <<-- NUEVO
+    {
+        return array_keys($this->touchedRefs);
     }
 
     private function tick(int $n): void
@@ -364,6 +390,13 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
         Cache::put($key, $state, now()->addHours(2));
     }
 
+    /** Divide por “+” ASCII o “＋” (ancho completo), recorta y quita vacíos */
+    private function splitPlus(string $s): array
+    {
+        $parts = preg_split('/[\+\xEF\xBC\x8B]/u', (string) $s);
+        return array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
+    }
+
     public static function progressKey(string $jobId): string
     {
         return "campaign_toys:import:progress:{$jobId}";
@@ -373,6 +406,7 @@ class CampaignToysImport implements OnEachRow, WithHeadingRow, WithCalculatedFor
     {
         return 500;
     }
+
     public function chunkSize(): int
     {
         return 500;

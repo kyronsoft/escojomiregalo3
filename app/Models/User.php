@@ -20,9 +20,10 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'documento',
         'email',
         'password',
-        'documento'
+        'nit'
     ];
 
     /**
@@ -43,4 +44,9 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    public function empresa()
+    {
+        return $this->belongsTo(\App\Models\Empresa::class, 'nit', 'nit');
+    }
 }

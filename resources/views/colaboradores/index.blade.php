@@ -13,7 +13,7 @@
 @section('content')
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="mb-0">Colaboradores</h3>
+            <h3 class="mb-0 mt-5">Colaboradores</h3>
             {{-- <a href="{{ route('colaboradores.create') }}" class="btn btn-primary">Nuevo colaborador</a> --}}
         </div>
 
@@ -173,16 +173,6 @@
                     headerSort: false
                 },
                 {
-                    title: "Actualizado",
-                    field: "updated_at",
-                    width: 170,
-                    formatter: (cell) => {
-                        const v = cell.getValue();
-                        const d = new Date(v);
-                        return isNaN(d) ? (v || '') : d.toLocaleString();
-                    }
-                },
-                {
                     title: "Acciones",
                     field: "_act",
                     width: 320,
@@ -192,7 +182,7 @@
                         const r = cell.getRow().getData();
                         const showUrl = `{{ route('colaboradores.show', ':id') }}`.replace(':id',
                             encodeURIComponent(r.documento));
-                        const editUrl = `{{ route('colaborador_hijos.edit', ':id') }}`.replace(':id',
+                        const editUrl = `{{ route('colaboradores.edit', ':id') }}`.replace(':id',
                             encodeURIComponent(r.documento));
                         const hijosUrl = hijosIndexUrl(r.documento);
                         return `

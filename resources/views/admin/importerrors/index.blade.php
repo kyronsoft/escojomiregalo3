@@ -12,6 +12,10 @@
         .actions-bar {
             gap: .5rem;
         }
+
+        details summary {
+            cursor: pointer;
+        }
     </style>
 @endpush
 
@@ -39,69 +43,116 @@
         (function() {
             const dataURL = `{{ route('importerrors.index', ['json' => 1]) }}`;
 
+            const escapeHtml = (str) => String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            function valuesFormatter(cell) {
+                const raw = cell.getValue() ?? '';
+                const txt = String(raw);
+                const MAX = 140;
+
+                if (txt.length <= MAX) {
+                    return `<span title="${escapeHtml(txt)}">${escapeHtml(txt)}</span>`;
+                }
+                const short = escapeHtml(txt.slice(0, MAX)) + '…';
+                const full = escapeHtml(txt);
+                return `
+                    <details>
+                        <summary>${short}</summary>
+                        <pre class="mb-0 mt-1" style="white-space:pre-wrap;">${full}</pre>
+                    </details>
+                `;
+            }
+
+            function dateFormatter(cell) {
+                const v = cell.getValue();
+                if (!v) return '';
+                const d = new Date(v);
+                return isNaN(d) ? escapeHtml(v) : d.toLocaleString();
+            }
+
+            const columns = [{
+                    title: "ID",
+                    field: "id",
+                    width: 80,
+                    hozAlign: "center",
+                    headerFilter: "input"
+                },
+                {
+                    title: "Fila (Excel)",
+                    field: "row",
+                    width: 120,
+                    hozAlign: "center",
+                    headerFilter: "input"
+                },
+                {
+                    title: "Atributo",
+                    field: "attribute",
+                    minWidth: 140,
+                    headerFilter: "input"
+                },
+                {
+                    title: "Error",
+                    field: "errors",
+                    minWidth: 240,
+                    headerFilter: "input",
+                    formatter: (cell) =>
+                        `<span title="${escapeHtml(cell.getValue())}">${escapeHtml(cell.getValue())}</span>`
+                },
+                {
+                    title: "Valores",
+                    field: "values",
+                    minWidth: 280,
+                    headerFilter: "input",
+                    formatter: valuesFormatter
+                },
+                {
+                    title: "Creado",
+                    field: "created_at",
+                    width: 170,
+                    formatter: dateFormatter
+                },
+            ];
+
             const table = new Tabulator("#errors-table", {
                 layout: "fitColumns",
                 height: "600px",
                 responsiveLayout: "collapse",
                 placeholder: "No hay registros",
-                ajaxURL: dataURL,
-                ajaxConfig: "GET",
-                pagination: false,
-                columns: [{
-                        title: "ID",
-                        field: "id",
-                        width: 80,
-                        hozAlign: "center",
-                        headerFilter: "input"
-                    },
-                    {
-                        title: "Fila (Excel)",
-                        field: "row",
-                        width: 120,
-                        hozAlign: "center",
-                        headerFilter: "input"
-                    },
-                    {
-                        title: "Atributo",
-                        field: "attribute",
-                        minWidth: 140,
-                        headerFilter: "input"
-                    },
-                    {
-                        title: "Error",
-                        field: "errors",
-                        minWidth: 240,
-                        headerFilter: "input"
-                    },
-                    {
-                        title: "Valores",
-                        field: "values",
-                        minWidth: 280,
-                        headerFilter: "input",
-                        formatter: function(cell) {
-                            const v = cell.getValue() || '';
-                            // Trunca visualmente para no romper la tabla
-                            return `<span title="${v.replace(/"/g,'&quot;')}">${v}</span>`;
-                        }
-                    },
-                    {
-                        title: "Creado",
-                        field: "created_at",
-                        width: 170,
-                        formatter: function(cell) {
-                            const v = cell.getValue();
-                            const d = v ? new Date(v) : null;
-                            return d && !isNaN(d) ? d.toLocaleString() : (v || '');
-                        }
-                    },
-                ],
+                columns,
+                // --- Paginación en el cliente ---
+                pagination: true,
+                paginationMode: "local",
+                paginationSize: 25,
+                paginationSizeSelector: [10, 25, 50, 100],
                 initialSort: [{
                     column: "created_at",
                     dir: "desc"
                 }],
+
+                // --- Carga por AJAX (una sola vez), pero Tabulator pagina localmente ---
+                ajaxURL: dataURL,
+                ajaxConfig: {
+                    method: "GET"
+                },
+                ajaxContentType: "json",
+                ajaxResponse: function(url, params, resp) {
+                    // Soportar varios formatos: array plano, {data:[]}, {items:[]}
+                    if (Array.isArray(resp)) return resp;
+                    if (resp && Array.isArray(resp.data)) return resp.data;
+                    if (resp && Array.isArray(resp.items)) return resp.items;
+                    return [];
+                },
             });
 
+            // Recargar: vuelve a pedir TODO y sigue paginando local
             $('#btn-reload').on('click', () => table.replaceData());
+
+            // Redibujo en resize (opcional)
             window.addEventListener('resize', () => table.redraw(true));
         })();
     </script>

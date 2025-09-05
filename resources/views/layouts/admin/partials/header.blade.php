@@ -33,13 +33,13 @@
     <div class="main-header-right row m-0">
         <div class="main-header-left">
             <div class="logo-wrapper">
-                <a href="{{ route('dashboard') }}">
+                <a href="{{ route('dashboard.index') }}">
                     <img class="img-fluid" style="max-width: 110px;"
                         src="{{ asset('assets/images/moreproducts/loginpage.png') }}" alt="">
                 </a>
             </div>
             <div class="dark-logo-wrapper">
-                <a href="{{ route('dashboard') }}">
+                <a href="{{ route('dashboard.index') }}">
                     <img class="img-fluid" style="max-width: 110px;"
                         src="{{ asset('assets/images/moreproducts/loginpage.png') }}" alt="">
                 </a>

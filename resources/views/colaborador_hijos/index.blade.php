@@ -103,19 +103,19 @@
             ];
 
             const table = new Tabulator("#hijos-table", {
-                layout: "fitColumns",
+                layout: "fitDataFill", // autoajuste por datos + rellena el ancho
+                layoutColumnsOnNewData: true, // recalcula al cargar/actualizar datos
                 height: "600px",
                 rowHeight: 48,
-                columns,
+                columns, // evita fijar width en columnas si quieres autoajuste
                 placeholder: "No hay hijos registrados",
+
                 ajaxURL: "{{ route('colaborador_hijos.data') }}",
                 ajaxConfig: "GET",
-                // Enviar el filtro de identificacion al backend:
                 ajaxParams: IDENT ? {
                     identificacion: IDENT
                 } : {},
 
-                // Carga local (sin paginación)
                 pagination: false,
                 sortMode: "local",
                 filterMode: "local",
@@ -124,6 +124,8 @@
                     return Array.isArray(response) ? response : [];
                 },
             });
+
+            window.hijosTable = table
         });
     </script>
     <script>
@@ -148,34 +150,60 @@
                         method: 'POST',
                         headers: {
                             'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'X-Requested-With': 'XMLHttpRequest', // <-- importante
                             'Accept': 'application/json'
                         },
                         body: new URLSearchParams({
                             _method: 'DELETE'
                         })
                     })
-                    .then(async r => {
+                    .then(async (r) => {
                         $.unblockUI();
-                        if (r.ok) {
+
+                        // 204 => sin contenido; 200 => JSON
+                        if (r.status === 204) {
                             Swal.fire({
                                 icon: 'success',
                                 title: 'Eliminado'
                             });
-                            table.replaceData(); // o table.setData(ajaxURL, ajaxParams)
-                        } else {
-                            const t = await r.text();
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: t || 'No se pudo eliminar.'
-                            });
+                            if (window.hijosTable) window.hijosTable.replaceData();
+                            return;
                         }
-                    })
-                    .catch(() => {
-                        $.unblockUI();
+
+                        if (r.ok) {
+                            let data = {};
+                            try {
+                                data = await r.json();
+                            } catch (_) {}
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Eliminado',
+                                text: data?.message || ''
+                            });
+                            if (window.hijosTable) window.hijosTable.replaceData();
+                            return;
+                        }
+
+                        // Error HTTP: intenta leer JSON o texto para mostrar algo útil
+                        let msg = 'No se pudo eliminar.';
+                        try {
+                            const ct = r.headers.get('content-type') || '';
+                            msg = ct.includes('application/json') ? (await r.json()).message || msg : (
+                                await r.text()) || msg;
+                        } catch (_) {}
                         Swal.fire({
                             icon: 'error',
-                            title: 'Error de red'
+                            title: 'Error',
+                            text: msg
+                        });
+                    })
+                    .catch((err) => {
+                        $.unblockUI();
+                        // Si hubo ReferenceError (p.ej. hijosTable undefined), mostrará el mensaje real
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: err?.message || 'Error de red'
                         });
                     });
             });

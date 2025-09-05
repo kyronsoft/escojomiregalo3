@@ -9,31 +9,7 @@ Route::prefix('admin')->group(function () {});
 // 	Route::view('dashboard-02', 'admin.dashboard.dashboard-02')->name('dashboard-02');
 // });
 
-Route::prefix('ecommerce')->name('ecommerce.')->group(function () {
-	Route::view('product-page',    'admin.apps.ecommerce.product-page')->name('product-page');
-	Route::view('list-products',   'admin.apps.ecommerce.list-products')->name('list-products');
-	Route::view('payment-details', 'admin.apps.ecommerce.payment-details')->name('payment-details');
-	Route::view('order-history',   'admin.apps.ecommerce.order-history')->name('order-history');
-	Route::view('invoice-template', 'admin.apps.ecommerce.invoice-template')->name('invoice-template');
 
-	Route::get('cart',  [CartController::class, 'index'])->name('cart.index');
-	Route::post('cart', [CartController::class, 'addcart'])->name('cart.add');
-	Route::delete('cart', [CartController::class, 'remove'])->name('cart.remove');
-	Route::post('finish', [CartController::class, 'finish'])->name('cart.finish');
-	Route::get('finish-review', [CartController::class, 'finishReview'])
-		->name('cart.finish.review')
-		->middleware(['auth', 'role:colaborador']);
-	Route::post('finish-update', [CartController::class, 'finishUpdate'])
-		->name('cart.finish.update')
-		->middleware(['auth', 'role:colaborador']);
-	// Asegúrate que el path de la vista coincide con el archivo Blade que creaste:
-	Route::get('/checkout', [CartController::class, 'checkout'])
-		->name('checkout')
-		->middleware(['auth', 'role:colaborador']);
-
-	Route::view('list-wish', 'admin.apps.ecommerce.list-wish')->name('list-wish');
-	Route::view('pricing',   'admin.apps.ecommerce.pricing')->name('pricing');
-});
 
 Route::prefix('email')->group(function () {
 	Route::view('email_inbox', 'admin.apps.email_inbox')->name('email_inbox');

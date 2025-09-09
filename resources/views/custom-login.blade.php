@@ -36,7 +36,41 @@
             margin: 0;
             color: #fff;
             font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
-            background: #000 url("{{ $bg }}") center center / cover no-repeat fixed;
+            /* Fondo base sin imagen: la imagen va en .bg-layer */
+            background: #000;
+        }
+
+        /* Capa de imagen de fondo con <img> para controlar object-fit */
+        .bg-layer {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background: #000;
+        }
+
+        .bg-img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            /* por defecto: cubre (desktop) */
+            object-position: center;
+        }
+
+        /* En móviles priorizamos no recortar: contain */
+        @media (max-width: 768px) {
+            .bg-img {
+                object-fit: contain;
+            }
+        }
+
+        /* Clases que el script alterna si detecta desproporción extrema */
+        .fit-cover {
+            object-fit: cover !important;
+        }
+
+        .fit-contain {
+            object-fit: contain !important;
         }
 
         .backdrop {
@@ -47,6 +81,7 @@
                 linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent 30%),
                 var(--overlay);
             pointer-events: none;
+            z-index: -1;
         }
 
         .content {
@@ -180,28 +215,6 @@
             outline: none;
         }
 
-        .row-inline {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-top: 6px;
-        }
-
-        .row-inline label {
-            margin: 0;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-        }
-
-        .row-inline input[type="checkbox"] {
-            accent-color: #2563eb;
-            width: 16px;
-            height: 16px;
-        }
-
         .actions {
             display: flex;
             gap: 12px;
@@ -249,7 +262,19 @@
 </head>
 
 <body>
+    <!-- Nueva capa de imagen de fondo -->
+    <div class="bg-layer" aria-hidden="true">
+        <img src="{{ $bg }}" alt="" class="bg-img" id="bgImg">
+    </div>
+
     <div class="backdrop" aria-hidden="true"></div>
+
+    <main class="content" role="main">
+        <div class="card" aria-label="Información de campaña">
+            <h1>{{ $empresaNombre }}</h1>
+            <p>{{ $campNombre }}</p>
+        </div>
+    </main>
 
     <!-- Barra inferior de ingreso -->
     <div class="ingreso-bar" id="ingresoBar">
@@ -277,12 +302,8 @@
                 </div>
             @endif
 
-            {{-- IMPORTANTE: esta forma publica al endpoint de login estándar --}}
             <form method="POST" action="{{ route('login') }}">
                 @csrf
-
-                {{-- En la mayoría de instalaciones (Breeze/Jetstream) el campo es "email".
-                     Si tu login usa "username" o "documento", cambia name="email" por el que corresponda. --}}
                 <div class="form-group">
                     <label for="email">Usuario o correo</label>
                     <input type="text" name="email" id="email" value="{{ old('email') }}" required
@@ -344,7 +365,6 @@
             function closeLogin() {
                 overlay.classList.remove('active');
             }
-
             open.addEventListener('click', openLogin);
             closeBtn.addEventListener('click', closeLogin);
             overlay.addEventListener('click', (e) => {
@@ -358,6 +378,51 @@
             @if ($errors->any() || session('status'))
                 openLogin();
             @endif
+        })();
+
+        // 🔧 Adaptación del fondo según el tamaño real de la imagen y del viewport
+        (function() {
+            const img = document.getElementById('bgImg');
+            if (!img) return;
+
+            function decideFit() {
+                const vw = window.innerWidth || document.documentElement.clientWidth;
+                const vh = window.innerHeight || document.documentElement.clientHeight;
+                const vr = vw / vh;
+
+                const iw = img.naturalWidth || vw;
+                const ih = img.naturalHeight || vh;
+                const ir = iw / ih;
+
+                // Regla:
+                // - En móviles (<768px): preferir "contain" (no recorte)
+                // - Si la desproporción es extrema (ir/vr > 1.8 o < 0.55), usar "contain" en cualquier tamaño
+                // - En el resto, usar "cover"
+                const isMobile = vw < 768;
+                const extreme = (ir / vr > 1.8) || (ir / vr < 0.55);
+
+                img.classList.remove('fit-cover', 'fit-contain');
+                if (isMobile || extreme) {
+                    img.classList.add('fit-contain');
+                } else {
+                    img.classList.add('fit-cover');
+                }
+            }
+
+            if (img.complete) {
+                decideFit();
+            } else {
+                img.addEventListener('load', decideFit, {
+                    once: true
+                });
+                img.addEventListener('error', () => {
+                    // si falla, no hacemos nada: se verá el fondo negro base
+                }, {
+                    once: true
+                });
+            }
+            window.addEventListener('resize', decideFit);
+            window.addEventListener('orientationchange', decideFit);
         })();
     </script>
 </body>

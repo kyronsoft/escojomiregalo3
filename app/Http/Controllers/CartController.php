@@ -296,7 +296,7 @@ class CartController extends Controller
 
         // === Hijos del colaborador en la campaña ===
         $children = ColaboradorHijo::where('identificacion', $documento)
-            ->where('idcampaign', $campaignId)
+            ->where('idcampaing', $campaignId)
             ->get(['id', 'nombre_hijo']);
 
         if ($children->isEmpty()) {
@@ -357,11 +357,11 @@ class CartController extends Controller
             ->join('colaborador_hijos', 'colaborador_hijos.id', '=', 'seleccionados.idhijo')
             ->join('campaign_toys', function ($j) {
                 $j->on('campaign_toys.referencia', '=', 'seleccionados.referencia')
-                    ->on('campaign_toys.idcampaign', '=', 'colaborador_hijos.idcampaign');
+                    ->on('campaign_toys.idcampaign', '=', 'colaborador_hijos.idcampaing');
             })
             ->where('seleccionados.documento', $documento)
             ->where('seleccionados.selected', 'Y')
-            ->where('colaborador_hijos.idcampaign', $campaignId)
+            ->where('colaborador_hijos.idcampaing', $campaignId)
             ->orderBy('colaborador_hijos.nombre_hijo')
             ->get()
             ->map(fn($r) => [
@@ -382,7 +382,7 @@ class CartController extends Controller
                 items: $items
             ))->onQueue('emails');
 
-            DB::table('colaboradores')->where('documento', $documento)->update(['enviado' => 'Y']);
+            DB::table('colaboradores')->where('documento', $documento)->update(['enviado' => 1]);
         }
 
         /**
@@ -504,11 +504,11 @@ class CartController extends Controller
             ->join('colaborador_hijos', 'colaborador_hijos.id', '=', 'seleccionados.idhijo')
             ->join('campaign_toys', function ($j) {
                 $j->on('campaign_toys.referencia', '=', 'seleccionados.referencia')
-                    ->on('campaign_toys.idcampaign', '=', 'colaborador_hijos.idcampaign');
+                    ->on('campaign_toys.idcampaign', '=', 'colaborador_hijos.idcampaing');
             })
             ->where('seleccionados.documento', $documento)
             ->where('seleccionados.selected', 'Y')
-            ->where('colaborador_hijos.idcampaign', $campaignId)
+            ->where('colaborador_hijos.idcampaing', $campaignId)
             ->orderBy('colaborador_hijos.nombre_hijo')
             ->get();
 

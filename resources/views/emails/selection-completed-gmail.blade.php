@@ -3,7 +3,7 @@
 
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <title>viho - Premium Admin Template</title>
+    <title>MoreProducts - EscojoMiRegalo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="x-apple-disable-message-reformatting">
     <meta name="format-detection" content="telephone=no">
@@ -228,7 +228,8 @@
                                     <td style="padding:0;">
                                         <p
                                             style="font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:24px;color:#000000;margin:0 0 10px 0;">
-                                            <b>Hi John Doe,</b></p>
+                                            <b>Hi John Doe,</b>
+                                        </p>
                                         <p
                                             style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:21px;color:#aba8a8;margin:0 0 5px 0;">
                                             Order Is Successfully Processsed And Your Order Is On The Way,</p>
@@ -314,7 +315,8 @@
                                     <td valign="top" style="border:1px solid #ddd;padding:12px 12px 12px 15px;">
                                         <h5
                                             style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#444;margin:15px 0 0 0;">
-                                            <b>$500</b></h5>
+                                            <b>$500</b>
+                                        </h5>
                                     </td>
                                 </tr>
 
@@ -340,7 +342,8 @@
                                     <td valign="top" style="border:1px solid #ddd;padding:12px 12px 12px 15px;">
                                         <h5
                                             style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#444;margin:15px 0 0 0;">
-                                            <b>$500</b></h5>
+                                            <b>$500</b>
+                                        </h5>
                                     </td>
                                 </tr>
 
@@ -366,7 +369,8 @@
                                     <td valign="top" style="border:1px solid #ddd;padding:12px 12px 12px 15px;">
                                         <h5
                                             style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#444;margin:15px 0 0 0;">
-                                            <b>$500</b></h5>
+                                            <b>$500</b>
+                                        </h5>
                                     </td>
                                 </tr>
 
@@ -392,7 +396,8 @@
                                     <td valign="top" style="border:1px solid #ddd;padding:12px 12px 12px 15px;">
                                         <h5
                                             style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#444;margin:15px 0 0 0;">
-                                            <b>$500</b></h5>
+                                            <b>$500</b>
+                                        </h5>
                                     </td>
                                 </tr>
 

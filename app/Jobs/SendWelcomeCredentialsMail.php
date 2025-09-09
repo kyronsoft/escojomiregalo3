@@ -50,13 +50,23 @@ class SendWelcomeCredentialsMail implements ShouldQueue
 
   public function handle(): void
   {
-    $absoluteLogin = \Illuminate\Support\Str::startsWith($this->loginUrl, ['http://', 'https://'])
-      ? $this->loginUrl
-      : url($this->loginUrl);
-
     $campaign = $this->campaignId
       ? \App\Models\Campaign::with('empresa')->find($this->campaignId)
       : null;
+
+    // === Login efectivo: usa customlogin si viene definido; si no, loginUrl ===
+    $loginCandidate = $this->loginUrl;
+    if ($campaign) {
+      $custom = trim((string)($campaign->customlogin ?? ''));
+      if ($custom !== '' && strcasecmp($custom, 'ND') !== 0) {
+        $loginCandidate = $custom;
+      }
+    }
+
+    // Asegurar URL absoluta
+    $absoluteLogin = \Illuminate\Support\Str::startsWith($loginCandidate, ['http://', 'https://'])
+      ? $loginCandidate
+      : url($loginCandidate);
 
     $empresa = $campaign?->empresa;
     if (!$empresa && $campaign?->nit) {
@@ -74,7 +84,7 @@ class SendWelcomeCredentialsMail implements ShouldQueue
       : asset('assets/images/logo/logo.png');
 
     // Logo derecho fijo (More)
-    $rightLogoAbs = url('assets/images/moreproducts/Logo_More.png');
+    $rightLogoAbs = url('assets/images/moreproducts/loginpage.png');
 
     // Background (opcional) a URL absoluta
     $bgUrlAbs = null;
@@ -92,7 +102,10 @@ class SendWelcomeCredentialsMail implements ShouldQueue
         ? $campaign->fechafin->format('d-M-Y')
         : (new \Carbon\Carbon($campaign->fechafin))->format('d-M-Y');
     }
+
     $esc = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+
+    // ⚠️ Aquí se reemplazan los metacampos con el login efectivo (customlogin o loginUrl)
     $replacements = [
       '[COLABORADOR]'     => $esc($this->name),
       '[EMPRESA]'         => $esc($empresaNom),
@@ -110,7 +123,7 @@ class SendWelcomeCredentialsMail implements ShouldQueue
       empresaCiudad: $empresaCiudad
     );
 
-    // HTML del correo (sin Blade). El “banner” ahora es el logo de More.
+    // HTML del correo (sin Blade)
     $html = $this->buildEmailHtml(
       leftLogoUrl: $logoUrlAbs,
       rightLogoUrl: $rightLogoAbs,
@@ -169,10 +182,6 @@ class SendWelcomeCredentialsMail implements ShouldQueue
 HTML;
   }
 
-  /**
-   * Plantilla HTML completa del correo (sin Blade), con background opcional.
-   * Ahora, el “rightLogoUrl” reemplaza al antiguo banner.
-   */
   private function buildEmailHtml(
     string $leftLogoUrl,
     string $rightLogoUrl,
@@ -222,36 +231,43 @@ VML;
 </head>
 <body style="{$bodyBase}{$bodyBg}">
 {$vml}
-<table{$tableBgAttr} style="width:100%;" cellpadding="0" cellspacing="0" role="presentation">
+<table{$tableBgAttr} width="100%" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;">
   <tbody>
     <tr>
       <td>
 
-        <!-- Header -->
-        <table style="background-color:transparent; width:100%;" cellpadding="0" cellspacing="0" role="presentation">
-          <tbody><tr><td>
-            <table style="width:650px; margin:0 auto 30px auto; background:rgba(255,255,255,0.0);" cellpadding="0" cellspacing="0" role="presentation">
-              <tbody>
-                <tr>
-                  <td style="vertical-align:middle;">
-                    <!-- Logo empresa (100px alto) -->
-                    <img src="{$leftLogo}" alt="Logo" style="height:100px; width:auto; display:block;">
-                  </td>
-                  <td style="text-align:right; vertical-align:middle;">
-                    <!-- Logo More (100px alto) -->
-                    <img src="{$rightLogo}" alt="MoreProducts Logo" style="height:100px; width:auto; display:inline-block;">
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </td></tr></tbody>
+        <!-- Header (logos pegados a los extremos) -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:transparent; width:100%;">
+          <tbody>
+            <tr>
+              <td align="center">
+                <table role="presentation" width="650" cellpadding="0" cellspacing="0"
+                       style="width:650px; margin:0 auto 30px auto; background:rgba(255,255,255,0.0); table-layout:fixed;">
+                  <tbody>
+                    <tr>
+                      <!-- IZQUIERDA -->
+                      <td width="50%" align="left" style="width:50%; padding:0; margin:0;">
+                        <img src="{$leftLogo}" alt="Logo" style="display:block; height:100px; width:auto; max-width:100%;">
+                      </td>
+                      <!-- DERECHA -->
+                      <td width="50%" align="right" style="width:50%; padding:0; margin:0;">
+                        <img src="{$rightLogo}" alt="MoreProducts Logo" style="display:block; height:100px; width:auto; max-width:100%;">
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </tbody>
         </table>
 
         <!-- Contenido principal -->
-        <table style="width:650px; margin:0 auto; background-color:#fff; border-radius:8px;" cellpadding="0" cellspacing="0" role="presentation">
+        <table role="presentation" width="650" cellpadding="0" cellspacing="0"
+               style="width:650px; margin:0 auto; background-color:#fff; border-radius:8px;">
           <tbody>
             <tr>
-              <td style="padding:30px;">
+              <!-- word-break para URLs muy largas (evita empujar el header) -->
+              <td style="padding:30px; word-break:break-word;">
                 {$mailtextHtml}
               </td>
             </tr>

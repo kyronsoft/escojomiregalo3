@@ -3,14 +3,15 @@
 @section('title', 'Usuarios')
 
 @push('css')
+    {{-- Tabulator CSS (recomendado) --}}
+    <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css">
     <style>
         .badge-role {
             font-size: .85rem;
         }
 
-        .table-users td,
-        .table-users th {
-            vertical-align: middle;
+        #users-table .tabulator-row {
+            min-height: 48px;
         }
     </style>
 @endpush
@@ -29,69 +30,189 @@
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
 
-        <div class="card">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover table-users mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width:80px;">ID</th>
-                                <th>Nombre</th>
-                                <th>Correo</th>
-                                <th style="width:200px;">Rol</th>
-                                <th style="width:180px;">Actualizado</th>
-                                <th style="width:180px;" class="text-center">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($users as $u)
-                                @php
-                                    $roleName = $u->getRoleNames()->first(); // uno solo
-                                    $label = match ($roleName) {
-                                        'admin' => 'Admin',
-                                        'ejecutiva_empresas' => 'Ejecutiva Empresas',
-                                        'business' => 'RRHH-Cliente',
-                                        'colaborador' => 'Colaborador',
-                                        default => $roleName,
-                                    };
-                                @endphp
-                                <tr>
-                                    <td>#{{ $u->id }}</td>
-                                    <td>{{ $u->name }}</td>
-                                    <td>{{ $u->email }}</td>
-                                    <td>
-                                        @if ($roleName)
-                                            <span class="badge bg-primary badge-role">{{ $label }}</span>
-                                        @else
-                                            <span class="text-muted">—</span>
-                                        @endif
-                                    </td>
-                                    <td>{{ optional($u->updated_at)->format('Y-m-d H:i') }}</td>
-                                    <td class="text-center">
-                                        <a href="{{ route('users.edit', $u) }}"
-                                            class="btn btn-sm btn-outline-primary">Editar</a>
-                                        <form action="{{ route('users.destroy', $u) }}" method="POST" class="d-inline"
-                                            onsubmit="return confirm('¿Eliminar este usuario?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">No hay usuarios</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            @if (method_exists($users, 'links'))
-                <div class="card-footer">
-                    {{ $users->links() }}
-                </div>
-            @endif
-        </div>
+        <div id="users-table"></div>
     </div>
 @endsection
+
+@push('scripts')
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    {{-- Tabulator JS --}}
+    <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+    <script>
+        (function() {
+            const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                '{{ csrf_token() }}';
+
+            // Rutas con placeholder
+            const ROUTES = {
+                data: `{{ route('users.data') }}`, // <-- crea esta ruta que devuelva un array/json de usuarios
+                edit: `{{ route('users.edit', ':id') }}`,
+                destroy: `{{ route('users.destroy', ':id') }}`,
+            };
+
+            // Mapea el primer rol del usuario a una etiqueta legible
+            function roleLabel(rowData) {
+                // intenta distintos campos posibles que pueda entregar tu API
+                const raw = rowData.role_name ||
+                    rowData.role ||
+                    (Array.isArray(rowData.roles) ? rowData.roles[0] : '') ||
+                    '';
+                const val = String(raw).trim();
+
+                switch (val) {
+                    case 'Admin':
+                    case 'admin':
+                        return 'Admin';
+                    case 'Ejecutiva-Empresas':
+                    case 'ejecutiva_empresas':
+                        return 'Ejecutiva Empresas';
+                    case 'RRHH-Cliente':
+                    case 'business':
+                        return 'RRHH-Cliente';
+                    case 'Colaborador':
+                    case 'colaborador':
+                        return 'Colaborador';
+                    default:
+                        return val || '—';
+                }
+            }
+
+            // Botón eliminar (con confirmación)
+            window.deleteUser = function(id) {
+                if (!id) return;
+                if (!confirm('¿Eliminar este usuario?')) return;
+
+                fetch(ROUTES.destroy.replace(':id', id), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': CSRF,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            _method: 'DELETE'
+                        }),
+                    })
+                    .then(async r => {
+                        if (r.ok) {
+                            table.replaceData(); // recargar
+                        } else {
+                            const t = await r.text();
+                            alert(t || 'No fue posible eliminar.');
+                        }
+                    })
+                    .catch(() => alert('Error de red'));
+            };
+
+            const columns = [{
+                    title: "ID",
+                    field: "id",
+                    width: 90,
+                    headerFilter: "input"
+                },
+                {
+                    title: "Nombre",
+                    field: "name",
+                    minWidth: 220,
+                    headerFilter: "input",
+                    formatter: c =>
+                        `<div class="text-truncate" title="${c.getValue() ?? ''}">${c.getValue() ?? ''}</div>`
+                },
+                {
+                    title: "Correo",
+                    field: "email",
+                    minWidth: 220,
+                    headerFilter: "input",
+                    formatter: c => {
+                        const v = c.getValue() || '';
+                        return v ? `<a href="mailto:${v}">${v}</a>` : '—';
+                    }
+                },
+                {
+                    title: "Rol",
+                    field: "role_name",
+                    width: 200,
+                    headerSort: false,
+                    formatter: cell =>
+                        `<span class="badge bg-primary badge-role">${roleLabel(cell.getRow().getData())}</span>`
+                },
+                {
+                    title: "Actualizado",
+                    field: "updated_at",
+                    width: 180,
+                    formatter: c => {
+                        const v = c.getValue();
+                        const d = v ? new Date(v) : null;
+                        return d && !isNaN(d) ? d.toLocaleString() : (v ?? '');
+                    }
+                },
+                {
+                    title: "Acciones",
+                    field: "_act",
+                    width: 180,
+                    hozAlign: "center",
+                    headerSort: false,
+                    formatter: (cell) => {
+                        const id = cell.getRow().getData().id;
+                        const editUrl = ROUTES.edit.replace(':id', encodeURIComponent(id));
+                        return `
+                        <div class="d-inline-flex gap-1">
+                          <a href="${editUrl}" class="btn btn-sm btn-outline-primary">Editar</a>
+                          <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${id})">Eliminar</button>
+                        </div>`;
+                    }
+                },
+            ];
+
+            const table = new Tabulator("#users-table", {
+                layout: "fitDataFill",
+                height: "600px",
+                responsiveLayout: "collapse",
+                ajaxURL: ROUTES.data,
+                ajaxConfig: "GET",
+                ajaxResponse: (url, params, resp) => Array.isArray(resp) ? resp : (resp?.data ?? []),
+
+                // 🔹 Paginación (cliente)
+                pagination: true,
+                paginationMode: "local",
+                paginationSize: 10,
+                paginationSizeSelector: [10, 20, 50, 100],
+                paginationCounter: "rows",
+
+                // Orden y filtros locales
+                sortMode: "local",
+                filterMode: "local",
+
+                columns,
+                placeholder: "No hay usuarios",
+                initialSort: [{
+                    column: "updated_at",
+                    dir: "desc"
+                }],
+                locale: "es",
+                langs: {
+                    es: {
+                        pagination: {
+                            first: "Primera",
+                            first_title: "Primera página",
+                            last: "Última",
+                            last_title: "Última página",
+                            prev: "Anterior",
+                            prev_title: "Página anterior",
+                            next: "Siguiente",
+                            next_title: "Página siguiente",
+                            page_size: "Registros por página",
+                        },
+                        headerFilters: {
+                            default: "filtrar columna..."
+                        },
+                    }
+                }
+            });
+
+            // Redibuja al cambiar tamaño
+            window.addEventListener('resize', () => table.redraw(true));
+        })();
+    </script>
+@endpush

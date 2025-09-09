@@ -57,7 +57,18 @@ Route::get('/post-login', function () {
 })->name('post-login');
 
 Route::middleware(['auth', 'role:Admin'])->group(function () {
-    Route::resource('users', UsersController::class);
+    // Index (vista con Tabulator)
+    Route::get('/users', [UsersController::class, 'index'])->name('users.index');
+
+    // Data para Tabulator (JSON)
+    Route::get('/users/data', [UsersController::class, 'data'])->name('users.data');
+
+    // CRUD clásico
+    Route::get('/users/create', [UsersController::class, 'create'])->name('users.create');
+    Route::post('/users', [UsersController::class, 'store'])->name('users.store');
+    Route::get('/users/{user}/edit', [UsersController::class, 'edit'])->name('users.edit');
+    Route::put('/users/{user}', [UsersController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
 });
 
 Route::get('/home', fn() => redirect()->route('post-login'))->name('home');

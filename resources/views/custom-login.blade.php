@@ -1,5 +1,5 @@
 @php
-    $bg = $bannerUrl ?? null ? asset($bannerUrl ? '' : '') : null; // no tocar; lo pasamos desde el controlador
+    $bg = $bannerUrl ?? null ? asset($bannerUrl ? '' : '') : null; // no tocar
     $bg =
         $bannerUrl ??
         'data:image/svg+xml;charset=UTF-8,' .
@@ -25,6 +25,8 @@
             --bar-fg: #fff;
             --bar-height: 72px;
             --hot-zone: 70px;
+            /* Fallback para navegadores que no soportan dvh */
+            --vh: 1vh;
         }
 
         html,
@@ -36,14 +38,19 @@
             margin: 0;
             color: #fff;
             font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
-            /* Fondo base sin imagen: la imagen va en .bg-layer */
             background: #000;
+            /* la imagen va en .bg-layer */
         }
 
-        /* Capa de imagen de fondo con <img> para controlar object-fit */
+        /* ===== Fondo a pantalla completa ===== */
         .bg-layer {
             position: fixed;
-            inset: 0;
+            left: 0;
+            top: 0;
+            width: 100vw;
+            /* usar 100dvh cuando exista; si no, usamos la variable --vh (que JS setea a innerHeight) o 100vh */
+            height: 100dvh;
+            height: calc(var(--vh, 1vh) * 100);
             z-index: -2;
             background: #000;
         }
@@ -53,24 +60,9 @@
             height: 100%;
             display: block;
             object-fit: cover;
-            /* por defecto: cubre (desktop) */
+            /* ¡siempre cubrir! */
             object-position: center;
-        }
-
-        /* En móviles priorizamos no recortar: contain */
-        @media (max-width: 768px) {
-            .bg-img {
-                object-fit: contain;
-            }
-        }
-
-        /* Clases que el script alterna si detecta desproporción extrema */
-        .fit-cover {
-            object-fit: cover !important;
-        }
-
-        .fit-contain {
-            object-fit: contain !important;
+            /* centrada */
         }
 
         .backdrop {
@@ -112,7 +104,6 @@
             opacity: .9;
         }
 
-        /* Barra inferior */
         .ingreso-bar {
             position: fixed;
             left: 0;
@@ -155,7 +146,6 @@
             z-index: 10;
         }
 
-        /* Overlay login (simula login de la app) */
         .login-overlay {
             position: fixed;
             inset: 0;
@@ -262,18 +252,23 @@
 </head>
 
 <body>
-    <!-- Nueva capa de imagen de fondo -->
+    <!-- Capa de imagen de fondo que SIEMPRE cubre -->
     <div class="bg-layer" aria-hidden="true">
-        <img src="{{ $bg }}" alt="" class="bg-img" id="bgImg">
+        <img src="{{ $bg }}" alt="" class="bg-img">
     </div>
 
     <div class="backdrop" aria-hidden="true"></div>
 
+    <main class="content" role="main">
+        <div class="card" aria-label="Información de campaña">
+            <h1>{{ $empresaNombre }}</h1>
+            <p>{{ $campNombre }}</p>
+        </div>
+    </main>
+
     <!-- Barra inferior de ingreso -->
     <div class="ingreso-bar" id="ingresoBar">
-        <a class="ingreso-link" id="openLogin" href="#">
-            Ingresar
-        </a>
+        <a class="ingreso-link" id="openLogin" href="#">Ingresar</a>
     </div>
     <div class="hot-zone" id="hotZone" aria-hidden="true"></div>
 
@@ -286,7 +281,6 @@
             @if (session('status'))
                 <div class="error">{{ session('status') }}</div>
             @endif
-
             @if ($errors->any())
                 <div class="error">
                     @foreach ($errors->all() as $err)
@@ -302,12 +296,10 @@
                     <input type="text" name="email" id="email" value="{{ old('email') }}" required
                         autocomplete="username">
                 </div>
-
                 <div class="form-group">
                     <label for="password">Contraseña</label>
                     <input type="password" name="password" id="password" required autocomplete="current-password">
                 </div>
-
                 <div class="actions">
                     <button type="submit" class="btn btn-primary">Ingresar</button>
                     <button type="button" class="btn btn-secondary" id="closeLogin">Cancelar</button>
@@ -317,6 +309,17 @@
     </div>
 
     <script>
+        // Ajuste del alto real del viewport en móviles (evita barras negras/espacios)
+        (function setRealVh() {
+            const update = () => {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            };
+            update();
+            window.addEventListener('resize', update);
+            window.addEventListener('orientationchange', update);
+        })();
+
         (function() {
             const bar = document.getElementById('ingresoBar');
             const hot = document.getElementById('hotZone');
@@ -324,7 +327,6 @@
             const overlay = document.getElementById('loginOverlay');
             const closeBtn = document.getElementById('closeLogin');
 
-            // Mostrar barra al acercar el ratón al borde inferior
             let hideTimer = null;
 
             function showBar() {
@@ -338,9 +340,8 @@
                 if (hideTimer) clearTimeout(hideTimer);
             }
             hot.addEventListener('mouseenter', showBar);
-            document.addEventListener('mousemove', (e) => {
-                const threshold = 70;
-                if ((window.innerHeight - e.clientY) <= threshold) showBar();
+            document.addEventListener('mousemove', e => {
+                if ((window.innerHeight - e.clientY) <= 70) showBar();
             });
             bar.addEventListener('mouseenter', immediateShow);
             bar.addEventListener('mouseleave', () => {
@@ -348,7 +349,6 @@
                 hideTimer = setTimeout(() => bar.classList.remove('active'), 800);
             });
 
-            // Abrir / cerrar overlay
             function openLogin(e) {
                 if (e) e.preventDefault();
                 overlay.classList.add('active');
@@ -360,62 +360,16 @@
             }
             open.addEventListener('click', openLogin);
             closeBtn.addEventListener('click', closeLogin);
-            overlay.addEventListener('click', (e) => {
+            overlay.addEventListener('click', e => {
                 if (e.target === overlay) closeLogin();
             });
-            document.addEventListener('keydown', (e) => {
+            document.addEventListener('keydown', e => {
                 if (e.key === 'Escape') closeLogin();
             });
 
-            // Si el servidor devolvió errores/status, abrir overlay automáticamente
             @if ($errors->any() || session('status'))
                 openLogin();
             @endif
-        })();
-
-        // 🔧 Adaptación del fondo según el tamaño real de la imagen y del viewport
-        (function() {
-            const img = document.getElementById('bgImg');
-            if (!img) return;
-
-            function decideFit() {
-                const vw = window.innerWidth || document.documentElement.clientWidth;
-                const vh = window.innerHeight || document.documentElement.clientHeight;
-                const vr = vw / vh;
-
-                const iw = img.naturalWidth || vw;
-                const ih = img.naturalHeight || vh;
-                const ir = iw / ih;
-
-                // Regla:
-                // - En móviles (<768px): preferir "contain" (no recorte)
-                // - Si la desproporción es extrema (ir/vr > 1.8 o < 0.55), usar "contain" en cualquier tamaño
-                // - En el resto, usar "cover"
-                const isMobile = vw < 768;
-                const extreme = (ir / vr > 1.8) || (ir / vr < 0.55);
-
-                img.classList.remove('fit-cover', 'fit-contain');
-                if (isMobile || extreme) {
-                    img.classList.add('fit-contain');
-                } else {
-                    img.classList.add('fit-cover');
-                }
-            }
-
-            if (img.complete) {
-                decideFit();
-            } else {
-                img.addEventListener('load', decideFit, {
-                    once: true
-                });
-                img.addEventListener('error', () => {
-                    // si falla, no hacemos nada: se verá el fondo negro base
-                }, {
-                    once: true
-                });
-            }
-            window.addEventListener('resize', decideFit);
-            window.addEventListener('orientationchange', decideFit);
         })();
     </script>
 </body>

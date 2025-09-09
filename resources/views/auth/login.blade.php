@@ -44,7 +44,7 @@
                                     <span class="input-group-text"><i class="icon-user"></i></span>
                                     <input class="form-control @error('documento') is-invalid @enderror" type="documento"
                                         id="documento" name="documento" value="{{ old('documento') }}"
-                                        placeholder="Correo Registrado" autofocus />
+                                        placeholder="Nro. Documento" autofocus />
 
                                     @error('documento')
                                         <span class="invalid-feedback" role="alert">

@@ -120,7 +120,7 @@
             z-index: 10;
         }
 
-        /* Overlay login */
+        /* Overlay login (simula login de la app) */
         .login-overlay {
             position: fixed;
             inset: 0;
@@ -180,6 +180,28 @@
             outline: none;
         }
 
+        .row-inline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .row-inline label {
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .row-inline input[type="checkbox"] {
+            accent-color: #2563eb;
+            width: 16px;
+            height: 16px;
+        }
+
         .actions {
             display: flex;
             gap: 12px;
@@ -229,13 +251,6 @@
 <body>
     <div class="backdrop" aria-hidden="true"></div>
 
-    <main class="content" role="main">
-        <div class="card" aria-label="Información de campaña">
-            <h1>{{ $empresaNombre }}</h1>
-            <p>{{ $campNombre }}</p>
-        </div>
-    </main>
-
     <!-- Barra inferior de ingreso -->
     <div class="ingreso-bar" id="ingresoBar">
         <a class="ingreso-link" id="openLogin" href="#">
@@ -244,11 +259,15 @@
     </div>
     <div class="hot-zone" id="hotZone" aria-hidden="true"></div>
 
-    <!-- Overlay de Login -->
+    <!-- Overlay de Login (usa el login estándar de la app) -->
     <div class="login-overlay" id="loginOverlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
         <div class="login-modal">
-            <h2 id="loginTitle">Acceso a la campaña</h2>
+            <h2 id="loginTitle">Iniciar sesión</h2>
             <p class="sub">{{ $empresaNombre }} — {{ $campNombre }}</p>
+
+            @if (session('status'))
+                <div class="error">{{ session('status') }}</div>
+            @endif
 
             @if ($errors->any())
                 <div class="error">
@@ -258,21 +277,22 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('custom.login.auth') }}">
+            {{-- IMPORTANTE: esta forma publica al endpoint de login estándar --}}
+            <form method="POST" action="{{ route('login') }}">
                 @csrf
-                <input type="hidden" name="token" value="{{ $token }}">
+
+                {{-- En la mayoría de instalaciones (Breeze/Jetstream) el campo es "email".
+                     Si tu login usa "username" o "documento", cambia name="email" por el que corresponda. --}}
                 <div class="form-group">
-                    <label for="identificacion">Documento</label>
-                    <input type="text" name="identificacion" id="identificacion" value="{{ old('identificacion') }}"
-                        required autocomplete="username">
+                    <label for="email">Usuario o correo</label>
+                    <input type="text" name="email" id="email" value="{{ old('email') }}" required
+                        autocomplete="username">
                 </div>
 
-                {{-- Si quieres también email o PIN, descomenta y valida en backend
                 <div class="form-group">
-                    <label for="email">Correo (opcional)</label>
-                    <input type="email" name="email" id="email" value="{{ old('email') }}">
+                    <label for="password">Contraseña</label>
+                    <input type="password" name="password" id="password" required autocomplete="current-password">
                 </div>
-                --}}
 
                 <div class="actions">
                     <button type="submit" class="btn btn-primary">Ingresar</button>
@@ -318,14 +338,13 @@
             function openLogin(e) {
                 if (e) e.preventDefault();
                 overlay.classList.add('active');
-                setTimeout(() => {
-                    document.getElementById('identificacion')?.focus();
-                }, 50);
+                setTimeout(() => document.getElementById('email')?.focus(), 50);
             }
 
             function closeLogin() {
                 overlay.classList.remove('active');
             }
+
             open.addEventListener('click', openLogin);
             closeBtn.addEventListener('click', closeLogin);
             overlay.addEventListener('click', (e) => {
@@ -335,8 +354,8 @@
                 if (e.key === 'Escape') closeLogin();
             });
 
-            // Si el servidor devolvió errores, abrir overlay automáticamente
-            @if ($errors->any())
+            // Si el servidor devolvió errores/status, abrir overlay automáticamente
+            @if ($errors->any() || session('status'))
                 openLogin();
             @endif
         })();

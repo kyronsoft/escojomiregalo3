@@ -44,22 +44,16 @@
             const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                 '{{ csrf_token() }}';
 
-            // Rutas con placeholder
             const ROUTES = {
-                data: `{{ route('users.data') }}`, // <-- crea esta ruta que devuelva un array/json de usuarios
+                data: `{{ route('users.data') }}`,
                 edit: `{{ route('users.edit', ':id') }}`,
                 destroy: `{{ route('users.destroy', ':id') }}`,
             };
 
-            // Mapea el primer rol del usuario a una etiqueta legible
             function roleLabel(rowData) {
-                // intenta distintos campos posibles que pueda entregar tu API
-                const raw = rowData.role_name ||
-                    rowData.role ||
-                    (Array.isArray(rowData.roles) ? rowData.roles[0] : '') ||
-                    '';
+                const raw = rowData.role_name || rowData.role || (Array.isArray(rowData.roles) ? rowData.roles[0] :
+                    '') || '';
                 const val = String(raw).trim();
-
                 switch (val) {
                     case 'Admin':
                     case 'admin':
@@ -78,11 +72,9 @@
                 }
             }
 
-            // Botón eliminar (con confirmación)
             window.deleteUser = function(id) {
                 if (!id) return;
                 if (!confirm('¿Eliminar este usuario?')) return;
-
                 fetch(ROUTES.destroy.replace(':id', id), {
                         method: 'POST',
                         headers: {
@@ -96,10 +88,9 @@
                     })
                     .then(async r => {
                         if (r.ok) {
-                            table.replaceData(); // recargar
+                            table.replaceData();
                         } else {
-                            const t = await r.text();
-                            alert(t || 'No fue posible eliminar.');
+                            alert((await r.text()) || 'No fue posible eliminar.');
                         }
                     })
                     .catch(() => alert('Error de red'));
@@ -111,6 +102,15 @@
                     width: 90,
                     headerFilter: "input"
                 },
+
+                // 👇 NUEVA COLUMNA Documento
+                {
+                    title: "Documento",
+                    field: "documento",
+                    width: 160,
+                    headerFilter: "input"
+                },
+
                 {
                     title: "Nombre",
                     field: "name",
@@ -157,10 +157,10 @@
                         const id = cell.getRow().getData().id;
                         const editUrl = ROUTES.edit.replace(':id', encodeURIComponent(id));
                         return `
-                        <div class="d-inline-flex gap-1">
-                          <a href="${editUrl}" class="btn btn-sm btn-outline-primary">Editar</a>
-                          <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${id})">Eliminar</button>
-                        </div>`;
+                      <div class="d-inline-flex gap-1">
+                        <a href="${editUrl}" class="btn btn-sm btn-outline-primary">Editar</a>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${id})">Eliminar</button>
+                      </div>`;
                     }
                 },
             ];
@@ -173,14 +173,12 @@
                 ajaxConfig: "GET",
                 ajaxResponse: (url, params, resp) => Array.isArray(resp) ? resp : (resp?.data ?? []),
 
-                // 🔹 Paginación (cliente)
                 pagination: true,
                 paginationMode: "local",
                 paginationSize: 10,
                 paginationSizeSelector: [10, 20, 50, 100],
                 paginationCounter: "rows",
 
-                // Orden y filtros locales
                 sortMode: "local",
                 filterMode: "local",
 
@@ -211,7 +209,6 @@
                 }
             });
 
-            // Redibuja al cambiar tamaño
             window.addEventListener('resize', () => table.redraw(true));
         })();
     </script>

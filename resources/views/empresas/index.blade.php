@@ -35,7 +35,7 @@
             <a href="{{ route('empresas.create') }}" class="btn btn-primary">Crear Empresa</a>
         </div>
 
-        {{-- Mensajes flash opcionales (también puedes usar SweetAlert aquí si gustas) --}}
+        {{-- Mensajes flash --}}
         @if (session('success'))
             <div class="alert alert-success mb-3">{{ session('success') }}</div>
         @endif
@@ -55,23 +55,26 @@
     <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
     <script>
-        // Datos del servidor tal cual te llegan
+        // ¿Es Admin? (desde Spatie)
+        const IS_ADMIN = @json(auth()->user()->hasRole('Admin'));
+
+        // Datos del servidor
         const EMPRESAS = @json($empresas);
 
-        // Base absoluta hacia /storage/empresas (respeta host/puerto actual)
+        // Base absoluta hacia /storage/empresas
         const EMP_BASE = @json(url('storage/empresas'));
         const FALLBACK_IMG = @json(asset('assets/images/placeholder.png'));
 
         function imgCell(src, fallbackPath) {
-            const bust = Date.now(); // o usa un timestamp del registro si lo tienes
+            const bust = Date.now(); // cache-busting simple
             return `
-    <div class="thumb-cell">
-      <img src="${src}?v=${bust}" alt="img"
-           onerror="this.onerror=null;this.src='${FALLBACK_IMG}'">
-    </div>`;
+                <div class="thumb-cell">
+                    <img src="${src}?v=${bust}" alt="img"
+                         onerror="this.onerror=null;this.src='${FALLBACK_IMG}'">
+                </div>`;
         }
 
-        // Columnas
+        // Columnas base (sin "Acciones")
         const columns = [{
                 title: "NIT",
                 field: "nit",
@@ -98,7 +101,7 @@
                 minWidth: 220
             },
 
-            // Usamos el NIT de la fila para construir la URL de la imagen
+            // Logo (usa NIT para armar ruta si no viene URL absoluta)
             {
                 title: "Logo",
                 field: "logo",
@@ -172,7 +175,11 @@
                     return v ? `<span class="color-chip" style="background:${v}"></span> ${v}` : '';
                 }
             },
-            {
+        ];
+
+        // Agregar columna "Acciones" SOLO si es Admin
+        if (IS_ADMIN) {
+            columns.push({
                 title: "Acciones",
                 field: "_actions",
                 width: 120,
@@ -183,14 +190,14 @@
                     const editUrl = `{{ route('empresas.edit', ':nit') }}`.replace(':nit', nit);
                     return `<a href="${editUrl}" class="btn btn-sm btn-outline-primary">Editar</a>`;
                 }
-            }
-        ];
+            });
+        }
 
         // Inicializa Tabulator
         const table = new Tabulator("#empresas-table", {
             data: EMPRESAS,
-            layout: "fitDataFill", // <- autoajuste por datos + relleno
-            layoutColumnsOnNewData: true, // <- recalcula al cargar/cambiar datos
+            layout: "fitDataFill", // autoajuste por datos + relleno
+            layoutColumnsOnNewData: true, // recalcula al cargar/cambiar datos
             height: "550px",
             responsiveLayout: "collapse",
             pagination: true,
@@ -198,6 +205,7 @@
             paginationCounter: "rows",
             placeholder: "No hay empresas registradas",
             columns,
+            // Si tienes una columna "updated_at" puedes dejar esto, si no, quítalo o cámbialo
             initialSort: [{
                 column: "updated_at",
                 dir: "desc"

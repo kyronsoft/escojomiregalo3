@@ -56,7 +56,7 @@ class UsersController extends Controller
     {
         // Roles marcados en el form (array de strings con los nombres EXACTOS de Spatie)
         $roles = array_values((array) $request->input('roles', []));
-        $requireNit = in_array('RRHH-Cliente', $roles, true);
+        $requireNit = !empty(array_intersect($roles, ['RRHH-Cliente', 'Ejecutiva-Empresas']));
 
         $data = $request->validate([
             'name'      => ['required', 'string', 'max:120'],

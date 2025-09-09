@@ -38,6 +38,7 @@
         (function() {
             const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                 '{{ csrf_token() }}';
+            const IS_EXEC = @json(auth()->user()->hasRole('Ejecutiva-Empresas')); // 👈 rol Ejecutiva-Empresas
 
             // Acciones
             window.deleteColab = function(documento) {
@@ -175,7 +176,7 @@
                 {
                     title: "Acciones",
                     field: "_act",
-                    width: 320,
+                    width: IS_EXEC ? 220 : 320, // más angosto para Ejecutiva-Empresas (2 botones)
                     hozAlign: "center",
                     headerSort: false,
                     formatter: (cell) => {
@@ -185,18 +186,29 @@
                         const editUrl = `{{ route('colaboradores.edit', ':id') }}`.replace(':id',
                             encodeURIComponent(r.documento));
                         const hijosUrl = hijosIndexUrl(r.documento);
+
+                        // 👇 Ejecutiva-Empresas: SOLO "Ver" y "Hijos"
+                        if (IS_EXEC) {
+                            return `
+                                <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                    <a href="${showUrl}"  class="btn btn-sm btn-outline-info">Ver</a>
+                                    <a href="${hijosUrl}" class="btn btn-sm btn-outline-secondary">Hijos</a>
+                                </div>
+                            `;
+                        }
+
+                        // Otros roles: Ver / Editar / Hijos / Eliminar
                         return `
-        <div class="d-flex gap-1 justify-content-center flex-wrap">
-          <a href="${showUrl}"  class="btn btn-sm btn-outline-info">Ver</a>
-          <a href="${editUrl}"  class="btn btn-sm btn-outline-primary">Editar</a>
-          <a href="${hijosUrl}" class="btn btn-sm btn-outline-secondary">Hijos</a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteColab('${r.documento}')">Eliminar</button>
-        </div>
-      `;
+                            <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                <a href="${showUrl}"  class="btn btn-sm btn-outline-info">Ver</a>
+                                <a href="${editUrl}"  class="btn btn-sm btn-outline-primary">Editar</a>
+                                <a href="${hijosUrl}" class="btn btn-sm btn-outline-secondary">Hijos</a>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteColab('${r.documento}')">Eliminar</button>
+                            </div>
+                        `;
                     }
                 },
             ];
-
 
             // Tabla (sin paginación; sort/filter locales)
             const table = new Tabulator("#colab-table", {
@@ -209,15 +221,12 @@
                 ajaxURL: "{{ route('colaboradores.data') }}",
                 ajaxConfig: "GET",
 
-                pagination: false, // sin paginación
+                pagination: false,
                 sortMode: "local",
                 filterMode: "local",
 
                 ajaxResponse: function(url, params, response) {
-                    // Debe ser un array plano
-                    if (Array.isArray(response)) return response;
-                    console.error('Respuesta inesperada:', response);
-                    return [];
+                    return Array.isArray(response) ? response : [];
                 },
 
                 initialSort: [{
@@ -245,13 +254,12 @@
 
             window.addEventListener('resize', () => table.redraw(true));
         })();
-    </script>
-    <script>
+
         function hijosIndexUrl(identificacion) {
             // abre el index de hijos con filtro ?identificacion=<documento>
             const base = "{{ route('colaborador_hijos.index') }}";
             const qs = new URLSearchParams({
-                identificacion: identificacion
+                identificacion
             });
             return base + "?" + qs.toString();
         }

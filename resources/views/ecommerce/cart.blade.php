@@ -152,7 +152,7 @@
                                         <tr>
                                             <td colspan="4" class="text-end">
                                                 <a class="btn btn-secondary" href="{{ route('product') }}">Seguir
-                                                    comprando</a>
+                                                    seleccionando</a>
                                                 <form id="finishForm" action="{{ route('ecommerce.cart.finish') }}"
                                                     method="POST" class="d-inline">
                                                     @csrf

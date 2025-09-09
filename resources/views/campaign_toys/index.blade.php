@@ -43,87 +43,68 @@
     <script>
         (function() {
             const CSRF = '{{ csrf_token() }}';
-            const STORAGE_BASE = @json(asset('storage')); // /storage -> public/storage
+            const STORAGE_BASE = @json(asset('storage'));
             const PLACEHOLDER = @json(asset('assets/images/placeholder.png'));
+            const IS_EXEC = @json(auth()->user()->hasRole('Ejecutiva-Empresas')); // 👈 rol Ejecutiva-Empresas
 
-            // Genera una lista de URLs candidatas para una imagen
             function buildCandidates(firstName, campaignId) {
                 const name = String(firstName || '').trim();
                 const out = [];
-
                 if (!name) return out;
-
-                // URL absoluta (OneDrive, CDN, etc.)
                 if (/^https?:\/\//i.test(name)) {
                     out.push(name);
                     return out;
                 }
-
-                // Si ya viene con prefijo campaign_toys/...
                 if (/^campaign_toys\//i.test(name)) {
                     out.push(`${STORAGE_BASE}/${encodeTail(name)}`);
-                    // Variante en minúscula del filename
                     out.push(`${STORAGE_BASE}/${encodeTail(lowercaseFilename(name))}`);
                     return out;
                 }
-
-                // Si viene "229/archivo.jpg"
                 if (/^\d+\//.test(name)) {
                     const p = `campaign_toys/${name}`;
                     out.push(`${STORAGE_BASE}/${encodeTail(p)}`);
                     out.push(`${STORAGE_BASE}/${encodeTail(lowercaseFilename(p))}`);
                     return out;
                 }
-
-                // Solo filename: asumimos campaign_toys/{id}/filename
                 const p = `campaign_toys/${campaignId}/${name}`;
                 out.push(`${STORAGE_BASE}/${encodeTail(p)}`);
                 out.push(`${STORAGE_BASE}/${encodeTail(lowercaseFilename(p))}`);
-
                 return out;
             }
 
-            // Codifica SOLO el último segmento (filename), para no romper las carpetas
             function encodeTail(path) {
                 const segs = String(path).split('/');
-                if (segs.length === 0) return path;
+                if (!segs.length) return path;
                 const tail = segs.pop();
-                // encodeURIComponent preserva puntos; bien para "Mi foto 1.jpg"
-                const encTail = encodeURIComponent(tail);
-                segs.push(encTail);
+                segs.push(encodeURIComponent(tail));
                 return segs.join('/');
             }
 
-            // Devuelve misma ruta pero con filename en minúscula (por si el FS es case-sensitive)
             function lowercaseFilename(path) {
                 const segs = String(path).split('/');
-                if (segs.length === 0) return path;
+                if (!segs.length) return path;
                 const tail = segs.pop();
                 segs.push(tail.toLowerCase());
                 return segs.join('/');
             }
 
-            // onerror en cadena: va probando candidatos hasta agotar; luego pone placeholder y desactiva onerror
-            function toyImgFallback(img) {
+            window.toyImgFallback = function(img) {
                 try {
                     const list = JSON.parse(img.dataset.altList || '[]');
                     let idx = parseInt(img.dataset.altIdx || '0', 10);
                     if (Number.isNaN(idx)) idx = 0;
-
                     if (idx < list.length) {
                         img.dataset.altIdx = String(idx + 1);
                         img.src = list[idx];
                         return;
                     }
-                    // sin más candidatos: placeholder y no más onerror
                     img.onerror = null;
                     if (img.src !== PLACEHOLDER) img.src = PLACEHOLDER;
                 } catch (e) {
                     img.onerror = null;
                     img.src = PLACEHOLDER;
                 }
-            }
-            window.toyImgFallback = toyImgFallback; // expone para el onerror inline
+            };
 
             window.deleteToy = function(id) {
                 Swal.fire({
@@ -205,7 +186,7 @@
                 },
                 {
                     title: "Imagen",
-                    field: "image_url", // <- usa el campo ya listo del backend
+                    field: "image_url",
                     width: 120,
                     hozAlign: "center",
                     headerSort: false,
@@ -213,16 +194,15 @@
                         const src = cell.getValue();
                         const partsCount = cell.getRow().getData().image_parts_count || 0;
                         const badge = partsCount > 1 ?
-                            `<span class="badge bg-secondary ms-1 align-middle">+${partsCount-1}</span>` : '';
-                        const placeholder = @json(asset('assets/images/placeholder.png'));
-                        if (!src) return `<img src="${placeholder}" class="toy-thumb" alt="thumb">`;
+                            `<span class="badge bg-secondary ms-1 align-middle">+${partsCount-1}</span>` :
+                            '';
+                        if (!src) return `<img src="${PLACEHOLDER}" class="toy-thumb" alt="thumb">`;
                         return `
                             <div class="d-inline-flex align-items-center">
                                 <img src="${src}" class="toy-thumb" alt="thumb"
-                                    onerror="this.onerror=null; this.src='${placeholder}';">
+                                     onerror="this.onerror=null; this.src='${PLACEHOLDER}';">
                                 ${badge}
-                            </div>
-                            `;
+                            </div>`;
                     }
                 },
                 {
@@ -238,36 +218,39 @@
                     hozAlign: "right",
                     headerFilter: "input"
                 },
-                // {
-                //     title: "Precio",
-                //     field: "precio_unitario",
-                //     width: 110,
-                //     hozAlign: "right",
-                //     headerFilter: "input",
-                //     formatter: cell => new Intl.NumberFormat().format(cell.getValue() ?? 0)
-                // },
                 {
                     title: "Restantes",
                     field: "porcentaje",
                     width: 110,
                     headerFilter: "input",
-                    formatter: cell => cell.getValue() || '0'
+                    formatter: c => c.getValue() || '0'
                 },
                 {
                     title: "Acciones",
                     field: "_act",
-                    width: 260,
+                    width: IS_EXEC ? 140 : 260, // más angosto si no hay "Eliminar"
                     hozAlign: "center",
                     headerSort: false,
                     formatter: cell => {
                         const r = cell.getRow().getData();
                         const showUrl = `{{ route('campaign_toys.show', ':id') }}`.replace(':id', r.id);
+
+                        // Ejecutiva-Empresas: SIN eliminar
+                        if (IS_EXEC) {
+                            return `
+                                <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                    <a href="${showUrl}" class="btn btn-sm btn-outline-info">Ver</a>
+                                </div>
+                            `;
+                        }
+
+                        // Otros roles: Ver + Eliminar
                         return `
-          <div class="d-flex gap-1 justify-content-center flex-wrap">
-            <a href="${showUrl}" class="btn btn-sm btn-outline-info">Ver</a>
-            <button class="btn btn-sm btn-outline-danger" onclick="deleteToy(${r.id})">Eliminar</button>
-          </div>
-        `;
+                            <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                <a href="${showUrl}" class="btn btn-sm btn-outline-info">Ver</a>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteToy(${r.id})">Eliminar</button>
+                            </div>
+                        `;
                     }
                 },
             ];

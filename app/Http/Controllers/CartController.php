@@ -11,10 +11,8 @@ use Illuminate\Http\Request;
 use App\Models\ColaboradorHijo;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Mail\SelectionCompletedMail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use App\Jobs\SendSelectionCompletedMail;
 
@@ -22,11 +20,17 @@ class CartController extends Controller
 {
     public function index()
     {
-        // Documento del colaborador autenticado
-        $documento = auth()->user()->documento;
+        // 1) Asegura que solo Colaborador vea el carrito (ajusta si quieres permitir otros)
+        if (!auth()->check() || !auth()->user()->hasRole('Colaborador')) {
+            // Redirige a login o muestra 403 (elige una)
+            // return redirect()->route('login');
+            abort(403, 'Solo los colaboradores pueden ver el carrito.');
+        }
 
-        // Ítems actuales del carrito
-        $items = Seleccionado::query()
+        $documento = auth()->user()->documento; // ya seguro
+
+        // 2) Carga de ítems del carrito
+        $items = \App\Models\Seleccionado::query()
             ->select([
                 'seleccionados.id',
                 'seleccionados.documento',
@@ -40,15 +44,16 @@ class CartController extends Controller
             ->join('colaborador_hijos', 'colaborador_hijos.id', '=', 'seleccionados.idhijo')
             ->join('campaign_toys', function ($j) {
                 $j->on('campaign_toys.referencia', '=', 'seleccionados.referencia')
-                    ->on('campaign_toys.idcampaign', '=', 'colaborador_hijos.idcampaign');
+                    ->on('campaign_toys.idcampaign', '=', 'colaborador_hijos.idcampaing');
             })
             ->where('seleccionados.documento', $documento)
             ->orderByDesc('seleccionados.created_at')
             ->get();
 
-        // Determinar campaignId: items -> sesión -> puente (más reciente, opcional por NIT de sesión)
+        // 3) Determinar la campaña activa con operador null-safe (?->)
         $nitSesion  = session('empresa_nit');
-        $campaignId = $items->first()->idcampaing
+        $firstItem  = $items->first();
+        $campaignId = $firstItem?->idcampaing
             ?? session('campaign_id')
             ?? DB::table('campaing_colaboradores')
             ->where('documento', $documento)
@@ -56,12 +61,12 @@ class CartController extends Controller
             ->orderByDesc('created_at')
             ->value('idcampaign');
 
-        // Resolver URL absoluta del banner (si existe)
+        // 4) Banner de campaña (si aplica)
         $campaignBannerUrl = null;
         if ($campaignId) {
-            $campaign = Campaign::find($campaignId);
-            if ($campaign && !empty($campaign->banner) && $campaign->banner !== 'ND') {
-                // asume que el banner está en el disk 'public'
+            $campaign = \App\Models\Campaign::find($campaignId);
+            if ($campaign && filled($campaign->banner) && $campaign->banner !== 'ND') {
+                // Usa disk 'public'
                 $campaignBannerUrl = url(Storage::disk('public')->url($campaign->banner));
             }
         }
@@ -72,73 +77,156 @@ class CartController extends Controller
         ]);
     }
 
-
     public function addcart(Request $request)
     {
         $data = $request->validate([
-            'idhijo'     => ['required', 'integer', 'min:1'],
-            'referencia' => ['required', 'string', 'max:100'],
+            'idhijo'      => ['required', 'integer', 'min:1', 'exists:colaborador_hijos,id'],
+            'referencia'  => ['required', 'string', 'max:100'],
+            'idcampaign'  => ['nullable', 'integer', 'min:1'], // ← opcional, si lo mandas desde la vista
         ]);
 
-        $hijo       = ColaboradorHijo::findOrFail($data['idhijo']);
-        $documento  = (string) $hijo->identificacion;
-        $campaignId = (int) $hijo->idcampaign;
-        $edad       = (int) $hijo->rango_edad;
-
-        // Género del hijo: F, M o NULL => '' (neutro)
-        $generoHijo = strtoupper(trim((string) ($hijo->genero ?? '')));
-
-        $toy = CampaignToy::where('idcampaign', $campaignId)
-            ->where('referencia', $data['referencia'])
-            ->firstOrFail();
-
-        // --- Elegibilidad por edad + género ---
-        $desde  = (int) $toy->desde;
-        $hasta  = (int) $toy->hasta;
-
-        // Género del juguete: F, M o NULL/'' => Unisex
-        // (también soporta 'UNISEX' por compatibilidad con datos antiguos)
-        $genToyRaw = $toy->genero; // puede venir NULL
-        $genToy    = strtoupper(trim((string) ($genToyRaw ?? '')));
-        $isUnisex  = is_null($genToyRaw) || $genToy === '' || $genToy === 'UNISEX';
-
-        // Si es unisex, OK; si no, debe coincidir con F/M del hijo
-        $genOk = $isUnisex || ($generoHijo !== '' && $genToy === $generoHijo);
-
-        if (!($edad >= $desde && $edad <= $hasta && $genOk)) {
-            return redirect()
-                ->route('product')
-                ->with('active_child_id', $hijo->id)
-                ->with('swal', [
-                    'icon'  => 'error',
-                    'title' => 'Juguete no elegible',
-                    'text'  => 'No coincide edad o género para ' . ($hijo->nombre_hijo ?? 'el hijo(a)') . '.',
-                ]);
+        // Debe estar logueado y ser Colaborador
+        if (!auth()->check() || !auth()->user()->hasRole('Colaborador')) {
+            return redirect()->route('ecommerce.cart.index')->with('swal', [
+                'icon'  => 'error',
+                'title' => 'Acceso restringido',
+                'text'  => 'Debes iniciar sesión como Colaborador.',
+            ]);
         }
 
-        // ✅ Solo 1 por hijo en esta campaña
-        $yaHay = Seleccionado::where('documento', $documento)
-            ->where('idcampaing', $campaignId)   // nombre tal cual en BD
+        // Hijo y pertenencia
+        $hijo = ColaboradorHijo::find($data['idhijo']);
+        $userDoc = (string) auth()->user()->documento;
+        if ((string) $hijo->identificacion !== $userDoc) {
+            return back()->with('swal', [
+                'icon'  => 'error',
+                'title' => 'Hijo no válido',
+                'text'  => 'El hijo seleccionado no pertenece al colaborador autenticado.',
+            ]);
+        }
+
+        // Normaliza referencia (quita NBSP/control chars y trim)
+        $refRaw = (string) $data['referencia'];
+        $ref    = preg_replace('/[\x{00A0}\p{C}]+/u', '', $refRaw);
+        $ref    = trim($ref);
+
+        // ===== Resolver campaignId con múltiples fallbacks =====
+        $campaignId = (int) ($data['idcampaign'] ?? 0);
+        if ($campaignId <= 0) {
+            // Soporta ambos nombres de columna por si tu tabla conserva "idcampaing"
+            $campaignId = (int) ($hijo->getAttribute('idcampaign') ?? 0);
+        }
+        if ($campaignId <= 0) {
+            $campaignId = (int) ($hijo->getAttribute('idcampaing') ?? 0);
+        }
+        if ($campaignId <= 0) {
+            // Campaña más reciente por pivot (campaing_colaboradores)
+            $campaignId = (int) DB::table('campaing_colaboradores')
+                ->where('documento', $userDoc)
+                ->orderByDesc('created_at')
+                ->value('idcampaign');
+        }
+
+        // Si aún no lo tenemos, intenta encontrar la referencia en campañas del colaborador
+        $toy = null;
+        if ($campaignId > 0) {
+            $toy = CampaignToy::where('idcampaign', $campaignId)
+                ->where(function ($q) use ($ref) {
+                    $q->where('referencia', $ref)
+                        ->orWhereRaw('TRIM(referencia) = ?', [$ref])
+                        ->orWhereRaw('REPLACE(referencia," ","") = REPLACE(?, " ", "")', [$ref]);
+                })
+                ->first();
+        }
+
+        if (!$toy) {
+            // Buscar esa referencia en campañas a las que esté asignado el colaborador
+            $toy = DB::table('campaign_toys as t')
+                ->join('campaing_colaboradores as pc', 'pc.idcampaign', '=', 't.idcampaign')
+                ->where('pc.documento', $userDoc)
+                ->where(function ($q) use ($ref) {
+                    $q->where('t.referencia', $ref)
+                        ->orWhereRaw('TRIM(t.referencia) = ?', [$ref])
+                        ->orWhereRaw('REPLACE(t.referencia," ","") = REPLACE(?, " ", "")', [$ref]);
+                })
+                ->select('t.*')
+                ->first();
+
+            if ($toy) {
+                $campaignId = (int) $toy->idcampaign;
+            }
+        }
+
+        if (!$toy || $campaignId <= 0) {
+            Log::warning('addcart: no se pudo resolver toy/campaign', [
+                'ref_in'    => $refRaw,
+                'ref_norm'  => $ref,
+                'child_id'  => $hijo->id,
+                'doc'       => $userDoc,
+                'campaignId' => $campaignId,
+            ]);
+
+            return back()->with('active_child_id', $hijo->id)->with('swal', [
+                'icon'  => 'error',
+                'title' => 'No se pudo agregar',
+                'text'  => 'No ubicamos la referencia en una campaña válida para tu usuario.',
+            ]);
+        }
+
+        // ===== Chequeo de elegibilidad: edad + género =====
+        $edad = (int) ($hijo->rango_edad ?? 0); // numérico desde tu ajuste en el form
+
+        // Normaliza género del hijo a clave M/F/'' aceptando NIÑO/NIÑA/UNISEX
+        $gH = strtoupper(trim((string) ($hijo->genero ?? '')));
+        $gHKey = match ($gH) {
+            'M', 'NIÑO', 'NINO', 'BOY', 'MALE'   => 'M',
+            'F', 'NIÑA', 'NINA', 'GIRL', 'FEMALE' => 'F',
+            default                              => '',
+        };
+
+        $desde  = (int) (($toy->desde ?? 0));
+        $hasta  = (int) (($toy->hasta ?? 99));
+        $gT     = strtoupper(trim((string) ($toy->genero ?? '')));
+        $isUni  = in_array($gT, ['', 'UNISEX', 'U', 'UNI'], true);
+
+        // Permite emparejar M/F con NIÑO/NIÑA también
+        $genOk = $isUni || (
+            $gHKey !== '' && (
+                $gT === $gHKey ||           // M/F
+                ($gHKey === 'M' && in_array($gT, ['NIÑO', 'NINO'], true)) ||
+                ($gHKey === 'F' && in_array($gT, ['NIÑA', 'NINA'], true))
+            )
+        );
+        $edadOk = ($edad >= $desde && $edad <= $hasta);
+
+        if (!($edadOk && $genOk)) {
+            return back()->with('active_child_id', $hijo->id)->with('swal', [
+                'icon'  => 'error',
+                'title' => 'Juguete no elegible',
+                'text'  => 'No coincide edad o género para ' . ($hijo->nombre_hijo ?? 'el hijo(a)') . '.',
+            ]);
+        }
+
+        // ===== Solo 1 selección por hijo en esa campaña =====
+        $yaHay = Seleccionado::where('documento', $userDoc)
+            ->where('idcampaing', $campaignId) // nombre en BD de tu tabla seleccionados
             ->where('idhijo', $hijo->id)
             ->exists();
 
         if ($yaHay) {
-            return redirect()
-                ->route('product')
-                ->with('active_child_id', $hijo->id)
-                ->with('swal', [
-                    'icon'  => 'warning',
-                    'title' => 'Solo 1 por hijo(a)',
-                    'text'  => "Ya elegiste un juguete para {$hijo->nombre_hijo}.",
-                ]);
+            return back()->with('active_child_id', $hijo->id)->with('swal', [
+                'icon'  => 'warning',
+                'title' => 'Solo 1 por hijo(a)',
+                'text'  => "Ya elegiste un juguete para {$hijo->nombre_hijo}.",
+            ]);
         }
 
-        // Insertar selección
-        DB::transaction(function () use ($documento, $campaignId, $hijo, $toy) {
+        // ===== Insertar selección =====
+        DB::transaction(function () use ($userDoc, $campaignId, $hijo, $toy) {
             Seleccionado::updateOrCreate(
                 [
-                    'documento'  => $documento,
-                    'idcampaing' => $campaignId,
+                    'documento'  => $userDoc,
+                    'idcampaing' => $campaignId,        // ← respeta el nombre real de la columna
                     'idhijo'     => $hijo->id,
                     'referencia' => $toy->referencia,
                 ],
@@ -148,14 +236,11 @@ class CartController extends Controller
             );
         });
 
-        return redirect()
-            ->route('product')
-            ->with('active_child_id', $hijo->id)
-            ->with('swal', [
-                'icon'  => 'success',
-                'title' => 'Agregado',
-                'text'  => "{$toy->referencia} - {$toy->nombre} agregado para {$hijo->nombre_hijo}.",
-            ]);
+        return back()->with('active_child_id', $hijo->id)->with('swal', [
+            'icon'  => 'success',
+            'title' => 'Agregado',
+            'text'  => "{$toy->referencia} - {$toy->nombre} agregado para {$hijo->nombre_hijo}.",
+        ]);
     }
 
     public function remove(Request $request)

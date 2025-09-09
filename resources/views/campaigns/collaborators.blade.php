@@ -26,6 +26,10 @@
 @endpush
 
 @section('content')
+    @php
+        $isExec = auth()->user()->hasRole('Ejecutiva-Empresas');
+    @endphp
+
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
             <div>
@@ -38,7 +42,7 @@
             </div>
 
             <div class="d-flex align-items-center actions-bar mt-5">
-                {{-- Select Plantilla --}}
+                {{-- Select Plantilla (visible para todos) --}}
                 <div class="d-flex align-items-center">
                     <label for="plantilla" class="me-2 mb-0">Plantilla</label>
                     <select id="plantilla" class="form-select form-select-sm">
@@ -48,10 +52,12 @@
                     </select>
                 </div>
 
-                {{-- Enviar correo a todos --}}
-                <button type="button" id="btn-send-all" class="btn btn-sm btn-success">
-                    Enviar correo a todos
-                </button>
+                {{-- Enviar correo a todos (OCULTO para Ejecutiva-Empresas) --}}
+                @unless ($isExec)
+                    <button type="button" id="btn-send-all" class="btn btn-sm btn-success">
+                        Enviar correo a todos
+                    </button>
+                @endunless
 
                 <a href="{{ route('campaigns.index') }}" class="btn btn-outline-secondary btn-sm">Volver</a>
             </div>
@@ -81,13 +87,11 @@
             const sendOneURL = `{{ route('campaigns.collaborators.emailOne', $campaign) }}`;
             const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                 '{{ csrf_token() }}';
-
-            function formatDate(v) {
-                const d = new Date(v);
-                return isNaN(d) ? (v || '') : d.toLocaleString();
-            }
+            const IS_EXEC = @json($isExec); // 👈 rol Ejecutiva-Empresas
 
             function actionBtnFormatter(cell) {
+                // 👉 Sin botón "Reenviar correo" para Ejecutiva-Empresas
+                if (IS_EXEC) return '';
                 const r = cell.getRow().getData();
                 const docEnc = encodeURIComponent(String(r.documento || ''));
                 return `
@@ -152,29 +156,50 @@
             ];
 
             const table = new Tabulator("#collaborators-table", {
+                // Responsive
                 layout: "fitColumns",
-                height: "600px",
+                layoutColumnsOnNewData: true,
                 responsiveLayout: "collapse",
+                responsiveLayoutCollapseStartOpen: false,
+
+                // UI
+                height: "600px",
                 placeholder: "No hay colaboradores asignados a esta campaña",
+
+                // Datos
                 ajaxURL: dataURL,
                 ajaxConfig: "GET",
-                pagination: false,
+                ajaxResponse: (url, params, resp) => Array.isArray(resp) ? resp : [],
+
+                // Orden/filtrado en el cliente
                 sortMode: "local",
                 filterMode: "local",
-                ajaxResponse: (url, params, resp) => Array.isArray(resp) ? resp : [],
+
+                // Paginación local
+                pagination: true,
+                paginationMode: "local",
+                paginationSize: 15,
+                paginationSizeSelector: [10, 15, 25, 50, 100],
+                paginationCounter: "rows",
+
+                // Columnas y orden inicial
+                columns,
                 initialSort: [{
                     column: "nombre",
                     dir: "asc"
                 }],
-                columns,
             });
 
-            // Exponer función global para el botón por fila
+            // Redibujar al cambiar tamaño de ventana
+            window.addEventListener('resize', () => table.redraw(true));
+
+
+            // Exponer función global para el botón por fila (solo tendrá efecto si no es Ejecutiva-Empresas)
             window.sendOne = function(docEnc) {
+                if (IS_EXEC) return; // hard stop extra, por si alguien intenta dispararlo manualmente
                 const documento = decodeURIComponent(docEnc);
                 const plantilla = ($('#plantilla').val() || 'standard');
 
-                // Buscar la fila para mostrar datos al usuario
                 const row = (table.getRows() || []).find(r => (r.getData()?.documento || '') == documento);
                 const rowData = row ? row.getData() : {};
                 const nombre = rowData?.nombre || documento;
@@ -225,7 +250,6 @@
                                     return {};
                                 }
                             })();
-
                             if (r.ok) {
                                 Swal.fire({
                                     icon: 'success',
@@ -233,10 +257,7 @@
                                     text: payload.message ||
                                         'El sistema solo procesa los envíos individuales inmediatamente!.'
                                 });
-
-                                // Si el backend devuelve flag 'notified' o similar, actualizamos la fila; si no, recargamos
                                 if (row && (payload.notified === true || payload.updated_row)) {
-                                    // Actualizamos email_notified y updated_at localmente
                                     row.update({
                                         email_notified: 1,
                                         updated_at: (new Date()).toISOString()
@@ -263,7 +284,7 @@
                 });
             };
 
-            // Enviar correo a todos
+            // Enviar correo a todos (solo si el botón existe: no estará para Ejecutiva-Empresas)
             $('#btn-send-all').on('click', function() {
                 const plantilla = ($('#plantilla').val() || 'standard');
                 const total = (table.getData() || []).length;
@@ -320,7 +341,6 @@
                                     return {};
                                 }
                             })();
-
                             if (r.ok) {
                                 Swal.fire({
                                     icon: 'success',
@@ -363,8 +383,6 @@
                     text: @json(session('error'))
                 });
             @endif
-
-            window.addEventListener('resize', () => table.redraw(true));
         })();
     </script>
 @endpush

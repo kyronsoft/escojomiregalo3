@@ -27,7 +27,8 @@
         ];
 
         $oldRole = old('roles.0', 'Colaborador');
-        $showNit = $oldRole === 'RRHH-Cliente';
+        // Mostrar selector NIT si rol es RRHH-Cliente o Ejecutiva-Empresas
+        $showNit = in_array($oldRole, ['RRHH-Cliente', 'Ejecutiva-Empresas'], true);
     @endphp
 
     <div class="container-fluid">
@@ -98,7 +99,7 @@
                             @enderror
                         </div>
 
-                        {{-- Empresa (NIT) — solo si el rol es RRHH-Cliente --}}
+                        {{-- Empresa (NIT) — visible si rol es RRHH-Cliente o Ejecutiva-Empresas --}}
                         <div class="col-md-6" id="nit-wrapper" style="display: {{ $showNit ? 'block' : 'none' }};">
                             <label class="form-label">Empresa (NIT)</label>
                             <select id="nit" name="nit" class="form-select @error('nit') is-invalid @enderror"
@@ -112,7 +113,9 @@
                             @error('nit')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
-                            <small class="text-muted">Obligatorio para RRHH-Cliente.</small>
+                            <small class="text-muted">
+                                Obligatorio para RRHH-Cliente. Disponible para Ejecutiva-Empresas.
+                            </small>
                         </div>
 
                         <div class="col-md-6">
@@ -154,7 +157,7 @@
             $nit.select2({
                 theme: 'bootstrap-5',
                 width: '100%',
-                placeholder: 'Buscar empresa por NIT o nombre…', // <-- sólo aquí
+                placeholder: 'Buscar empresa por NIT o nombre…',
                 allowClear: true,
                 ajax: {
                     url: '{{ route('empresas.select2') }}',
@@ -183,16 +186,18 @@
 
             function toggleNit() {
                 const selected = $role.val();
-                if (selected === 'RRHH-Cliente') {
+                // Mostrar NIT para RRHH-Cliente y Ejecutiva-Empresas
+                if (selected === 'RRHH-Cliente' || selected === 'Ejecutiva-Empresas') {
                     $nitBox.show();
                 } else {
+                    // Limpiar si se oculta
                     $nit.val(null).trigger('change');
                     $nitBox.hide();
                 }
             }
 
             $role.on('change', toggleNit);
-            toggleNit();
+            toggleNit(); // estado inicial
         })();
     </script>
 @endpush

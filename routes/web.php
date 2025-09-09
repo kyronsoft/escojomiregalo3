@@ -68,6 +68,32 @@ Route::middleware(['auth', 'role:Admin|Ejecutiva-Empresas|RRHH-Cliente'])->group
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 });
 
+Route::prefix('ecommerce')->name('ecommerce.')->group(function () {
+    Route::view('product-page',    'admin.apps.ecommerce.product-page')->name('product-page');
+    Route::view('list-products',   'admin.apps.ecommerce.list-products')->name('list-products');
+    Route::view('payment-details', 'admin.apps.ecommerce.payment-details')->name('payment-details');
+    Route::view('order-history',   'admin.apps.ecommerce.order-history')->name('order-history');
+    Route::view('invoice-template', 'admin.apps.ecommerce.invoice-template')->name('invoice-template');
+
+    Route::get('cart',  [CartController::class, 'index'])->name('cart.index');
+    Route::post('cart', [CartController::class, 'addcart'])->name('cart.add');
+    Route::delete('cart', [CartController::class, 'remove'])->name('cart.remove');
+    Route::post('finish', [CartController::class, 'finish'])->name('cart.finish');
+    Route::get('finish-review', [CartController::class, 'finishReview'])
+        ->name('cart.finish.review')
+        ->middleware(['auth', 'role:Colaborador']);
+    Route::post('finish-update', [CartController::class, 'finishUpdate'])
+        ->name('cart.finish.update')
+        ->middleware(['auth', 'role:Colaborador']);
+    // Asegúrate que el path de la vista coincide con el archivo Blade que creaste:
+    Route::get('/checkout', [CartController::class, 'checkout'])
+        ->name('checkout')
+        ->middleware(['auth', 'role:Colaborador']);
+
+    Route::view('list-wish', 'admin.apps.ecommerce.list-wish')->name('list-wish');
+    Route::view('pricing',   'admin.apps.ecommerce.pricing')->name('pricing');
+});
+
 
 Route::get('/product', [ProductController::class, 'index'])
     ->name('product')
@@ -117,7 +143,7 @@ Route::prefix('campaigns/{campaign}')->group(function () {
         ->name('campaigns.toys.image.fetch');
 });
 
-Route::middleware(['auth', 'role:Admin|Colaborador'])->group(function () {
+Route::middleware(['auth', 'role:Admin|Ejecutiva-Empresas'])->group(function () {
     Route::get('/campaigns/{campaign}/collaborators', [CampaignCollaboratorController::class, 'index'])
         ->name('campaigns.collaborators');
 
@@ -213,29 +239,3 @@ Route::get('/debug/roles', function () {
         'has_Admin'   => $u?->hasRole('Admin'),
     ]);
 })->middleware('auth');
-
-Route::prefix('ecommerce')->name('ecommerce.')->group(function () {
-    Route::view('product-page',    'admin.apps.ecommerce.product-page')->name('product-page');
-    Route::view('list-products',   'admin.apps.ecommerce.list-products')->name('list-products');
-    Route::view('payment-details', 'admin.apps.ecommerce.payment-details')->name('payment-details');
-    Route::view('order-history',   'admin.apps.ecommerce.order-history')->name('order-history');
-    Route::view('invoice-template', 'admin.apps.ecommerce.invoice-template')->name('invoice-template');
-
-    Route::get('cart',  [CartController::class, 'index'])->name('cart.index');
-    Route::post('cart', [CartController::class, 'addcart'])->name('cart.add');
-    Route::delete('cart', [CartController::class, 'remove'])->name('cart.remove');
-    Route::post('finish', [CartController::class, 'finish'])->name('cart.finish');
-    Route::get('finish-review', [CartController::class, 'finishReview'])
-        ->name('cart.finish.review')
-        ->middleware(['auth', 'role:Colaborador']);
-    Route::post('finish-update', [CartController::class, 'finishUpdate'])
-        ->name('cart.finish.update')
-        ->middleware(['auth', 'role:Colaborador']);
-    // Asegúrate que el path de la vista coincide con el archivo Blade que creaste:
-    Route::get('/checkout', [CartController::class, 'checkout'])
-        ->name('checkout')
-        ->middleware(['auth', 'role:Colaborador']);
-
-    Route::view('list-wish', 'admin.apps.ecommerce.list-wish')->name('list-wish');
-    Route::view('pricing',   'admin.apps.ecommerce.pricing')->name('pricing');
-});

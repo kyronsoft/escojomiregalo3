@@ -270,13 +270,13 @@
 
             <div class="campaign-banner-bleed">
                 <img src="{{ $campaignBannerUrl }}" alt="Banner campaña" loading="lazy">
-                @if (!empty($welcomeMsg))
+                {{-- @if (!empty($welcomeMsg))
                     <div class="banner-welcome">
                         <div class="banner-welcome__box">
                             {!! $welcomeMsg !!}
                         </div>
                     </div>
-                @endif
+                @endif --}}
             </div>
         @endif
 

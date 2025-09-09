@@ -269,13 +269,6 @@
 
     <div class="backdrop" aria-hidden="true"></div>
 
-    <main class="content" role="main">
-        <div class="card" aria-label="Información de campaña">
-            <h1>{{ $empresaNombre }}</h1>
-            <p>{{ $campNombre }}</p>
-        </div>
-    </main>
-
     <!-- Barra inferior de ingreso -->
     <div class="ingreso-bar" id="ingresoBar">
         <a class="ingreso-link" id="openLogin" href="#">

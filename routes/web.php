@@ -113,6 +113,7 @@ Route::get('/product', [ProductController::class, 'index'])
 Route::post('/product/aceptar-politica-datos', [ProductController::class, 'aceptarPolitica'])
     ->name('product.aceptarPolitica')
     ->middleware('role:Colaborador');
+Route::post('/product/aceptar-welcome', [ProductController::class, 'aceptarWelcome'])->name('product.aceptarWelcome')->middleware('role:Colaborador');
 
 Route::get('/custom-login/{token}', [CustomLoginController::class, 'show'])
     ->name('custom.login');

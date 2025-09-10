@@ -327,11 +327,13 @@
         @endif
 
         <div class="container product-wrapper">
-            {{-- === Aquí va el nombre del colaborador (reemplaza el mensaje anterior) === --}}
+            {{-- Nombre del colaborador como saludo/identificador --}}
             @php
                 $colabName =
                     $colaboradorNombre ??
-                    ((isset($colaborador) ? $colaborador->nombre ?? null : null) ??
+                    null ??
+                    ($colaborador->nombre ??
+                        null ??
                         (optional(auth()->user())->name ??
                             (optional(auth()->user())->nombre ?? (optional(auth()->user())->email ?? 'Colaborador'))));
             @endphp
@@ -555,13 +557,37 @@
                     <div style="max-height:60vh; overflow:auto;">{!! $politicaHtml !!}</div>
                 </div>
                 <div class="modal-footer">
-                    {{-- ENVIAR politicadatos=Y --}}
                     <form id="formPolitica" action="{{ route('product.aceptarPolitica') }}" method="POST"
                         class="ms-auto">
                         @csrf
                         <input type="hidden" name="politicadatos" value="Y">
                         <button type="submit" class="btn btn-primary" id="btnAceptarPolitica">Acepto la
                             política</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Modal Bienvenida (Welcome) --}}
+    <div class="modal fade" id="modalWelcome" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+        data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">¡Bienvenido(a)!</h5>
+                </div>
+                <div class="modal-body">
+                    <div style="max-height:60vh; overflow:auto;">
+                        {!! $welcomeMsg !!}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <form id="formWelcome" action="{{ route('product.aceptarWelcome') }}" method="POST"
+                        class="ms-auto">
+                        @csrf
+                        <input type="hidden" name="welcome" value="Y">
+                        <button type="submit" class="btn btn-primary" id="btnAceptarWelcome">Aceptar</button>
                     </form>
                 </div>
             </div>
@@ -603,7 +629,6 @@
                 e.preventDefault();
                 const id = String($(this).data('child-id'));
 
-                // feedback visible
                 $('.js-child-btn').removeClass('active').attr('aria-pressed', 'false');
                 $(this).addClass('active').attr('aria-pressed', 'true');
 
@@ -613,7 +638,6 @@
                 $all.addClass('d-none');
                 $show.removeClass('d-none');
 
-                // Oculta el nombre al seleccionar (comportamiento idéntico al hint anterior)
                 $('#hintSelect').addClass('d-none');
                 $('#noResults').toggleClass('d-none', $show.length > 0);
 
@@ -628,10 +652,11 @@
         });
     </script>
 
-    {{-- Mostrar modal de Política si $showPolitica es true, con fallback para cargar Bootstrap JS si falta --}}
+    {{-- Mostrar Welcome / Política (solo una a la vez; prioridad Welcome) --}}
     <script>
         (function() {
-            const SHOULD_SHOW = {!! json_encode(!empty($showPolitica) && $showPolitica) !!};
+            const SHOULD_SHOW_WELCOME = {!! json_encode(!empty($welcomeMsg) && !empty($showWelcome) && $showWelcome) !!};
+            const SHOULD_SHOW_POLITICA = {!! json_encode(!empty($showPolitica) && $showPolitica) !!};
 
             function ensureBootstrap(callback) {
                 if (window.bootstrap && typeof window.bootstrap.Modal === 'function') {
@@ -645,8 +670,8 @@
                 document.head.appendChild(s);
             }
 
-            function showPolitica() {
-                const el = document.getElementById('modalPoliticaDatos');
+            function showModal(id) {
+                const el = document.getElementById(id);
                 if (!el) return;
                 const modal = new bootstrap.Modal(el, {
                     backdrop: 'static',
@@ -655,12 +680,18 @@
                 modal.show();
             }
 
-            if (SHOULD_SHOW) {
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', () => ensureBootstrap(showPolitica));
-                } else {
-                    ensureBootstrap(showPolitica);
+            function start() {
+                if (SHOULD_SHOW_WELCOME) {
+                    showModal('modalWelcome');
+                } else if (SHOULD_SHOW_POLITICA) {
+                    showModal('modalPoliticaDatos');
                 }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => ensureBootstrap(start));
+            } else {
+                ensureBootstrap(start);
             }
         })();
     </script>

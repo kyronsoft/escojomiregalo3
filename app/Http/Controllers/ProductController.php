@@ -25,9 +25,7 @@ class ProductController extends Controller
             ->orderByDesc('created_at')
             ->value('idcampaign');
 
-        if (!$campaignId) {
-            abort(403, 'No tienes campañas asignadas para esta empresa.');
-        }
+        if (!$campaignId) abort(403, 'No tienes campañas asignadas para esta empresa.');
 
         $pertenece = DB::table('campaing_colaboradores')
             ->where('documento', $documento)
@@ -35,14 +33,12 @@ class ProductController extends Controller
             ->when($nitSesion, fn($q) => $q->where('nit', $nitSesion))
             ->exists();
 
-        if (!$pertenece) {
-            abort(403, 'No estás asignado a esta campaña.');
-        }
+        if (!$pertenece) abort(403, 'No estás asignado a esta campaña.');
 
         // Campaña y empresa
         $campaign = Campaign::with('empresa')->find($campaignId);
 
-        // Empresa por relación o por NIT de respaldo
+        // Empresa (fallback por NIT si falta relación)
         $empresa = $campaign?->empresa;
         if (!$empresa) {
             $nitEmpresa = $campaign?->nit
@@ -53,31 +49,34 @@ class ProductController extends Controller
                 ->value('nit');
 
             if ($nitEmpresa) {
-                $empresa = Empresa::whereRaw('TRIM(nit) = ?', [trim((string) $nitEmpresa)])->first();
+                $empresa = Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$nitEmpresa)])->first();
             }
         }
 
-        // Banner y logo (con fallback seguro)
+        // Banner y logo
         $campaignBannerUrl = $this->publicUrlIfExists($campaign?->banner);
-
         $empresaLogoUrl = $this->publicUrlLoose($empresa?->logo)
             ?? $this->publicUrlLoose($empresa ? "images/{$empresa->nit}/logo.png" : null)
             ?? asset('assets/images/placeholder.png');
 
-        // Colores / welcome
+        // Colores & mensajes
         $primaryColor   = $empresa?->color_primario   ?: '#ffffff';
         $secondaryColor = $empresa?->color_secundario ?: '#f2f2f2';
         $welcomeMsg     = (string) ($empresa->welcome_msg ?? '');
 
-        // Colaborador y POLÍTICA DE DATOS
+        // Colaborador y modales
         $colaborador = Colaborador::where('documento', $documento)->first();
-        // Mostrar modal cuando politicadatos sea distinto de 'Y' (incluye N, '', null, etc.)
+
+        // Política de datos
         $pdValue = strtoupper(trim((string) ($colaborador->politicadatos ?? '')));
         $showPolitica = ($pdValue !== 'Y');
-
         $politicaHtml = Parametro::where('nombre', 'POLITICA DATOS')->value('valor') ?? '...';
 
-        // Datos de juguetes/hijos
+        // Bienvenida (solo si hay mensaje y no marcada)
+        $welcomeValue = strtoupper(trim((string) ($colaborador->welcome ?? '')));
+        $showWelcome = ($welcomeMsg !== '') && ($welcomeValue !== 'Y');
+
+        // Datos juguetes
         $resultado = $this->juguetesPorColaboradorJoin($documento, $campaignId);
 
         return view('ecommerce.product', [
@@ -89,36 +88,29 @@ class ProductController extends Controller
             'primaryColor'      => $primaryColor,
             'secondaryColor'    => $secondaryColor,
             'welcomeMsg'        => $welcomeMsg,
+            'showWelcome'       => $showWelcome,
             'empresaLogoUrl'    => $empresaLogoUrl,
+            'colaborador'       => $colaborador,
         ]);
     }
 
     private function publicUrlLoose(?string $path): ?string
     {
         if (!$path) return null;
+        if (preg_match('#^https?://#i', $path)) return $path;
 
-        // URL absoluta
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
-        }
-
-        // Normaliza separadores
         $p = str_replace('\\', '/', $path);
         $p = ltrim($p, '/');
 
-        // Corrige prefijos viejos
         $p = preg_replace('#^storage/app/public/#', '', $p);
         $p = preg_replace('#^app/public/#', '', $p);
         $p = preg_replace('#^public/#', '', $p);
 
-        // Ajuste: mapear "images/{nit}/..." -> "campaigns/{nit}/..."
         if (preg_match('#^images/(\d+)/(.+)$#', $p, $m)) {
             $p = "campaigns/{$m[1]}/{$m[2]}";
         }
 
-        if (preg_match('#^storage/#i', $p)) {
-            return '/' . $p;
-        }
+        if (preg_match('#^storage/#i', $p)) return '/' . $p;
 
         return Storage::disk('public')->url($p);
     }
@@ -126,7 +118,6 @@ class ProductController extends Controller
     private function publicUrlIfExists(?string $path): ?string
     {
         if (!$path) return null;
-
         if (preg_match('#^https?://#i', $path)) return $path;
 
         $p = str_replace('\\', '/', $path);
@@ -142,7 +133,6 @@ class ProductController extends Controller
     {
         $toysTable = 'campaign_toys';
 
-        // Hijos normalizados
         $childrenSub = \App\Models\ColaboradorHijo::query()
             ->select([
                 'colaborador_hijos.id         as hijo_id',
@@ -164,7 +154,6 @@ class ProductController extends Controller
             ->where('colaborador_hijos.identificacion', $documento)
             ->when($campaignId, fn($q) => $q->where('colaborador_hijos.idcampaing', $campaignId));
 
-        // Juguetes normalizados
         $toysSub = DB::table($toysTable)
             ->select([
                 "$toysTable.id            as toy_id",
@@ -246,7 +235,6 @@ class ProductController extends Controller
     {
         $user = $request->user();
 
-        // Preferir documento; si no existe, caer a email
         $colaborador = Colaborador::where('documento', $user->documento)->first();
         if (!$colaborador && !empty($user->email)) {
             $colaborador = Colaborador::where('email', $user->email)->first();
@@ -254,15 +242,33 @@ class ProductController extends Controller
 
         if ($colaborador) {
             $colaborador->forceFill(['politicadatos' => 'Y'])->save();
-        } else {
-            // Como refuerzo: si por alguna razón no se encontró registro, no romper flujo
-            // (podrías loguear este evento)
         }
 
         return back()->with('swal', [
             'icon'  => 'success',
             'title' => 'Gracias',
             'text'  => 'Has aceptado la política de tratamiento de datos.',
+        ]);
+    }
+
+    /** ✅ Nuevo: aceptar mensaje de bienvenida */
+    public function aceptarWelcome(Request $request)
+    {
+        $user = $request->user();
+
+        $colaborador = Colaborador::where('documento', $user->documento)->first();
+        if (!$colaborador && !empty($user->email)) {
+            $colaborador = Colaborador::where('email', $user->email)->first();
+        }
+
+        if ($colaborador) {
+            $colaborador->forceFill(['welcome' => 'Y'])->save();
+        }
+
+        return back()->with('swal', [
+            'icon'  => 'success',
+            'title' => '¡Bienvenido(a)!',
+            'text'  => 'Gracias por leer el mensaje de bienvenida.',
         ]);
     }
 }

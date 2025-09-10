@@ -19,23 +19,24 @@ class DashboardController extends Controller
 
         $today = \Carbon\Carbon::now(config('app.timezone', 'UTC'))->toDateString();
 
-        // Parseo flexible de NIT(s) del usuario (uno o varios separados por coma)
+        // NIT(s) asignados al usuario (puede venir separado por comas)
         $userNits = collect(
-            is_string($user->nit) ? preg_split('/\s*,\s*/', $user->nit, -1, PREG_SPLIT_NO_EMPTY) : []
+            is_string($user->nit)
+                ? preg_split('/\s*,\s*/', $user->nit, -1, PREG_SPLIT_NO_EMPTY)
+                : []
         )->filter()->values();
 
-        $applyRoleFilter = function ($q, bool $hasPcJoin = false) use ($user, $roleAdmin, $roleEjecutiva, $roleBusiness, $roleColab, $today, $userNits) {
+        $applyRoleFilter = function ($q, bool $hasPcJoin = false)
+        use ($user, $roleAdmin, $roleEjecutiva, $roleBusiness, $roleColab, $today, $userNits) {
+
             if ($roleAdmin) return;
 
             if ($roleEjecutiva) {
-                // Restringe a campañas cuyo NIT esté asignado al usuario
                 if ($userNits->isNotEmpty()) {
                     $q->whereIn('c.nit', $userNits);
                 } elseif (!empty($user->empresa_id)) {
-                    // Alternativa por empresa_id si la usas
                     $q->where('e.id', $user->empresa_id);
                 } else {
-                    // Sin asignación → no ver nada
                     $q->whereRaw('1=0');
                 }
                 return;
@@ -49,7 +50,6 @@ class DashboardController extends Controller
                 } else {
                     $q->whereRaw('1=0');
                 }
-                // RRHH-Cliente: solo campañas vigentes
                 $q->whereDate('c.fechaini', '<=', $today)
                     ->whereDate('c.fechafin', '>=', $today);
                 return;
@@ -78,9 +78,9 @@ class DashboardController extends Controller
                     ->on('t.referencia', '=', 's.referencia');
             })
             ->selectRaw("
-            COALESCE(NULLIF(t.nombre, ''), CONCAT('Ref ', s.referencia)) as toy_name,
+            COALESCE(NULLIF(t.nombre, ''), CONCAT('Ref ', s.referencia)) AS toy_name,
             s.referencia,
-            COUNT(*) as total
+            COUNT(*) AS total
         ")
             ->groupBy('s.idcampaing', 's.referencia', 't.nombre')
             ->orderByDesc('total')
@@ -88,9 +88,10 @@ class DashboardController extends Controller
 
         $applyRoleFilter($top10Q, false);
 
-        $top10      = $top10Q->get();
-        $topLabels  = $top10->pluck('toy_name')->values();
-        $topCounts  = $top10->pluck('total')->values();
+        $top10     = $top10Q->get();
+        $topLabels = $top10->pluck('toy_name')->values();     // nombres (para KPI y fallback)
+        $topRefs   = $top10->pluck('referencia')->values();   // ← códigos de referencia (para el gráfico)
+        $topCounts = $top10->pluck('total')->values();
 
         // ===== Avance por campaña (activas) =====
         $progressQ = \DB::table('campaigns as c')
@@ -101,9 +102,9 @@ class DashboardController extends Controller
             ->whereDate('c.fechafin', '>=', $today)
             ->selectRaw("
             c.id,
-            c.nombre as campaign_name,
-            COUNT(DISTINCT pc.documento) as colaboradores,
-            COUNT(DISTINCT s.documento) as seleccionados
+            c.nombre AS campaign_name,
+            COUNT(DISTINCT pc.documento) AS colaboradores,
+            COUNT(DISTINCT s.documento)  AS seleccionados
         ")
             ->groupBy('c.id', 'c.nombre')
             ->orderBy('c.updated_at', 'desc');
@@ -117,23 +118,25 @@ class DashboardController extends Controller
         $campPercent  = [];
 
         foreach ($progress as $row) {
-            $totalColab   = (int) $row->colaboradores;
-            $sel          = (int) $row->seleccionados;
-            $pending      = max($totalColab - $sel, 0);
-            $pct          = $totalColab > 0 ? round(($sel / $totalColab) * 100, 1) : 0.0;
+            $totalColab = (int) $row->colaboradores;
+            $sel        = (int) $row->seleccionados;
+            $pending    = max($totalColab - $sel, 0);
+            $pct        = $totalColab > 0 ? round(($sel / $totalColab) * 100, 1) : 0.0;
+
             $campLabels[]   = $row->campaign_name;
             $campSelected[] = $sel;
             $campPending[]  = $pending;
             $campPercent[]  = $pct;
         }
 
-        return view('dashboard.index', compact(
-            'topLabels',
-            'topCounts',
-            'campLabels',
-            'campSelected',
-            'campPending',
-            'campPercent'
-        ));
+        return view('dashboard.index', [
+            'topLabels'    => $topLabels,   // se usa para KPI y como fallback
+            'topRefs'      => $topRefs,     // ← etiquetas del gráfico (códigos)
+            'topCounts'    => $topCounts,
+            'campLabels'   => $campLabels,
+            'campSelected' => $campSelected,
+            'campPending'  => $campPending,
+            'campPercent'  => $campPercent,
+        ]);
     }
 }

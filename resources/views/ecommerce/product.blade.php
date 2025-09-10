@@ -289,9 +289,17 @@
             <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
                 @foreach ($resultado as $grupo)
                     @php
-                        $g = strtoupper(trim((string) ($grupo['hijo']['genero'] ?? '')));
-                        $btnClass = $g === 'F' ? 'btn-kid-girl' : ($g === 'M' ? 'btn-kid-boy' : 'btn-kid-neutral');
+                        $gRaw = $grupo['hijo']['genero'] ?? '';
+                        $g = strtoupper(trim((string) $gRaw)); // normaliza
+
+                        $btnClass = match (true) {
+                            in_array($g, ['NIÑA', 'NINA', 'F']) => 'btn-kid-girl', // #1B4C43
+                            in_array($g, ['NIÑO', 'NINO', 'M']) => 'btn-kid-boy', // #BA895D
+                            in_array($g, ['UNISEX', 'U', '']) => 'btn-kid-neutral', // negro
+                            default => 'btn-kid-neutral',
+                        };
                     @endphp
+
                     <div class="col">
                         <button class="btn {{ $btnClass }} w-100 text-truncate js-child-btn"
                             data-child-id="{{ $grupo['hijo']['id'] }}">
@@ -299,6 +307,7 @@
                         </button>
                     </div>
                 @endforeach
+
             </div>
 
             <div class="product-grid mt-5">

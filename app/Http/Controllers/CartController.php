@@ -246,20 +246,57 @@ class CartController extends Controller
     public function remove(Request $request)
     {
         $data = $request->validate([
-            'idhijo'     => ['required', 'integer', 'min:1'],
-            'referencia' => ['required', 'string', 'max:100'],
+            'idhijo'      => ['required', 'integer', 'min:1'],
+            'referencia'  => ['required', 'string', 'max:100'],
+            'idcampaing'  => ['nullable', 'integer', 'min:1'], // viene del form
         ]);
+
+        // Asegura sesión y rol (ajusta si permites otros)
+        if (!auth()->check() || !auth()->user()->hasRole('Colaborador')) {
+            abort(403, 'Solo los colaboradores pueden eliminar del carrito.');
+        }
 
         $hijo = ColaboradorHijo::findOrFail($data['idhijo']);
 
-        Seleccionado::where('documento', $hijo->identificacion)
-            ->where('idcampaing', $hijo->idcampaign)
+        // Solo puede eliminar si el hijo pertenece al usuario autenticado
+        if ((string) $hijo->identificacion !== (string) auth()->user()->documento) {
+            abort(403, 'No puedes eliminar selecciones de otro usuario.');
+        }
+
+        // Normaliza referencia (quita &nbsp; y caracteres de control, y trim)
+        $refRaw = (string) $data['referencia'];
+        $ref    = preg_replace('/[\x{00A0}\p{C}]+/u', '', $refRaw);
+        $ref    = trim($ref);
+
+        // Resuelve campaña con prioridad al valor enviado; cae a columnas reales del hijo
+        $campId = (int) ($data['idcampaing'] ?? 0);
+        if ($campId <= 0) {
+            $campId = (int) ($hijo->getAttribute('idcampaing') ?? 0);
+        }
+        if ($campId <= 0) {
+            $campId = (int) ($hijo->getAttribute('idcampaign') ?? 0); // por si tu modelo trae este alias
+        }
+
+        // Elimina con comparaciones tolerantes para referencia
+        $deleted = Seleccionado::where('documento', $hijo->identificacion)
             ->where('idhijo', $hijo->id)
-            ->where('referencia', $data['referencia'])
+            ->when($campId > 0, fn($q) => $q->where('idcampaing', $campId))
+            ->where(function ($q) use ($ref) {
+                $q->where('referencia', $ref)
+                    ->orWhereRaw('TRIM(referencia) = ?', [$ref])
+                    ->orWhereRaw('REPLACE(referencia," ","") = REPLACE(?, " ", "")', [$ref]);
+            })
             ->delete();
 
-        return back()->with('status', 'Producto eliminado del carrito.');
+        return back()->with('swal', [
+            'icon'  => $deleted ? 'success' : 'info',
+            'title' => $deleted ? 'Eliminado' : 'Nada para eliminar',
+            'text'  => $deleted
+                ? 'Producto eliminado del carrito.'
+                : 'No se encontró la selección a eliminar.',
+        ]);
     }
+
 
     public function finish(Request $request)
     {

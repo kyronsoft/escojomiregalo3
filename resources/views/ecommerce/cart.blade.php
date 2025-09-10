@@ -15,6 +15,19 @@
         .order-history .table-bordered> :not(caption)>*>* {
             border: 1px solid #000 !important;
         }
+
+        /* Botón de hijo(a) */
+        .child-btn {
+            display: inline-block;
+            border: 1px solid transparent;
+            border-radius: .5rem;
+            padding: .35rem .65rem;
+            font-weight: 600;
+            line-height: 1.1;
+            color: #fff !important;
+            text-decoration: none;
+            white-space: nowrap;
+        }
     </style>
 @endpush
 
@@ -47,9 +60,8 @@
                             @media (min-width: 992px) {
                                 .campaign-banner-bleed img {
                                     height: 33.333vh;
+                                    /* desktop: 1/3 altura */
                                 }
-
-                                /* desktop: 1/3 altura */
                             }
                         </style>
                         <div class="campaign-banner-bleed">
@@ -59,6 +71,7 @@
                 </div>
             </div>
         </div>
+
         <div class="row">
             <div class="col-sm-12">
                 <div class="card">
@@ -82,7 +95,7 @@
                                     <tbody>
                                         @forelse($items as $row)
                                             @php
-                                                // Construir ruta imagen: campaign_toys/{idcampaign}/{imagenppal} si no viene con prefijo
+                                                // Construir ruta imagen: campaign_toys/{idcampaign}/{imagenppal}
                                                 $imgRel = trim((string) ($row->imagenppal ?? ''));
                                                 $imgRel = ltrim($imgRel, '/');
                                                 $imgPath =
@@ -92,9 +105,34 @@
                                                             : "campaign_toys/{$row->idcampaing}/{$imgRel}")
                                                         : '';
 
+                                                // Normalizar género (acepta NIÑO/NIÑA/UNISEX y M/F)
+                                                $genRaw = strtoupper(trim((string) ($row->genero ?? '')));
+                                                $genKey = match (true) {
+                                                    in_array($genRaw, ['NIÑA', 'NINA', 'F', 'GIRL', 'FEMALE'], true)
+                                                        => 'F',
+                                                    in_array($genRaw, ['NIÑO', 'NINO', 'M', 'BOY', 'MALE'], true)
+                                                        => 'M',
+                                                    in_array($genRaw, ['UNISEX', 'U', 'UNI', 'NEUTRO', 'NEUTRAL'], true)
+                                                        => 'U',
+                                                    default => 'U',
+                                                };
+
+                                                // Clase de botón (si usas las mismas de la otra vista)
+                                                $childBtnClass = match ($genKey) {
+                                                    'M' => 'btn-kid-boy', // #BA895D
+                                                    'F' => 'btn-kid-girl', // #1B4C43
+                                                    default => 'btn-kid-neutral', // #000000
+                                                };
+
+                                                // Color HEX (si prefieres inline)
+                                                $childBtnColor = match ($genKey) {
+                                                    'M' => '#BA895D', // Niño
+                                                    'F' => '#1B4C43', // Niña
+                                                    default => '#000000', // Unisex / desconocido
+                                                };
+
                                                 $formId = "remove-{$row->id}";
                                             @endphp
-
                                             <tr>
                                                 {{-- Producto: imagen + referencia + nombre --}}
                                                 <td>
@@ -104,18 +142,22 @@
                                                                 alt="{{ $row->toy_nombre }}" class="img-fluid mb-2"
                                                                 style="max-width:160px">
                                                         @endif
-                                                        <div class="small text-muted">Ref:
-                                                            <strong>{{ $row->referencia }}</strong>
+                                                        <div class="small text-muted">
+                                                            Ref: <strong>{{ $row->referencia }}</strong>
                                                         </div>
                                                         <div class="fw-semibold">{{ $row->toy_nombre }}</div>
                                                     </div>
                                                 </td>
 
-                                                {{-- Hijo(a) --}}
+                                                {{-- Hijo(a) con color por género --}}
                                                 <td class="text-center">
-                                                    <div class="fw-semibold">
-                                                        {{ $row->child_nombre ?? ($row->nombre_hijo ?? '—') }}
-                                                    </div>
+                                                    @php
+                                                        $childName = $row->child_nombre ?? ($row->nombre_hijo ?? '—');
+                                                    @endphp
+                                                    <span class="child-btn"
+                                                        style="background-color: {{ $childBtnColor }}; border-color: {{ $childBtnColor }};">
+                                                        {{ $childName }}
+                                                    </span>
                                                 </td>
 
                                                 {{-- Cantidad (siempre 1) --}}
@@ -133,6 +175,8 @@
                                                         <input type="hidden" name="idhijo" value="{{ $row->idhijo }}">
                                                         <input type="hidden" name="referencia"
                                                             value="{{ $row->referencia }}">
+                                                        <input type="hidden" name="idcampaing"
+                                                            value="{{ $row->idcampaing }}">
                                                         <button type="button"
                                                             class="btn btn-outline-danger btn-sm js-remove-btn"
                                                             data-form="{{ $formId }}">
@@ -151,13 +195,15 @@
 
                                         <tr>
                                             <td colspan="4" class="text-end">
-                                                <a class="btn btn-secondary" href="{{ route('product') }}">Seguir
-                                                    seleccionando</a>
+                                                <a class="btn btn-secondary" href="{{ route('product') }}">
+                                                    Seguir seleccionando
+                                                </a>
                                                 <form id="finishForm" action="{{ route('ecommerce.cart.finish') }}"
                                                     method="POST" class="d-inline">
                                                     @csrf
-                                                    <button type="button" class="btn btn-success"
-                                                        id="btnFinish">Finalizar</button>
+                                                    <button type="button" class="btn btn-success" id="btnFinish">
+                                                        Finalizar
+                                                    </button>
                                                 </form>
                                             </td>
                                         </tr>
@@ -184,8 +230,8 @@
             document.addEventListener('click', function(e) {
                 const btn = e.target.closest('.js-remove-btn');
                 if (!btn) return;
-
                 e.preventDefault();
+
                 const formId = btn.getAttribute('data-form');
                 const formEl = document.getElementById(formId);
                 if (!formEl) return;
@@ -202,9 +248,7 @@
                     if (result.isConfirmed) formEl.submit();
                 });
             });
-        </script>
 
-        <script>
             document.getElementById('btnFinish').addEventListener('click', function() {
                 Swal.fire({
                     title: '¿Finalizar selección?',

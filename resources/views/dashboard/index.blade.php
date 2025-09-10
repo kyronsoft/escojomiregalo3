@@ -38,7 +38,7 @@
             height: 100% !important
         }
 
-        @media (min-width: 992px) {
+        @media (min-width:992px) {
             .chart-wrap {
                 min-height: 360px
             }
@@ -48,12 +48,10 @@
 
 @section('content')
     <div class="container-fluid py-3">
-
         <div class="d-flex justify-content-between align-items-center mb-2">
             <h3 class="mb-0">Dashboard</h3>
         </div>
 
-        {{-- Aviso de alcance para Ejecutiva-Empresas --}}
         @if (auth()->check() && auth()->user()->hasRole('Ejecutiva-Empresas'))
             <div class="alert alert-info py-2">
                 Mostrando datos únicamente de la empresa
@@ -61,7 +59,6 @@
             </div>
         @endif
 
-        {{-- KPIs --}}
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
                 <div class="kpi-card">
@@ -96,7 +93,6 @@
             </div>
         </div>
 
-        {{-- Top 10 / Avance (igual que tenías) --}}
         <div class="row g-3">
             <div class="col-12 col-lg-6">
                 <div class="chart-wrap">
@@ -121,7 +117,6 @@
             </div>
         </div>
 
-        {{-- Tabla auxiliar --}}
         <div class="row g-3 mt-3">
             <div class="col-12">
                 <div class="chart-wrap">
@@ -158,17 +153,23 @@
 @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
-        const topLabels = @json($topLabels, JSON_UNESCAPED_UNICODE);
+        // Datos del backend
+        const topLabels = @json($topLabels, JSON_UNESCAPED_UNICODE); // nombres (fallback)
         const topCounts = @json($topCounts);
         const campLabels = @json($campLabels, JSON_UNESCAPED_UNICODE);
         const campSelected = @json($campSelected);
         const campPending = @json($campPending);
 
+        // 👇 NUEVO: usar códigos de referencia si el controlador los envía como $topRefs
+        // En tu controlador: $topRefs = $top10->pluck('referencia')->values();
+        const topRefs = @json($topRefs ?? ($topReferences ?? ($topRefLabels ?? null)), JSON_UNESCAPED_UNICODE) || topLabels;
+
+        // Top 10 (etiquetas = códigos de referencia)
         const ctxTop = document.getElementById('chartTopToys').getContext('2d');
         new Chart(ctxTop, {
             type: 'bar',
             data: {
-                labels: topLabels,
+                labels: topRefs, // ← etiquetas por código
                 datasets: [{
                     label: 'Selecciones',
                     data: topCounts
@@ -193,6 +194,7 @@
             }
         });
 
+        // Avance campañas
         const ctxProg = document.getElementById('chartProgress').getContext('2d');
         new Chart(ctxProg, {
             type: 'bar',

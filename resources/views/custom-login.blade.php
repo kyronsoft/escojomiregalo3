@@ -48,7 +48,6 @@
             left: 0;
             top: 0;
             width: 100vw;
-            /* usar 100dvh cuando exista; si no, usamos la variable --vh (que JS setea a innerHeight) o 100vh */
             height: 100dvh;
             height: calc(var(--vh, 1vh) * 100);
             z-index: -2;
@@ -60,9 +59,7 @@
             height: 100%;
             display: block;
             object-fit: cover;
-            /* ¡siempre cubrir! */
             object-position: center;
-            /* centrada */
         }
 
         .backdrop {
@@ -265,7 +262,7 @@
     </div>
     <div class="hot-zone" id="hotZone" aria-hidden="true"></div>
 
-    <!-- Overlay de Login (usa el login estándar de la app) -->
+    <!-- Overlay de Login -->
     <div class="login-overlay" id="loginOverlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
         <div class="login-modal">
             <h2 id="loginTitle">Iniciar sesión</h2>
@@ -282,16 +279,18 @@
                 </div>
             @endif
 
+            {{-- IMPORTANTE: tu backend espera "documento", no "email" --}}
             <form method="POST" action="{{ route('login') }}">
                 @csrf
                 <div class="form-group">
-                    <label for="email">Usuario o correo</label>
-                    <input type="text" name="email" id="email" value="{{ old('email') }}" required
-                        autocomplete="username">
+                    <label for="documento">Documento</label>
+                    <input type="text" name="documento" id="documento" value="{{ old('documento') }}" required
+                        autocomplete="username" inputmode="numeric" placeholder="Ingresa tu documento">
                 </div>
                 <div class="form-group">
                     <label for="password">Contraseña</label>
-                    <input type="password" name="password" id="password" required autocomplete="current-password">
+                    <input type="password" name="password" id="password" required autocomplete="current-password"
+                        placeholder="Ingresa tu contraseña">
                 </div>
                 <div class="actions">
                     <button type="submit" class="btn btn-primary">Ingresar</button>
@@ -302,7 +301,7 @@
     </div>
 
     <script>
-        // Ajuste del alto real del viewport en móviles (evita barras negras/espacios)
+        // Ajuste del alto real del viewport en móviles
         (function setRealVh() {
             const update = () => {
                 const vh = window.innerHeight * 0.01;
@@ -332,6 +331,7 @@
                 bar.classList.add('active');
                 if (hideTimer) clearTimeout(hideTimer);
             }
+
             hot.addEventListener('mouseenter', showBar);
             document.addEventListener('mousemove', e => {
                 if ((window.innerHeight - e.clientY) <= 70) showBar();
@@ -345,12 +345,13 @@
             function openLogin(e) {
                 if (e) e.preventDefault();
                 overlay.classList.add('active');
-                setTimeout(() => document.getElementById('email')?.focus(), 50);
+                setTimeout(() => document.getElementById('documento')?.focus(), 50);
             }
 
             function closeLogin() {
                 overlay.classList.remove('active');
             }
+
             open.addEventListener('click', openLogin);
             closeBtn.addEventListener('click', closeLogin);
             overlay.addEventListener('click', e => {

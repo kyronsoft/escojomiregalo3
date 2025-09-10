@@ -198,14 +198,10 @@ Route::prefix('colaborador-hijos')->name('colaborador_hijos.')->group(function (
         ->whereNumber('colaborador_hijo')->name('destroy');
 });
 
-Route::get('/seleccionados', [SeleccionadosController::class, 'index'])
-    ->name('seleccionados.index')
-    ->middleware(['auth']);
+Route::get('/seleccionados', [SeleccionadosController::class, 'index'])->name('seleccionados.index');
+Route::get('/seleccionados/data', [SeleccionadosController::class, 'data'])->name('seleccionados.data');
+Route::get('/seleccionados/export', [SeleccionadosController::class, 'export'])->name('seleccionados.export');
 
-Route::middleware(['auth'])->group(function () {
-    Route::get('/seleccionados',        [SeleccionadosController::class, 'index'])->name('seleccionados.index');
-    Route::get('/seleccionados/export', [SeleccionadosController::class, 'export'])->name('seleccionados.export');
-});
 
 Route::prefix('campaign-toys')->name('campaign_toys.')->group(function () {
     Route::get('data', [CampaignToyController::class, 'data'])->name('data');

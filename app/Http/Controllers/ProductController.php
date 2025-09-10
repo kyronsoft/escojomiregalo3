@@ -25,7 +25,9 @@ class ProductController extends Controller
             ->orderByDesc('created_at')
             ->value('idcampaign');
 
-        if (!$campaignId) abort(403, 'No tienes campañas asignadas para esta empresa.');
+        if (!$campaignId) {
+            abort(403, 'No tienes campañas asignadas para esta empresa.');
+        }
 
         $pertenece = DB::table('campaing_colaboradores')
             ->where('documento', $documento)
@@ -33,12 +35,14 @@ class ProductController extends Controller
             ->when($nitSesion, fn($q) => $q->where('nit', $nitSesion))
             ->exists();
 
-        if (!$pertenece) abort(403, 'No estás asignado a esta campaña.');
+        if (!$pertenece) {
+            abort(403, 'No estás asignado a esta campaña.');
+        }
 
         // Campaña y empresa
         $campaign = Campaign::with('empresa')->find($campaignId);
 
-        // Empresa por relación o, si falta, por NIT de campaña / sesión / pivot
+        // Empresa por relación o por NIT de respaldo
         $empresa = $campaign?->empresa;
         if (!$empresa) {
             $nitEmpresa = $campaign?->nit
@@ -49,14 +53,13 @@ class ProductController extends Controller
                 ->value('nit');
 
             if ($nitEmpresa) {
-                $empresa = Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$nitEmpresa)])->first();
+                $empresa = Empresa::whereRaw('TRIM(nit) = ?', [trim((string) $nitEmpresa)])->first();
             }
         }
 
-        // Banner (normalizado, con fallback null permitido en la vista)
+        // Banner y logo (con fallback seguro)
         $campaignBannerUrl = $this->publicUrlIfExists($campaign?->banner);
 
-        // ✅ Logo empresa SIEMPRE con valor (placeholder si no hay archivo)
         $empresaLogoUrl = $this->publicUrlLoose($empresa?->logo)
             ?? $this->publicUrlLoose($empresa ? "images/{$empresa->nit}/logo.png" : null)
             ?? asset('assets/images/placeholder.png');
@@ -66,11 +69,16 @@ class ProductController extends Controller
         $secondaryColor = $empresa?->color_secundario ?: '#f2f2f2';
         $welcomeMsg     = (string) ($empresa->welcome_msg ?? '');
 
-        // Lógica existente
-        $colaborador  = Colaborador::where('documento', $documento)->first();
-        $showPolitica = is_null(optional($colaborador)->politicadatos);
-        $politicaHtml = \App\Models\Parametro::where('nombre', 'POLITICA DATOS')->value('valor') ?? '...';
-        $resultado    = $this->juguetesPorColaboradorJoin($documento, $campaignId);
+        // Colaborador y POLÍTICA DE DATOS
+        $colaborador = Colaborador::where('documento', $documento)->first();
+        // Mostrar modal cuando politicadatos sea distinto de 'Y' (incluye N, '', null, etc.)
+        $pdValue = strtoupper(trim((string) ($colaborador->politicadatos ?? '')));
+        $showPolitica = ($pdValue !== 'Y');
+
+        $politicaHtml = Parametro::where('nombre', 'POLITICA DATOS')->value('valor') ?? '...';
+
+        // Datos de juguetes/hijos
+        $resultado = $this->juguetesPorColaboradorJoin($documento, $campaignId);
 
         return view('ecommerce.product', [
             'resultado'         => $resultado,
@@ -81,7 +89,7 @@ class ProductController extends Controller
             'primaryColor'      => $primaryColor,
             'secondaryColor'    => $secondaryColor,
             'welcomeMsg'        => $welcomeMsg,
-            'empresaLogoUrl'    => $empresaLogoUrl,  // ← ya NO es null
+            'empresaLogoUrl'    => $empresaLogoUrl,
         ]);
     }
 
@@ -103,28 +111,18 @@ class ProductController extends Controller
         $p = preg_replace('#^app/public/#', '', $p);
         $p = preg_replace('#^public/#', '', $p);
 
-        // 🚀 Ajuste clave: si viene "images/{nit}/..." => usar "campaigns/{nit}/..."
+        // Ajuste: mapear "images/{nit}/..." -> "campaigns/{nit}/..."
         if (preg_match('#^images/(\d+)/(.+)$#', $p, $m)) {
             $p = "campaigns/{$m[1]}/{$m[2]}";
         }
 
-        // Si ya viene como storage/...
         if (preg_match('#^storage/#i', $p)) {
             return '/' . $p;
         }
 
-        // Genera URL pública en el disco "public"
-        return \Illuminate\Support\Facades\Storage::disk('public')->url($p);
+        return Storage::disk('public')->url($p);
     }
 
-
-    /**
-     * URL pública si existe en disco 'public'.
-     * Acepta:
-     *  - URL absoluta → retorna igual
-     *  - /storage/... → retorna igual
-     *  - rutas relativas (normaliza y verifica existencia)
-     */
     private function publicUrlIfExists(?string $path): ?string
     {
         if (!$path) return null;
@@ -142,9 +140,9 @@ class ProductController extends Controller
 
     private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId = null)
     {
-        $toysTable = 'campaign_toys'; // cambia si tu tabla tiene otro nombre
+        $toysTable = 'campaign_toys';
 
-        // Hijos normalizados (género vacío/NULL => 'U')
+        // Hijos normalizados
         $childrenSub = \App\Models\ColaboradorHijo::query()
             ->select([
                 'colaborador_hijos.id         as hijo_id',
@@ -154,19 +152,19 @@ class ProductController extends Controller
                 DB::raw('CAST(colaborador_hijos.rango_edad AS UNSIGNED) as edad_int'),
                 'colaborador_hijos.idcampaing',
                 DB::raw("
-                CASE
-                  WHEN UPPER(TRIM(colaborador_hijos.genero)) IN ('F','FEM','FEMENINO','NIÑA') THEN 'F'
-                  WHEN UPPER(TRIM(colaborador_hijos.genero)) IN ('M','MAS','MASCULINO','NIÑO') THEN 'M'
-                  WHEN colaborador_hijos.genero IS NULL OR TRIM(colaborador_hijos.genero) = '' THEN 'U'
-                  WHEN UPPER(TRIM(colaborador_hijos.genero)) IN ('U','UNISEX','UNI','TODOS','ANY') THEN 'U'
-                  ELSE 'U' -- fallback inclusivo
-                END as genero_norm_hijo
-            "),
+                    CASE
+                      WHEN UPPER(TRIM(colaborador_hijos.genero)) IN ('F','FEM','FEMENINO','NIÑA') THEN 'F'
+                      WHEN UPPER(TRIM(colaborador_hijos.genero)) IN ('M','MAS','MASCULINO','NIÑO') THEN 'M'
+                      WHEN colaborador_hijos.genero IS NULL OR TRIM(colaborador_hijos.genero) = '' THEN 'U'
+                      WHEN UPPER(TRIM(colaborador_hijos.genero)) IN ('U','UNISEX','UNI','TODOS','ANY') THEN 'U'
+                      ELSE 'U'
+                    END as genero_norm_hijo
+                "),
             ])
             ->where('colaborador_hijos.identificacion', $documento)
             ->when($campaignId, fn($q) => $q->where('colaborador_hijos.idcampaing', $campaignId));
 
-        // Juguetes normalizados (género vacío/NULL => 'U')
+        // Juguetes normalizados
         $toysSub = DB::table($toysTable)
             ->select([
                 "$toysTable.id            as toy_id",
@@ -179,14 +177,14 @@ class ProductController extends Controller
                 DB::raw("CAST($toysTable.hasta AS UNSIGNED) as hasta_int"),
                 "$toysTable.genero        as genero_toy",
                 DB::raw("
-                CASE
-                  WHEN $toysTable.genero IS NULL OR TRIM($toysTable.genero) = '' THEN 'U'
-                  WHEN UPPER(TRIM($toysTable.genero)) IN ('U','UNISEX','UNI','TODOS','ANY') THEN 'U'
-                  WHEN UPPER(TRIM($toysTable.genero)) IN ('F','FEM','FEMENINO','NIÑA') THEN 'F'
-                  WHEN UPPER(TRIM($toysTable.genero)) IN ('M','MAS','MASCULINO','NIÑO') THEN 'M'
-                  ELSE 'U' -- fallback inclusivo
-                END as genero_norm_toy
-            "),
+                    CASE
+                      WHEN $toysTable.genero IS NULL OR TRIM($toysTable.genero) = '' THEN 'U'
+                      WHEN UPPER(TRIM($toysTable.genero)) IN ('U','UNISEX','UNI','TODOS','ANY') THEN 'U'
+                      WHEN UPPER(TRIM($toysTable.genero)) IN ('F','FEM','FEMENINO','NIÑA') THEN 'F'
+                      WHEN UPPER(TRIM($toysTable.genero)) IN ('M','MAS','MASCULINO','NIÑO') THEN 'M'
+                      ELSE 'U'
+                    END as genero_norm_toy
+                "),
             ]);
 
         $rows = DB::query()
@@ -195,10 +193,6 @@ class ProductController extends Controller
                 $join->on('ct.idcampaing', '=', 'ch.idcampaing')
                     ->whereRaw('ch.edad_int BETWEEN ct.desde_int AND ct.hasta_int')
                     ->where(function ($w) {
-                        // Regla de género:
-                        // - Juguete 'U' → válido para todos
-                        // - Hijo 'U' → acepta cualquier juguete
-                        // - Si no, igualdad F/M
                         $w->whereRaw("ct.genero_norm_toy = 'U'")
                             ->orWhereRaw("ch.genero_norm_hijo = 'U'")
                             ->orWhereRaw('ct.genero_norm_toy = ch.genero_norm_hijo');
@@ -217,13 +211,12 @@ class ProductController extends Controller
                 'ct.referencia',
                 'ct.toy_nombre    as toy_nombre',
                 'ct.imagenppal',
-                'ct.genero_norm_toy as genero_toy', // ya normalizado
+                'ct.genero_norm_toy as genero_toy',
                 'ct.desde_int     as desde',
                 'ct.hasta_int     as hasta',
                 'ct.descripcion',
             ]);
 
-        // Estructura: hijos -> juguetes
         return $rows->groupBy('hijo_id')->map(function ($items) {
             $f = $items->first();
             return [
@@ -240,7 +233,7 @@ class ProductController extends Controller
                     'referencia'  => $r->referencia,
                     'nombre'      => $r->toy_nombre,
                     'imagenppal'  => $r->imagenppal,
-                    'genero'      => $r->genero_toy,   // 'F' | 'M' | 'U'
+                    'genero'      => $r->genero_toy,
                     'desde'       => $r->desde,
                     'hasta'       => $r->hasta,
                     'descripcion' => $r->descripcion,
@@ -249,15 +242,22 @@ class ProductController extends Controller
         })->values();
     }
 
-
     public function aceptarPolitica(Request $request)
     {
         $user = $request->user();
 
-        $colaborador = \App\Models\Colaborador::where('email', $user->email)->firstOrFail();
+        // Preferir documento; si no existe, caer a email
+        $colaborador = Colaborador::where('documento', $user->documento)->first();
+        if (!$colaborador && !empty($user->email)) {
+            $colaborador = Colaborador::where('email', $user->email)->first();
+        }
 
-        // Guardar aceptación como 'Y'
-        $colaborador->forceFill(['politicadatos' => 'Y'])->save();
+        if ($colaborador) {
+            $colaborador->forceFill(['politicadatos' => 'Y'])->save();
+        } else {
+            // Como refuerzo: si por alguna razón no se encontró registro, no romper flujo
+            // (podrías loguear este evento)
+        }
 
         return back()->with('swal', [
             'icon'  => 'success',

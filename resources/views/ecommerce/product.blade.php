@@ -19,17 +19,13 @@
             content: "";
             position: fixed;
             inset: 0;
-            background: linear-gradient(to bottom,
-                    var(--primary) 0%,
-                    var(--primary) 50%,
-                    var(--secondary) 50%,
-                    var(--secondary) 100%);
-            opacity: .5;
-            z-index: -1;
             pointer-events: none;
+            z-index: -1;
+            opacity: .5;
+            background: linear-gradient(to bottom, var(--primary) 0%, var(--primary) 50%, var(--secondary) 50%, var(--secondary) 100%);
         }
 
-        /* Contenedor topbar por defecto: flex en pantallas medias/grandes */
+        /* Topbar */
         .topbar {
             position: sticky;
             top: 0;
@@ -38,27 +34,43 @@
             color: #fff;
             box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
             min-height: 100px;
-            /* mobile base */
-            padding-top: .25rem;
-            padding-bottom: .25rem;
+            padding: .25rem 0;
         }
 
-        /* En pantallas ≥992px incrementa altura para logo 200px */
-        @media (min-width: 992px) {
+        @media (min-width:992px) {
             .topbar {
                 min-height: 120px;
-                padding-top: .5rem;
-                padding-bottom: .5rem;
+                padding: .5rem 0;
             }
+        }
+
+        /* Contenedor 3 columnas: logo izq – acciones centro – logo der */
+        .topbar-container {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: .75rem;
+        }
+
+        .topbar-left,
+        .topbar-right {
+            display: flex;
+            align-items: center;
+        }
+
+        .topbar-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
         }
 
         .topbar .btn {
             --bs-btn-padding-y: .35rem;
-            --bs-btn-padding-x: .75rem;
-            --bs-btn-font-size: .9rem;
+            --bs-btn-padding-x: .9rem;
+            --bs-btn-font-size: .95rem;
         }
 
-        /* Imagen de logo responsive */
         .topbar-logo-img {
             height: 100px;
             width: auto;
@@ -66,21 +78,21 @@
             display: block;
         }
 
-        @media (min-width: 992px) {
+        @media (min-width:992px) {
             .topbar-logo-img {
                 height: 100px;
             }
         }
 
         .btn-top {
-            background-color: var(--secondary) !important;
+            background: var(--secondary) !important;
             border-color: var(--secondary) !important;
             color: #fff !important;
         }
 
         .btn-top:hover,
         .btn-top:focus {
-            filter: brightness(0.92);
+            filter: brightness(.92);
             color: #fff !important;
         }
 
@@ -88,157 +100,199 @@
             position: relative;
         }
 
+        /* Colores botones por género */
         .btn-kid-girl {
-            background-color: #e91e63 !important;
-            border-color: #e91e63 !important;
-            color: #fff !important;
-        }
-
-        .btn-kid-girl:hover,
-        .btn-kid-girl:focus {
-            background-color: #d81b60 !important;
-            border-color: #d81b60 !important;
+            background: #1B4C43 !important;
+            border-color: #1B4C43 !important;
             color: #fff !important;
         }
 
         .btn-kid-boy {
-            background-color: #0d6efd !important;
-            border-color: #0d6efd !important;
-            color: #fff !important;
-        }
-
-        .btn-kid-boy:hover,
-        .btn-kid-boy:focus {
-            background-color: #0b5ed7 !important;
-            border-color: #0a58ca !important;
+            background: #BA895D !important;
+            border-color: #BA895D !important;
             color: #fff !important;
         }
 
         .btn-kid-neutral {
-            background-color: #000 !important;
+            background: #000 !important;
             border-color: #000 !important;
             color: #fff !important;
         }
 
+        .btn-kid-girl:hover,
+        .btn-kid-girl:focus,
+        .btn-kid-boy:hover,
+        .btn-kid-boy:focus,
         .btn-kid-neutral:hover,
         .btn-kid-neutral:focus {
-            background-color: #111 !important;
-            border-color: #111 !important;
-            color: #fff !important;
+            filter: brightness(.95);
         }
 
+        /* Feedback visible al seleccionar hijo */
+        .child-btn {
+            position: relative;
+            border-width: 2px;
+            transition: transform .12s ease, box-shadow .18s ease, filter .18s ease;
+            white-space: normal;
+            text-overflow: clip;
+            overflow: visible;
+            line-height: 1.2;
+            padding: .65rem .8rem;
+        }
+
+        .child-btn:active {
+            transform: translateY(1px) scale(.985);
+        }
+
+        .child-btn:focus-visible {
+            outline: 2px solid #fff;
+            outline-offset: 2px;
+        }
+
+        .child-btn.active {
+            filter: brightness(.95);
+            box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(0, 0, 0, .35);
+        }
+
+        .child-btn .check {
+            display: none;
+            font-weight: 700;
+        }
+
+        .child-btn.active .check {
+            display: inline-block;
+        }
+
+        /* Contenedor enmarcado para los botones de hijos */
+        .children-box {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+        }
+
+        .children-box .col .child-btn {
+            border: 2px solid rgba(0, 0, 0, .15);
+            border-radius: 10px;
+        }
+
+        /* Banner */
         .campaign-banner-bleed {
             position: relative;
         }
 
-        .banner-welcome {
-            position: absolute;
-            right: 1rem;
-            bottom: 1rem;
-            z-index: 2;
-            max-width: min(90vw, 560px);
-        }
-
-        .banner-welcome__box {
-            background: rgba(0, 0, 0, .65);
-            color: #fff;
-            padding: 12px 16px;
-            border-radius: 14px;
-            font-weight: 700;
-            line-height: 1.2;
-            font-size: clamp(1.1rem, 2.5vw, 2em);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, .25);
-        }
-
-        .banner-welcome__box p {
-            margin: 0;
-        }
-
-        .topbar-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: .5rem;
-        }
-
         .badge-gender {
-            background-color: #FFCD01 !important;
+            background: #FFCD01 !important;
             color: #fff !important;
         }
 
-        @media (max-width: 499px) {
-            .topbar {
-                min-height: 70px;
-            }
+        /* ==== Tarjetas de juguetes ==== */
+        .toy-card .card {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .04);
+        }
 
+        .product-img {
+            height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 12px;
+        }
+
+        .product-img img {
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+
+        .product-img .combo-wrap img {
+            max-width: 120px;
+            max-height: 100%;
+        }
+
+        /* Responsive topbar (móvil) */
+        @media (max-width:576px) {
             .topbar-container {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                align-items: center;
-                gap: .5rem;
+                grid-template-columns: 1fr;
+                row-gap: .5rem;
+                text-align: center;
             }
 
-            .topbar-slot {
+            .topbar-center {
+                justify-content: stretch;
+                flex-wrap: wrap;
+            }
+
+            .topbar-center .btn,
+            .topbar-center form {
                 width: 100%;
             }
 
             .topbar-logo-img {
                 height: 50px;
             }
+        }
 
-            .topbar .btn,
-            .topbar form,
-            .topbar a {
-                width: 100%;
+        /* Toy cards más compactas en móvil */
+        @media (max-width:576px) {
+            .child-btn {
+                font-size: .95rem;
+                padding: .55rem .65rem;
             }
 
-            .topbar-cart-label {
-                display: none;
+            .product-wrapper-grid #toyGrid {
+                row-gap: .75rem;
             }
 
-            .topbar-cart-btn .icon-shopping-cart {
-                margin-right: 0 !important;
+            .toy-card {
+                padding-left: .25rem;
+                padding-right: .25rem;
             }
 
-            .topbar-slot.text-end {
-                text-align: center !important;
+            .toy-card .card {
+                margin-bottom: .5rem;
+            }
+
+            .product-img {
+                height: 160px;
+                padding: 8px;
+            }
+
+            .product-details h4 {
+                font-size: 1rem;
             }
         }
     </style>
 @endpush
 
 @section('content')
-    {{-- Barra superior con Logo + Ver carrito / Salir --}}
+    {{-- Barra superior con Logo (izq) + Acciones (centro) + Logo (der) --}}
     <div class="topbar">
         <div class="container topbar-container">
-            {{-- 1) Logo empresa (izquierda) --}}
-            <div class="topbar-slot">
-                @php
-                    $logoUrl = !empty($empresaLogoUrl) ? $empresaLogoUrl : asset('assets/images/placeholder.png');
-                @endphp
+            {{-- Izquierda: logo empresa --}}
+            <div class="topbar-left">
+                @php $logoUrl = !empty($empresaLogoUrl) ? $empresaLogoUrl : asset('assets/images/placeholder.png'); @endphp
                 <img src="{{ $logoUrl }}" alt="Logo empresa" class="topbar-logo-img">
             </div>
 
-            {{-- 2) Botón Ver carrito (texto se oculta <500px) --}}
-            <div class="topbar-slot">
-                <a href="{{ route('ecommerce.cart.index') }}" class="btn btn-top w-100 topbar-cart-btn">
+            {{-- Centro: botones --}}
+            <div class="topbar-center">
+                <a href="{{ route('ecommerce.cart.index') }}" class="btn btn-top topbar-cart-btn">
                     <i class="icon-shopping-cart me-1"></i>
                     <span class="topbar-cart-label">Ver carrito</span>
                 </a>
-            </div>
-
-            {{-- 3) Botón Salir --}}
-            <div class="topbar-slot">
-                <form action="{{ route('logout') }}" method="POST" class="d-inline w-100">
+                <form action="{{ route('logout') }}" method="POST" class="d-inline">
                     @csrf
-                    <button type="submit" class="btn btn-top w-100">
+                    <button type="submit" class="btn btn-top">
                         <i class="icon-power me-1"></i> Salir
                     </button>
                 </form>
             </div>
 
-            {{-- 4) Logo fijo (derecha) --}}
-            <div class="topbar-slot text-end">
+            {{-- Derecha: logo fijo --}}
+            <div class="topbar-right">
                 <img src="{{ asset('assets/images/moreproducts/loginpage.png') }}" alt="Logo fijo" class="topbar-logo-img">
             </div>
         </div>
@@ -261,90 +315,87 @@
                     object-fit: cover;
                 }
 
-                @media (min-width: 992px) {
+                @media (min-width:992px) {
                     .campaign-banner-bleed img {
                         height: 33.333vh;
                     }
                 }
             </style>
-
             <div class="campaign-banner-bleed">
                 <img src="{{ $campaignBannerUrl }}" alt="Banner campaña" loading="lazy">
-                {{-- @if (!empty($welcomeMsg))
-                    <div class="banner-welcome">
-                        <div class="banner-welcome__box">
-                            {!! $welcomeMsg !!}
-                        </div>
-                    </div>
-                @endif --}}
             </div>
         @endif
 
         <div class="container product-wrapper">
-            <div id="hintSelect" class="alert alert-info mt-3" style="background: black;">
-                Selecciona un hijo o hija para ver los juguetes que puedes escoger.
+            {{-- === Aquí va el nombre del colaborador (reemplaza el mensaje anterior) === --}}
+            @php
+                $colabName =
+                    $colaboradorNombre ??
+                    ((isset($colaborador) ? $colaborador->nombre ?? null : null) ??
+                        (optional(auth()->user())->name ??
+                            (optional(auth()->user())->nombre ?? (optional(auth()->user())->email ?? 'Colaborador'))));
+            @endphp
+            <div id="hintSelect" class="alert alert-info mt-3 text-white" style="background:black;">
+                <strong>{{ $colabName }}</strong>
             </div>
 
-            {{-- Botones por hijo(a) --}}
-            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
-                @foreach ($resultado as $grupo)
-                    @php
-                        $gRaw = $grupo['hijo']['genero'] ?? '';
-                        $g = strtoupper(trim((string) $gRaw)); // normaliza
-
-                        $btnClass = match (true) {
-                            in_array($g, ['NIÑA', 'NINA', 'F']) => 'btn-kid-girl', // #1B4C43
-                            in_array($g, ['NIÑO', 'NINO', 'M']) => 'btn-kid-boy', // #BA895D
-                            in_array($g, ['UNISEX', 'U', '']) => 'btn-kid-neutral', // negro
-                            default => 'btn-kid-neutral',
-                        };
-                    @endphp
-
-                    <div class="col">
-                        <button class="btn {{ $btnClass }} w-100 text-truncate js-child-btn"
-                            data-child-id="{{ $grupo['hijo']['id'] }}">
-                            {{ $grupo['hijo']['nombre'] }}
-                        </button>
+            {{-- Contenedor enmarcado de botones de hijos --}}
+            <div class="card shadow-sm mb-4 children-box" role="group" aria-label="Selecciona un hijo(a)">
+                <div class="card-body py-3">
+                    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
+                        @foreach ($resultado as $grupo)
+                            @php
+                                $gRaw = $grupo['hijo']['genero'] ?? '';
+                                $g = strtoupper(trim((string) $gRaw));
+                                $btnClass = match (true) {
+                                    in_array($g, ['NIÑA', 'NINA', 'F']) => 'btn-kid-girl',
+                                    in_array($g, ['NIÑO', 'NINO', 'M']) => 'btn-kid-boy',
+                                    in_array($g, ['UNISEX', 'U', '']) => 'btn-kid-neutral',
+                                    default => 'btn-kid-neutral',
+                                };
+                            @endphp
+                            <div class="col d-grid">
+                                <button class="btn child-btn {{ $btnClass }} w-100 js-child-btn" type="button"
+                                    data-child-id="{{ $grupo['hijo']['id'] }}" aria-pressed="false">
+                                    <span class="label">{{ $grupo['hijo']['nombre'] }}</span>
+                                    <span class="check ms-2" aria-hidden="true">✓</span>
+                                </button>
+                            </div>
+                        @endforeach
                     </div>
-                @endforeach
-
+                </div>
             </div>
 
-            <div class="product-grid mt-5">
+            {{-- Grid de juguetes --}}
+            <div class="product-grid mt-4">
                 <div class="product-wrapper-grid">
                     <div id="toyGrid" class="row">
                         @foreach ($resultado as $grupo)
                             @foreach ($grupo['juguetes'] as $toy)
                                 @php
                                     $idCampaign = $grupo['hijo']['idcampaign'] ?? null;
-
-                                    // ====== SOPORTE COMBOS (imagenppal con '+') ======
                                     $imgRel = trim((string) ($toy['imagenppal'] ?? ''));
                                     $imgRel = str_replace('\\', '/', $imgRel);
                                     $imgPaths = [];
-
                                     if ($imgRel !== '') {
-                                        $parts = preg_split('/\s*\+\s*/', $imgRel); // divide por '+'
+                                        $parts = preg_split('/\s*\+\s*/', $imgRel);
                                         foreach ($parts as $p) {
                                             if ($p === '') {
                                                 continue;
                                             }
                                             $p = ltrim($p, '/');
-                                            $path = Str::startsWith($p, 'campaign_toys/')
+                                            $path = \Illuminate\Support\Str::startsWith($p, 'campaign_toys/')
                                                 ? $p
                                                 : "campaign_toys/{$idCampaign}/{$p}";
                                             $imgPaths[] = $path;
                                         }
                                     }
-
                                     $isCombo = count($imgPaths) > 1;
-
                                     $modalId =
                                         'modalToy_' .
                                         ($grupo['hijo']['id'] ?? 'h') .
                                         '_' .
-                                        Str::slug((string) $toy['referencia'], '_');
-
+                                        \Illuminate\Support\Str::slug((string) $toy['referencia'], '_');
                                     $tg = strtoupper(trim((string) ($toy['genero'] ?? '')));
                                     $toyGenderBadge = $tg === 'F' ? 'Niña' : ($tg === 'M' ? 'Niño' : 'Unisex');
                                     $toyGenderClass =
@@ -355,16 +406,16 @@
                                     data-child-id="{{ $grupo['hijo']['id'] }}">
                                     <div class="card">
                                         <div class="product-box">
-                                            <div class="product-img d-flex justify-content-center position-relative">
-                                                {{-- ====== Imagen (simple o combo) en tarjeta ====== --}}
+                                            <div class="product-img">
+                                                {{-- Imagen (simple o combo) en tarjeta --}}
                                                 @if (!empty($imgPaths))
                                                     @if ($isCombo)
-                                                        <div class="d-flex justify-content-center flex-wrap gap-2">
+                                                        <div
+                                                            class="combo-wrap d-flex justify-content-center flex-wrap gap-2">
                                                             @foreach ($imgPaths as $p)
                                                                 @if (Storage::disk('public')->exists($p))
                                                                     <img src="{{ Storage::disk('public')->url($p) }}"
-                                                                        alt="{{ $toy['nombre'] }}" class="img-fluid"
-                                                                        style="max-width:120px">
+                                                                        alt="{{ $toy['nombre'] }}" class="img-fluid">
                                                                 @endif
                                                             @endforeach
                                                         </div>
@@ -372,8 +423,7 @@
                                                         @php $p = $imgPaths[0]; @endphp
                                                         @if (Storage::disk('public')->exists($p))
                                                             <img src="{{ Storage::disk('public')->url($p) }}"
-                                                                alt="{{ $toy['nombre'] }}" class="img-fluid"
-                                                                style="max-width:180px">
+                                                                alt="{{ $toy['nombre'] }}" class="img-fluid">
                                                         @endif
                                                     @endif
                                                 @endif
@@ -416,11 +466,9 @@
                                                             <button type="button" class="btn-close btn-close-white"
                                                                 data-bs-dismiss="modal" aria-label="Close"></button>
                                                         </div>
-
                                                         <div class="modal-body">
                                                             <div class="row">
                                                                 <div class="col-lg-6 d-flex justify-content-center">
-                                                                    {{-- ====== Imagen (simple o combo) en modal ====== --}}
                                                                     @if (!empty($imgPaths))
                                                                         @if ($isCombo)
                                                                             <div
@@ -454,13 +502,9 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-
                                                         <div class="modal-footer d-flex justify-content-between">
                                                             <button type="button" class="btn btn-outline-secondary"
-                                                                data-bs-dismiss="modal">
-                                                                Cerrar
-                                                            </button>
-
+                                                                data-bs-dismiss="modal">Cerrar</button>
                                                             <form method="POST"
                                                                 action="{{ route('ecommerce.cart.add') }}"
                                                                 class="d-inline">
@@ -484,7 +528,6 @@
                                                 </a>
                                                 <span class="badge badge-gender">{{ $toyGenderBadge }}</span>
                                             </div>
-
                                         </div>
                                     </div>
                                 </div>
@@ -505,103 +548,137 @@
         data-bs-keyboard="false">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
-
                 <div class="modal-header">
                     <h5 class="modal-title">Política de tratamiento de datos</h5>
                 </div>
-
                 <div class="modal-body">
-                    <div style="max-height:60vh; overflow:auto;">
-                        {!! $politicaHtml !!}
-                    </div>
+                    <div style="max-height:60vh; overflow:auto;">{!! $politicaHtml !!}</div>
                 </div>
-
                 <div class="modal-footer">
-                    <form action="{{ route('product.aceptarPolitica') }}" method="POST" class="ms-auto">
+                    {{-- ENVIAR politicadatos=Y --}}
+                    <form id="formPolitica" action="{{ route('product.aceptarPolitica') }}" method="POST"
+                        class="ms-auto">
                         @csrf
-                        <button type="submit" class="btn btn-primary">
-                            Acepto la política
-                        </button>
+                        <input type="hidden" name="politicadatos" value="Y">
+                        <button type="submit" class="btn btn-primary" id="btnAceptarPolitica">Acepto la
+                            política</button>
                     </form>
                 </div>
-
             </div>
         </div>
     </div>
-
-    @push('scripts')
-        <script src="{{ asset('assets/js/jquery-3.5.1.min.js') }}"></script>
-        <script src="{{ asset('assets/js/range-slider/ion.rangeSlider.min.js') }}"></script>
-        <script src="{{ asset('assets/js/range-slider/rangeslider-script.js') }}"></script>
-        <script src="{{ asset('assets/js/touchspin/vendors.min.js') }}"></script>
-        <script src="{{ asset('assets/js/touchspin/touchspin.js') }}"></script>
-        <script src="{{ asset('assets/js/touchspin/input-groups.min.js') }}"></script>
-        <script src="{{ asset('assets/js/owlcarousel/owl.carousel.js') }}"></script>
-        <script src="{{ asset('assets/js/select2/select2.full.min.js') }}"></script>
-        <script src="{{ asset('assets/js/select2/select2-custom.js') }}"></script>
-        <script src="{{ asset('assets/js/tooltip-init.js') }}"></script>
-        <script src="{{ asset('assets/js/product-tab.js') }}"></script>
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script>
-            document.addEventListener('click', function(e) {
-                const t = e.target.closest('[data-bs-toggle="modal"]');
-                if (!t) return;
-                e.preventDefault();
-                const sel = t.getAttribute('data-bs-target');
-                const el = document.querySelector(sel);
-                if (el) new bootstrap.Modal(el).show();
-            });
-        </script>
-        <script>
-            $(function() {
-                $('.js-child-btn').on('click', function(e) {
-                    e.preventDefault();
-                    const id = String($(this).data('child-id'));
-
-                    $('.js-child-btn').removeClass('active');
-                    $(this).addClass('active');
-
-                    const $all = $('.toy-card');
-                    const $show = $all.filter('[data-child-id="' + id + '"]');
-
-                    $all.addClass('d-none');
-                    $show.removeClass('d-none');
-
-                    $('#hintSelect').addClass('d-none');
-                    $('#noResults').toggleClass('d-none', $show.length > 0);
-
-                    const $grid = $('#toyGrid');
-                    if ($grid.length) {
-                        window.scrollTo({
-                            top: $grid.offset().top - 80,
-                            behavior: 'smooth'
-                        });
-                    }
-                });
-            });
-        </script>
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                @if (session('active_child_id'))
-                    (function() {
-                        const id = @json(session('active_child_id'));
-                        const btn = document.querySelector('.js-child-btn[data-child-id="' + id + '"]');
-                        if (btn) btn.click();
-                    })();
-                @endif
-
-                @if (session('swal'))
-                    Swal.fire(@json(session('swal')));
-                @endif
-            });
-        </script>
-        @if (!empty($showPolitica) && $showPolitica)
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    var el = document.getElementById('modalPoliticaDatos');
-                    if (el && typeof bootstrap !== 'undefined') new bootstrap.Modal(el).show();
-                });
-            </script>
-        @endif
-    @endpush
 @endsection
+
+@push('scripts')
+    {{-- Dependencias varias (jQuery, etc.) --}}
+    <script src="{{ asset('assets/js/jquery-3.5.1.min.js') }}"></script>
+    <script src="{{ asset('assets/js/range-slider/ion.rangeSlider.min.js') }}"></script>
+    <script src="{{ asset('assets/js/range-slider/rangeslider-script.js') }}"></script>
+    <script src="{{ asset('assets/js/touchspin/vendors.min.js') }}"></script>
+    <script src="{{ asset('assets/js/touchspin/touchspin.js') }}"></script>
+    <script src="{{ asset('assets/js/touchspin/input-groups.min.js') }}"></script>
+    <script src="{{ asset('assets/js/owlcarousel/owl.carousel.js') }}"></script>
+    <script src="{{ asset('assets/js/select2/select2.full.min.js') }}"></script>
+    <script src="{{ asset('assets/js/select2/select2-custom.js') }}"></script>
+    <script src="{{ asset('assets/js/tooltip-init.js') }}"></script>
+    <script src="{{ asset('assets/js/product-tab.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    {{-- Apertura segura de modales por data-bs-target (si Bootstrap está) --}}
+    <script>
+        document.addEventListener('click', function(e) {
+            const t = e.target.closest('[data-bs-toggle="modal"]');
+            if (!t) return;
+            e.preventDefault();
+            const sel = t.getAttribute('data-bs-target');
+            const el = document.querySelector(sel);
+            if (el && window.bootstrap) new bootstrap.Modal(el).show();
+        });
+    </script>
+
+    {{-- Selección de hijo --}}
+    <script>
+        $(function() {
+            $('.js-child-btn').on('click', function(e) {
+                e.preventDefault();
+                const id = String($(this).data('child-id'));
+
+                // feedback visible
+                $('.js-child-btn').removeClass('active').attr('aria-pressed', 'false');
+                $(this).addClass('active').attr('aria-pressed', 'true');
+
+                const $all = $('.toy-card');
+                const $show = $all.filter('[data-child-id="' + id + '"]');
+
+                $all.addClass('d-none');
+                $show.removeClass('d-none');
+
+                // Oculta el nombre al seleccionar (comportamiento idéntico al hint anterior)
+                $('#hintSelect').addClass('d-none');
+                $('#noResults').toggleClass('d-none', $show.length > 0);
+
+                const $grid = $('#toyGrid');
+                if ($grid.length) {
+                    window.scrollTo({
+                        top: $grid.offset().top - 80,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+
+    {{-- Mostrar modal de Política si $showPolitica es true, con fallback para cargar Bootstrap JS si falta --}}
+    <script>
+        (function() {
+            const SHOULD_SHOW = {!! json_encode(!empty($showPolitica) && $showPolitica) !!};
+
+            function ensureBootstrap(callback) {
+                if (window.bootstrap && typeof window.bootstrap.Modal === 'function') {
+                    callback();
+                    return;
+                }
+                var s = document.createElement('script');
+                s.src = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js";
+                s.defer = true;
+                s.onload = callback;
+                document.head.appendChild(s);
+            }
+
+            function showPolitica() {
+                const el = document.getElementById('modalPoliticaDatos');
+                if (!el) return;
+                const modal = new bootstrap.Modal(el, {
+                    backdrop: 'static',
+                    keyboard: false
+                });
+                modal.show();
+            }
+
+            if (SHOULD_SHOW) {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => ensureBootstrap(showPolitica));
+                } else {
+                    ensureBootstrap(showPolitica);
+                }
+            }
+        })();
+    </script>
+
+    {{-- Auto-acciones por sesión --}}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            @if (session('active_child_id'))
+                (function() {
+                    const id = @json(session('active_child_id'));
+                    const btn = document.querySelector('.js-child-btn[data-child-id="' + id + '"]');
+                    if (btn) btn.click();
+                })();
+            @endif
+
+            @if (session('swal'))
+                Swal.fire(@json(session('swal')));
+            @endif
+        });
+    </script>
+@endpush

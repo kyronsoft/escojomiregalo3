@@ -31,11 +31,14 @@
                     <div class="card-body">
                         <div class="col-12 d-flex justify-content-end">
                             <a href="{{ route('colaboradores.index') }}" class="btn btn-outline-secondary me-2">Cancelar</a>
-                            <button class="btn btn-primary" type="submit">Guardar cambios</button>
+                            {{-- ✅ Ahora este botón envía el formulario #form-colab aunque esté fuera del <form> --}}
+                            <button class="btn btn-primary" type="submit" form="form-colab">Guardar cambios</button>
                         </div>
+
                         <form id="form-colab" class="row g-3" method="POST"
                             action="{{ route('colaboradores.update', $colaborador) }}">
-                            @csrf @method('PUT')
+                            @csrf
+                            @method('PUT')
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label" for="documento">Documento</label>

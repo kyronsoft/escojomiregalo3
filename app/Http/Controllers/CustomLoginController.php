@@ -29,7 +29,9 @@ class CustomLoginController extends Controller
         // 2) Buscar empresa por NIT
         $empresa = Empresa::find($nit);
         if (!$empresa) {
-            abort(404);
+            return view('admin.errors.error-page1', [
+                'message' => 'La empresa no existe o la URL no está asociada a una campaña válida.',
+            ]);
         }
 
         // 3) Buscar campaña por NIT
@@ -44,7 +46,9 @@ class CustomLoginController extends Controller
             ->first();
 
         if (!$campaign) {
-            abort(404);
+            return view('admin.errors.error-page1', [
+                'message' => 'La campaña no está activa este momento.',
+            ]);
         }
 
         // 4) Preparar URL de ingreso (ajusta según tu app)

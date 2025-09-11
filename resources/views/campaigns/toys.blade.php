@@ -47,7 +47,34 @@
         (function() {
             const dataUrl = @json(route('campaigns.toys.data', $campaign));
             const placeholder = @json(asset('assets/images/placeholder.png'));
-            const IS_EXEC = @json(auth()->user()->hasRole('Ejecutiva-Empresas')); // 👈 sin botón Modificar para este rol
+            const IS_EXEC = @json(auth()->user()->hasRole('Ejecutiva-Empresas')); // 👈 Oculta acciones a este rol
+            const CSRF = @json(csrf_token());
+
+            // Plantilla de URLs para editar/eliminar
+            const editUrlTemplate =
+                `{{ route('campaigns.toys.edit', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
+            const destroyUrlTemplate =
+                `{{ route('campaigns.toys.destroy', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
+
+            function actionFormatter(cell) {
+                const row = cell.getRow().getData();
+                const id = row.id;
+
+                if (IS_EXEC) return ''; // Ejecutiva-Empresas sin acciones
+
+                const editUrl = editUrlTemplate.replace('__ID__', id);
+
+                return `
+                    <div class="d-flex gap-1 justify-content-center">
+                        <a href="${editUrl}" class="btn btn-sm btn-primary" title="Editar">
+                            Editar
+                        </a>
+                        <button class="btn btn-sm btn-outline-danger" title="Eliminar"
+                            onclick="deleteToy(${id}, '${(row.nombre || '').replace(/'/g, "\\'")}')">
+                            Eliminar
+                        </button>
+                    </div>`;
+            }
 
             const columns = [{
                     title: "ID",
@@ -141,52 +168,38 @@
                 },
             ];
 
-            // 👉 Agregar columna "Acciones > Modificar" SOLO si NO es Ejecutiva-Empresas
+            // 👉 Columna Acciones si NO es Ejecutiva-Empresas
             if (!IS_EXEC) {
                 columns.push({
                     title: "Acciones",
-                    field: "id",
+                    field: "_actions",
                     hozAlign: "center",
                     headerSort: false,
-                    width: 120,
-                    formatter: function(cell) {
-                        const id = cell.getValue();
-                        const editUrl =
-                            `{{ route('campaigns.toys.edit', ['campaign' => $campaign->id, 'toy' => ':id']) }}`
-                            .replace(':id', id);
-                        return `
-                            <div class="d-flex gap-1 justify-content-center">
-                                <a href="${editUrl}" class="btn btn-sm btn-primary" title="Editar juguete">
-                                    <i class="fa fa-edit"></i>
-                                </a>
-                            </div>`;
-                    }
+                    width: 180,
+                    formatter: actionFormatter,
+                    responsive: 0 // última en colapsarse
                 });
             }
 
             const table = new Tabulator("#toys-table", {
-                // Hace que TODAS las columnas se ajusten al ancho disponible
                 layout: "fitColumns",
                 columnDefaults: {
-                    minWidth: 100, // evita que las columnas pidan demasiado ancho
-                    headerSort: true,
+                    minWidth: 100,
+                    headerSort: true
                 },
 
-                // Responsive: si aún no caben, colapsa las menos importantes
                 responsiveLayout: "collapse",
                 responsiveLayoutCollapseStartOpen: false,
+                responsiveLayoutCollapseUseFormatters: true, // 👈 mantiene botones en vista colapsada
 
-                // UI
                 height: "600px",
                 rowHeight: 68,
                 placeholder: "No hay registros",
 
-                // Datos (igual que antes)
                 ajaxURL: dataUrl,
                 ajaxConfig: "GET",
                 ajaxResponse: (url, params, resp) => Array.isArray(resp) ? resp : [],
 
-                // Paginación local
                 pagination: true,
                 paginationMode: "local",
                 paginationSize: 10,
@@ -200,9 +213,81 @@
                 }],
             });
 
-            // Redibuja al cambiar tamaño de ventana
             window.addEventListener('resize', () => table.redraw(true));
 
+            // ======= Acción ELIMINAR =======
+            window.deleteToy = function(id, nombre) {
+                const destroyUrl = destroyUrlTemplate.replace('__ID__', id);
+
+                Swal.fire({
+                    title: 'Eliminar juguete',
+                    html: `¿Seguro que deseas eliminar <b>${nombre || ('ID '+id)}</b>? Esta acción no se puede deshacer.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+
+                    $.blockUI({
+                        message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Eliminando...</div></div>',
+                        css: {
+                            border: 'none',
+                            padding: '15px',
+                            background: '#000',
+                            opacity: 0.6,
+                            color: '#fff',
+                            borderRadius: '8px'
+                        },
+                        baseZ: 2000
+                    });
+
+                    fetch(destroyUrl, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRF-TOKEN': CSRF,
+                                'Accept': 'application/json'
+                            }
+                        })
+                        .then(async r => {
+                            $.unblockUI();
+                            const payload = await (async () => {
+                                try {
+                                    return await r.json();
+                                } catch {
+                                    return {};
+                                }
+                            })();
+                            if (r.ok && payload.ok) {
+                                // Elimina la fila del Tabulator si existe
+                                const row = table.getRow(id);
+                                if (row) row.delete();
+                                else table.replaceData();
+
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Eliminado',
+                                    text: payload.message ||
+                                        'El juguete fue eliminado correctamente.'
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'No se pudo eliminar',
+                                    text: payload.message || 'Inténtalo más tarde.'
+                                });
+                            }
+                        })
+                        .catch(() => {
+                            $.unblockUI();
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error de red',
+                                text: 'No fue posible contactar el servidor.'
+                            });
+                        });
+                });
+            };
         })();
     </script>
 @endpush

@@ -42,7 +42,6 @@
             </div>
 
             <div class="d-flex align-items-center actions-bar mt-5">
-                {{-- Select Plantilla (visible para todos) --}}
                 <div class="d-flex align-items-center">
                     <label for="plantilla" class="me-2 mb-0">Plantilla</label>
                     <select id="plantilla" class="form-select form-select-sm">
@@ -52,7 +51,6 @@
                     </select>
                 </div>
 
-                {{-- Enviar correo a todos (OCULTO para Ejecutiva-Empresas) --}}
                 @unless ($isExec)
                     <button type="button" id="btn-send-all" class="btn btn-sm btn-success">
                         Enviar correo a todos
@@ -63,7 +61,6 @@
             </div>
         </div>
 
-        {{-- Flash --}}
         @if (session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
@@ -85,155 +82,175 @@
             const dataURL = `{{ route('campaigns.collaborators.data', $campaign) }}`;
             const sendAllURL = `{{ route('campaigns.collaborators.emailAll', $campaign) }}`;
             const sendOneURL = `{{ route('campaigns.collaborators.emailOne', $campaign) }}`;
+            const updateOneURL = `{{ route('campaigns.collaborators.updateOne', $campaign) }}`;
+            const destroyTpl =
+                `{{ route('campaigns.collaborators.destroy', ['campaign' => $campaign, 'documento' => '__DOC__']) }}`;
+
             const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                 '{{ csrf_token() }}';
-            const IS_EXEC = @json($isExec); // 👈 rol Ejecutiva-Empresas
+            const IS_EXEC = @json($isExec);
+
+            function parseResponseSafe(r) {
+                return (async () => {
+                    let d = null,
+                        t = null;
+                    try {
+                        d = await r.clone().json()
+                    } catch {}
+                    if (!d) {
+                        try {
+                            t = await r.text()
+                        } catch {}
+                    }
+                    return {
+                        data: d,
+                        txt: t
+                    }
+                })()
+            }
+
+            function reloadTable() {
+                return table.setData(dataURL).then(() => table.redraw(true)).catch(() => {
+                    try {
+                        table.clearData();
+                        table.setData(dataURL)
+                    } catch {}
+                })
+            }
 
             function actionBtnFormatter(cell) {
-                // 👉 Sin botón "Reenviar correo" para Ejecutiva-Empresas
-                if (IS_EXEC) return '';
                 const r = cell.getRow().getData();
-                const docEnc = encodeURIComponent(String(r.documento || ''));
-                return `
-                    <div class="d-flex gap-1 justify-content-center">
-                        <button class="btn btn-sm btn-outline-primary" onclick="sendOne('${docEnc}')">
-                            Reenviar correo
-                        </button>
-                    </div>
-                `;
+                const doc = String(r.documento || '');
+                const docEnc = encodeURIComponent(doc);
+
+                const resendBtn = IS_EXEC ? '' : `
+                    <button class="btn btn-sm btn-outline-primary" onclick="sendOne('${docEnc}')">Reenviar</button>`;
+
+                const editBtn = `
+                    <button class="btn btn-sm btn-outline-secondary" onclick="editOne('${docEnc}')">Editar</button>`;
+
+                const delBtn = IS_EXEC ? '' : `
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteOne('${docEnc}')">Eliminar</button>`;
+
+                return `<div class="d-flex gap-1 justify-content-center flex-wrap">${resendBtn}${editBtn}${delBtn}</div>`;
             }
 
             const columns = [{
-                    title: "Documento",
-                    field: "documento",
+                    title: 'Documento',
+                    field: 'documento',
                     width: 140,
-                    headerFilter: "input"
+                    headerFilter: 'input'
                 },
                 {
-                    title: "Nombre",
-                    field: "nombre",
+                    title: 'Nombre',
+                    field: 'nombre',
                     minWidth: 220,
-                    headerFilter: "input"
+                    headerFilter: 'input'
                 },
                 {
-                    title: "Email",
-                    field: "email",
+                    title: 'Email',
+                    field: 'email',
                     minWidth: 220,
-                    headerFilter: "input",
-                    formatter: cell => {
-                        const v = cell.getValue() || '';
+                    headerFilter: 'input',
+                    formatter: c => {
+                        const v = c.getValue() || '';
                         return v ? `<a href="mailto:${v}">${v}</a>` : '';
                     }
                 },
                 {
-                    title: "Sucursal",
-                    field: "sucursal",
+                    title: 'Sucursal',
+                    field: 'sucursal',
                     width: 160,
-                    headerFilter: "input"
+                    headerFilter: 'input'
                 },
                 {
-                    title: "Notificado",
-                    field: "email_notified",
+                    title: 'Notificado',
+                    field: 'email_notified',
                     width: 120,
-                    hozAlign: "center",
-                    formatter: c => c.getValue() ?
-                        '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-secondary">No</span>',
+                    hozAlign: 'center',
+                    formatter: c => c.getValue() ? '<span class="badge bg-success">Sí</span>' :
+                        '<span class="badge bg-secondary">No</span>'
                 },
                 {
-                    title: "NIT",
-                    field: "nit",
+                    title: 'NIT',
+                    field: 'nit',
                     width: 110,
-                    headerFilter: "input"
+                    headerFilter: 'input'
                 },
                 {
-                    title: "Acciones",
-                    field: "_actions",
-                    width: 160,
+                    title: 'Acciones',
+                    field: '_actions',
                     headerSort: false,
+                    hozAlign: 'center',
                     formatter: actionBtnFormatter,
-                    hozAlign: "center"
+                    minWidth: 260,
+                    widthGrow: 0,
+                    responsive: 0
                 },
             ];
 
-            const table = new Tabulator("#collaborators-table", {
-                // Responsive
-                layout: "fitColumns",
+            const table = new Tabulator('#collaborators-table', {
+                layout: 'fitColumns',
                 layoutColumnsOnNewData: true,
-                responsiveLayout: "collapse",
+                responsiveLayout: 'collapse',
                 responsiveLayoutCollapseStartOpen: false,
-
-                // UI
-                height: "600px",
-                placeholder: "No hay colaboradores asignados a esta campaña",
-
-                // Datos
+                responsiveLayoutCollapseUseFormatters: true,
+                height: '600px',
+                placeholder: 'No hay colaboradores asignados a esta campaña',
                 ajaxURL: dataURL,
-                ajaxConfig: "GET",
+                ajaxConfig: 'GET',
                 ajaxResponse: (url, params, resp) => Array.isArray(resp) ? resp : [],
-
-                // Orden/filtrado en el cliente
-                sortMode: "local",
-                filterMode: "local",
-
-                // Paginación local
+                sortMode: 'local',
+                filterMode: 'local',
                 pagination: true,
-                paginationMode: "local",
+                paginationMode: 'local',
                 paginationSize: 15,
                 paginationSizeSelector: [10, 15, 25, 50, 100],
-                paginationCounter: "rows",
-
-                // Columnas y orden inicial
+                paginationCounter: 'rows',
                 columns,
                 initialSort: [{
-                    column: "nombre",
-                    dir: "asc"
+                    column: 'nombre',
+                    dir: 'asc'
                 }],
             });
 
-            // Redibujar al cambiar tamaño de ventana
             window.addEventListener('resize', () => table.redraw(true));
 
-
-            // Exponer función global para el botón por fila (solo tendrá efecto si no es Ejecutiva-Empresas)
+            // -------- Reenviar correo --------
             window.sendOne = function(docEnc) {
-                if (IS_EXEC) return; // hard stop extra, por si alguien intenta dispararlo manualmente
+                if (IS_EXEC) return;
                 const documento = decodeURIComponent(docEnc);
                 const plantilla = ($('#plantilla').val() || 'standard');
-
                 const row = (table.getRows() || []).find(r => (r.getData()?.documento || '') == documento);
-                const rowData = row ? row.getData() : {};
-                const nombre = rowData?.nombre || documento;
-                const email = rowData?.email || '';
-
+                const d = row ? row.getData() : {};
                 Swal.fire({
                     title: '¿Reenviar correo?',
-                    html: `Se enviará la plantilla <b>${$('#plantilla option:selected').text()}</b> a:<br>
-                           <b>${nombre}</b><br><small>${email || 'sin email'}</small>`,
+                    html: `Se enviará la plantilla <b>${$('#plantilla option:selected').text()}</b> a:<br><b>${d?.nombre||documento}</b><br><small>${d?.email||'sin email'}</small>`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Sí, reenviar',
                     cancelButtonText: 'Cancelar'
                 }).then(res => {
                     if (!res.isConfirmed) return;
-
                     $.blockUI({
                         message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Encolando correo...</div></div>',
                         css: {
                             border: 'none',
                             padding: '15px',
                             background: '#000',
-                            opacity: 0.6,
+                            opacity: .6,
                             color: '#fff',
                             borderRadius: '8px'
                         },
                         baseZ: 2000
                     });
-
                     fetch(sendOneURL, {
                             method: 'POST',
+                            credentials: 'same-origin',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'X-CSRF-TOKEN': CSRF,
+                                'X-Requested-With': 'XMLHttpRequest',
                                 'Accept': 'application/json'
                             },
                             body: JSON.stringify({
@@ -243,37 +260,32 @@
                         })
                         .then(async r => {
                             $.unblockUI();
-                            const payload = await (async () => {
-                                try {
-                                    return await r.json();
-                                } catch {
-                                    return {};
-                                }
-                            })();
+                            const {
+                                data,
+                                txt
+                            } = await parseResponseSafe(r);
                             if (r.ok) {
+                                if (row) row.update({
+                                    email_notified: 1,
+                                    updated_at: new Date().toISOString()
+                                });
+                                await reloadTable();
                                 Swal.fire({
                                     icon: 'success',
                                     title: 'Envío de Correo',
-                                    text: payload.message ||
-                                        'El sistema solo procesa los envíos individuales inmediatamente!.'
+                                    text: (data && (data.message || data.msg)) ||
+                                        'El sistema procesó el envío.'
                                 });
-                                if (row && (payload.notified === true || payload.updated_row)) {
-                                    row.update({
-                                        email_notified: 1,
-                                        updated_at: (new Date()).toISOString()
-                                    });
-                                } else {
-                                    table.replaceData();
-                                }
                             } else {
                                 Swal.fire({
                                     icon: 'error',
                                     title: 'Error al enviar',
-                                    text: payload.message || 'No se pudo encolar el correo.'
+                                    text: (data && (data.message || data.error || data
+                                        .msg)) || (txt && txt.trim()) ||
+                                        'No se pudo encolar el correo.'
                                 });
                             }
-                        })
-                        .catch(() => {
+                        }).catch(() => {
                             $.unblockUI();
                             Swal.fire({
                                 icon: 'error',
@@ -284,11 +296,193 @@
                 });
             };
 
-            // Enviar correo a todos (solo si el botón existe: no estará para Ejecutiva-Empresas)
+            // -------- Editar --------
+            window.editOne = function(docEnc) {
+                const documento = decodeURIComponent(docEnc);
+                const row = (table.getRows() || []).find(r => (r.getData()?.documento || '') == documento);
+                const d = row ? row.getData() : {};
+                const html = `
+                    <div class="text-start">
+                        <div class="mb-2"><label class="form-label">Nombre</label>
+                            <input id="swal-nombre" class="form-control" type="text" value="${(d.nombre||'').replace(/"/g,'&quot;')}">
+                        </div>
+                        <div class="mb-2"><label class="form-label">Email</label>
+                            <input id="swal-email" class="form-control" type="email" value="${(d.email||'').replace(/"/g,'&quot;')}" placeholder="correo@dominio.com">
+                        </div>
+                        <div class="mb-2"><label class="form-label">Sucursal</label>
+                            <input id="swal-sucursal" class="form-control" type="text" value="${(d.sucursal||'').replace(/"/g,'&quot;')}">
+                        </div>
+                    </div>`;
+                Swal.fire({
+                    title: 'Editar colaborador',
+                    html,
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    confirmButtonText: 'Guardar cambios',
+                    cancelButtonText: 'Cancelar',
+                    preConfirm: () => {
+                        const nombre = document.getElementById('swal-nombre').value.trim();
+                        const email = document.getElementById('swal-email').value.trim();
+                        const sucursal = document.getElementById('swal-sucursal').value.trim();
+                        if (!nombre) return Swal.showValidationMessage('El nombre es obligatorio');
+                        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return Swal
+                            .showValidationMessage('El email no es válido');
+                        return {
+                            nombre,
+                            email,
+                            sucursal
+                        };
+                    }
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+                    const payload = {
+                        documento,
+                        ...res.value
+                    };
+                    $.blockUI({
+                        message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Guardando cambios...</div></div>',
+                        css: {
+                            border: 'none',
+                            padding: '15px',
+                            background: '#000',
+                            opacity: .6,
+                            color: '#fff',
+                            borderRadius: '8px'
+                        },
+                        baseZ: 2000
+                    });
+                    fetch(updateOneURL, {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': CSRF,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        })
+                        .then(async r => {
+                            $.unblockUI();
+                            const {
+                                data,
+                                txt
+                            } = await parseResponseSafe(r);
+                            if (r.ok) {
+                                if (row && data && data.row) {
+                                    row.update(data.row)
+                                } else if (row) {
+                                    row.update({
+                                        ...payload,
+                                        updated_at: new Date().toISOString()
+                                    })
+                                }
+                                await reloadTable();
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Actualizado',
+                                    text: (data && (data.message || data.msg)) ||
+                                        'Datos guardados correctamente.'
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'No se pudo actualizar',
+                                    text: (data && (data.message || data.error || data
+                                        .msg)) || (txt && txt.trim()) ||
+                                        'Inténtalo más tarde.'
+                                });
+                            }
+                        }).catch(() => {
+                            $.unblockUI();
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error de red',
+                                text: 'No fue posible contactar el servidor.'
+                            });
+                        });
+                });
+            };
+
+            // -------- Eliminar --------
+            window.deleteOne = function(docEnc) {
+                if (IS_EXEC) return;
+                const documento = decodeURIComponent(docEnc);
+                const row = (table.getRows() || []).find(r => (r.getData()?.documento || '') == documento);
+                const d = row ? row.getData() : {};
+                const delUrl = destroyTpl.replace('__DOC__', encodeURIComponent(documento));
+
+                Swal.fire({
+                    title: 'Eliminar colaborador',
+                    html: `¿Quitar a <b>${(d?.nombre||documento)}</b> de esta campaña?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+                    $.blockUI({
+                        message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Eliminando...</div></div>',
+                        css: {
+                            border: 'none',
+                            padding: '15px',
+                            background: '#000',
+                            opacity: .6,
+                            color: '#fff',
+                            borderRadius: '8px'
+                        },
+                        baseZ: 2000
+                    });
+
+                    fetch(delUrl, {
+                            method: 'DELETE',
+                            credentials: 'same-origin',
+                            headers: {
+                                'X-CSRF-TOKEN': CSRF,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json'
+                            }
+                        })
+                        .then(async r => {
+                            $.unblockUI();
+                            const {
+                                data,
+                                txt
+                            } = await parseResponseSafe(r);
+                            if (r.ok && data && data.ok) {
+                                if (row) row.delete();
+                                else await reloadTable();
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Eliminado',
+                                    text: data.message ||
+                                        'Colaborador quitado de la campaña.'
+                                });
+                            } else {
+                                const msg = (data && (data.message || data.error || data.msg)) || (
+                                    txt && txt.trim()) || 'No se pudo eliminar.';
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: msg
+                                });
+                            }
+                        }).catch(() => {
+                            $.unblockUI();
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error de red',
+                                text: 'No fue posible contactar el servidor.'
+                            });
+                        });
+                });
+            };
+
+            // -------- Enviar a todos --------
             $('#btn-send-all').on('click', function() {
+                if (IS_EXEC) return;
                 const plantilla = ($('#plantilla').val() || 'standard');
                 const total = (table.getData() || []).length;
-
                 if (!total) {
                     Swal.fire({
                         icon: 'info',
@@ -307,25 +501,25 @@
                     cancelButtonText: 'Cancelar'
                 }).then(res => {
                     if (!res.isConfirmed) return;
-
                     $.blockUI({
                         message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Enviando correos...</div></div>',
                         css: {
                             border: 'none',
                             padding: '15px',
                             background: '#000',
-                            opacity: 0.6,
+                            opacity: .6,
                             color: '#fff',
                             borderRadius: '8px'
                         },
                         baseZ: 2000
                     });
-
                     fetch(sendAllURL, {
                             method: 'POST',
+                            credentials: 'same-origin',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'X-CSRF-TOKEN': CSRF,
+                                'X-Requested-With': 'XMLHttpRequest',
                                 'Accept': 'application/json'
                             },
                             body: JSON.stringify({
@@ -334,31 +528,28 @@
                         })
                         .then(async r => {
                             $.unblockUI();
-                            const payload = await (async () => {
-                                try {
-                                    return await r.json();
-                                } catch {
-                                    return {};
-                                }
-                            })();
+                            const {
+                                data,
+                                txt
+                            } = await parseResponseSafe(r);
                             if (r.ok) {
                                 Swal.fire({
                                     icon: 'success',
                                     title: 'Correos encolados',
-                                    text: payload.message ||
+                                    text: (data && (data.message || data.msg)) ||
                                         'Se inició el envío de correos.'
                                 });
-                                table.replaceData();
+                                reloadTable();
                             } else {
                                 Swal.fire({
                                     icon: 'error',
                                     title: 'Error al enviar',
-                                    text: payload.message ||
-                                        'Ocurrió un problema al iniciar el envío.'
+                                    text: (data && (data.message || data.error || data
+                                            .msg)) || (txt && txt.trim()) ||
+                                        'Ocurrió un problema.'
                                 });
                             }
-                        })
-                        .catch(() => {
+                        }).catch(() => {
                             $.unblockUI();
                             Swal.fire({
                                 icon: 'error',

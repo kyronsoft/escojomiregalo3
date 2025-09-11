@@ -132,11 +132,9 @@
 
                             @php
                                 $placeholder = asset('assets/images/placeholder.png');
-                                // Mapa ref => URL pública (lo pasa el controlador)
                                 $imageMap = $toy->image_map ?? [];
-                                // Partes (refs) del combo, o única referencia
                                 $parts = array_keys($imageMap);
-                                $defaultSp = old('sp_path', $toy->referencia . '.jpg'); // raíz del drive
+                                $defaultSp = old('sp_path', $toy->referencia . '.jpg');
                             @endphp
 
                             {{-- Galería (todas las partes) --}}
@@ -150,7 +148,6 @@
                                         <div class="small mt-1 text-muted">{{ $ref }}</div>
                                     </div>
                                 @empty
-                                    {{-- fallback si no se pudo calcular partes --}}
                                     <div class="text-center">
                                         <img id="toy-thumb-__single" src="{{ $toy->image_url ?? $placeholder }}"
                                             class="toy-thumb" alt="imagen"
@@ -159,7 +156,7 @@
                                 @endforelse
                             </div>
 
-                            {{-- Herramientas SharePoint (no es form para evitar anidar) --}}
+                            {{-- Herramientas SharePoint --}}
                             <div id="sp-tools" class="row g-2">
                                 @csrf
                                 <div class="col-12">
@@ -168,17 +165,18 @@
                                         placeholder="Dejar vacío para usar {{ $toy->referencia }} dividido por +. Ej: ABC.jpg o ABC+DEF"
                                         value="{{ $defaultSp }}">
                                     <div class="form-text">
-                                        Las imágenes están en la <strong>raíz</strong> del drive. Si no indicas extensión,
-                                        se intentará .jpg, .jpeg, .png.<br>
+                                        Si no indicas extensión, se intentará .jpg, .jpeg, .png.
                                         Si la referencia es un combo (con <code>+</code>), se descargarán <em>todas</em>.
                                     </div>
                                 </div>
 
                                 <div class="col-12 d-flex gap-2">
-                                    <button type="button" id="btn-sp-download" class="btn btn-primary">Descargar desde
-                                        SharePoint</button>
-                                    <button type="button" id="btn-sp-retry"
-                                        class="btn btn-outline-secondary d-none">Reintentar</button>
+                                    <button type="button" id="btn-sp-download" class="btn btn-primary">
+                                        Descargar desde SharePoint
+                                    </button>
+                                    <button type="button" id="btn-sp-retry" class="btn btn-outline-secondary d-none">
+                                        Reintentar
+                                    </button>
                                 </div>
 
                                 <div id="sp-result" class="small mt-2"></div>
@@ -198,30 +196,54 @@
 @endsection
 
 @push('scripts')
-    <script src="{{ asset('assets/js/blockui/jquery.blockUI.js') }}"></script>
-    <script>
-        (function() {
-            const btn = document.getElementById('btn-sp-download');
-            const retry = document.getElementById('btn-sp-retry');
-            const input = document.getElementById('sp_path');
-            const result = document.getElementById('sp-result');
-            const url = @json(route('campaigns.toys.image.fetch', ['campaign' => $campaign->id, 'toy' => $toy->id]));
-            const csrf = @json(csrf_token());
-            const parts = @json(array_keys($imageMap)); // refs del combo
+    @push('scripts')
+        <script src="{{ asset('assets/js/blockui/jquery.blockUI.js') }}"></script>
+        <script>
+            (function() {
+                const btn = document.getElementById('btn-sp-download');
+                const retry = document.getElementById('btn-sp-retry');
+                const input = document.getElementById('sp_path');
+                const result = document.getElementById('sp-result');
+                const url = @json(route('campaigns.toys.image.fetch', ['campaign' => $campaign->id, 'toy' => $toy->id]));
+                const csrf = @json(csrf_token());
+                const parts = @json(array_keys($toy->image_map ?? [])); // refs del combo
 
-            function setBusy(state, text = 'Descargando imagen(es) desde SharePoint…') {
-                btn.disabled = state;
-                retry.classList.toggle('d-none', state);
-                result.innerHTML = state ? `<span class="text-muted">${text}</span>` : '';
-                if (state) {
-                    const count = (input.value.trim() ? input.value.trim().split('+') : parts).filter(Boolean).length ||
-                        1;
-                    $.blockUI({
-                        message: `
+                function setBusy(state, text = 'Descargando imagen(es) desde SharePoint…') {
+                    btn.disabled = state;
+                    retry.classList.toggle('d-none', state);
+                    result.innerHTML = state ? `<span class="text-muted">${text}</span>` : '';
+                    if (state) {
+                        const count = (input.value.trim() ? input.value.trim().split('+') : parts).filter(Boolean).length ||
+                            1;
+                        $.blockUI({
+                            message: `
                     <div class="p-3 d-flex flex-column align-items-center">
                         <div class="spinner-border" role="status"></div>
                         <div class="mt-2">${text} <br><small>(Archivos: ${count})</small></div>
                     </div>`,
+                            css: {
+                                border: 'none',
+                                padding: '15px',
+                                backgroundColor: '#000',
+                                opacity: 0.65,
+                                color: '#fff',
+                                borderRadius: '10px'
+                            },
+                            baseZ: 3000
+                        });
+                    } else {
+                        $.unblockUI();
+                    }
+                }
+
+                function blockBeforeReload(msg = 'Actualizando vista…', delayMs = 1000) {
+                    // Bloquea la UI para dar sensación de “aplicando cambios”
+                    $.blockUI({
+                        message: `
+                <div class="p-3 d-flex flex-column align-items-center">
+                    <div class="spinner-border" role="status"></div>
+                    <div class="mt-2">${msg}</div>
+                </div>`,
                         css: {
                             border: 'none',
                             padding: '15px',
@@ -232,84 +254,102 @@
                         },
                         baseZ: 3000
                     });
-                } else {
-                    $.unblockUI();
+                    // Pequeño retraso para que el usuario vea el estado, luego refrescar
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, delayMs);
                 }
-            }
 
-            function cacheBust(src) {
-                const sep = src.includes('?') ? '&' : '?';
-                return src + sep + 't=' + Date.now();
-            }
+                function cacheBust(src) {
+                    const sep = src.includes('?') ? '&' : '?';
+                    return src + sep + 't=' + Date.now();
+                }
 
-            async function doFetch() {
-                setBusy(true);
-                try {
-                    const fd = new FormData();
-                    // Si el usuario deja vacío, el backend usará las refs del combo del juguete
-                    if (input.value.trim()) fd.append('sp_path', input.value.trim());
+                async function doFetch() {
+                    setBusy(true);
+                    try {
+                        const fd = new FormData();
+                        if (input.value.trim()) fd.append('sp_path', input.value.trim());
 
-                    const r = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': csrf,
-                            'Accept': 'application/json'
-                        },
-                        body: fd
-                    });
-                    const ct = r.headers.get('content-type') || '';
-                    const data = ct.includes('application/json') ? await r.json() : {
-                        ok: false,
-                        message: await r.text()
-                    };
+                        const r = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': csrf,
+                                'Accept': 'application/json'
+                            },
+                            body: fd
+                        });
 
-                    if (!r.ok) {
-                        result.innerHTML =
-                            `<span class="text-danger">Error: ${data.message || 'No se pudo descargar'}</span>`;
-                        retry.classList.remove('d-none');
-                        return;
-                    }
+                        const ct = r.headers.get('content-type') || '';
+                        const data = ct.includes('application/json') ? await r.json() : {
+                            ok: false,
+                            message: await r.text()
+                        };
 
-                    // Esperamos { ok, summary: {ok,total,fail}, results: [{ref, ok, image_url, source, message}] }
-                    const summary = data.summary || {};
-                    const results = Array.isArray(data.results) ? data.results : [];
-
-                    // Actualiza todas las thumbs que tengan image_url
-                    results.forEach(it => {
-                        if (it.ok && it.image_url) {
-                            const el = document.getElementById('toy-thumb-' + it.ref);
-                            if (el) el.src = cacheBust(it.image_url);
+                        if (!r.ok) {
+                            result.innerHTML =
+                                `<span class="text-danger">Error: ${data.message || 'No se pudo descargar'}</span>`;
+                            retry.classList.remove('d-none');
+                            return;
                         }
-                    });
 
-                    const ok = Number(summary.ok || 0),
-                        total = Number(summary.total || results.length || 0),
-                        fail = Number(summary.fail || (total - ok));
-                    if (ok > 0 && fail === 0) {
+                        const summary = data.summary || {};
+                        const results = Array.isArray(data.results) ? data.results : [];
+                        const ok = Number(summary.ok || 0);
+                        const total = Number(summary.total || results.length || 0);
+                        const fail = Number(summary.fail || (total - ok));
+
+                        // Actualiza thumbs en caliente (por si decides no recargar)
+                        results.forEach(it => {
+                            if (it.ok && (it.image_url || it.local_url)) {
+                                const ref = it.ref || ''; // puede venir vacío si no se pudo inferir
+                                const el = document.getElementById('toy-thumb-' + ref) ||
+                                    document.getElementById('toy-thumb-__single');
+                                if (el) el.src = cacheBust(it.image_url || it.local_url);
+                            }
+                        });
+
+                        // Mensajes al usuario
+                        if (ok > 0 && fail === 0) {
+                            result.innerHTML =
+                                `<span class="text-success">Se descargaron ${ok}/${total} imagen(es) correctamente.</span>`;
+                            retry.classList.add('d-none');
+                            // Cerramos cualquier bloqueo previo y mostramos el bloqueo de “actualizando”
+                            setBusy(false);
+                            blockBeforeReload('Aplicando cambios y recargando…', 900);
+                            return;
+                        }
+
+                        if (ok > 0 && fail > 0) {
+                            result.innerHTML =
+                                `<span class="text-warning">Descargadas ${ok}/${total}. Fallaron ${fail}.</span>`;
+                            retry.classList.remove('d-none');
+                            // Aún así recargamos para reflejar lo que sí llegó
+                            setBusy(false);
+                            blockBeforeReload('Actualizando con los archivos descargados…', 1100);
+                            return;
+                        }
+
+                        // ok === 0
                         result.innerHTML =
-                            `<span class="text-success">Se descargaron ${ok}/${total} imagen(es) correctamente.</span>`;
-                        retry.classList.add('d-none');
-                    } else if (ok > 0 && fail > 0) {
-                        const tried = data.tried ? `<br><small>Intentos: ${data.tried.join(', ')}</small>` : '';
-                        result.innerHTML =
-                            `<span class="text-warning">Descargadas ${ok}/${total}. Fallaron ${fail}.${tried}</span>`;
+                            `<span class="text-danger">No se encontró ninguna imagen.${data.message ? '<br>'+data.message : ''}</span>`;
                         retry.classList.remove('d-none');
-                    } else {
-                        const tried = data.tried ? `<br><small>Intentos: ${data.tried.join(', ')}</small>` : '';
-                        result.innerHTML =
-                            `<span class="text-danger">No se encontró ninguna imagen.${tried}<br>${data.message || ''}</span>`;
+
+                    } catch (e) {
+                        result.innerHTML = `<span class="text-danger">Error de red: ${e?.message || ''}</span>`;
                         retry.classList.remove('d-none');
+                    } finally {
+                        // Quita el bloqueo de “descargando” si no se activó el de recarga
+                        // (cuando hay éxito, salimos antes con blockBeforeReload)
+                        if (!result.innerHTML.includes('Descargadas') && !result.innerHTML.includes('Se descargaron')) {
+                            setBusy(false);
+                        }
                     }
-                } catch (e) {
-                    result.innerHTML = `<span class="text-danger">Error de red: ${e?.message || ''}</span>`;
-                    retry.classList.remove('d-none');
-                } finally {
-                    setBusy(false);
                 }
-            }
 
-            btn.addEventListener('click', doFetch);
-            retry.addEventListener('click', doFetch);
-        })();
-    </script>
+                btn.addEventListener('click', doFetch);
+                retry.addEventListener('click', doFetch);
+            })();
+        </script>
+    @endpush
 @endpush

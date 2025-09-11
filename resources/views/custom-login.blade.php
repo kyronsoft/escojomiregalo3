@@ -21,10 +21,9 @@
     <style>
         :root {
             --overlay: rgba(0, 0, 0, 0.35);
-            --bar-bg: rgba(0, 0, 0, 0.7);
-            --bar-fg: #fff;
+            --bar-bg: rgba(255, 255, 255, 0.2);
+            --bar-fg: #F6C60F;
             --bar-height: 72px;
-            --hot-zone: 70px;
             /* Fallback para navegadores que no soportan dvh */
             --vh: 1vh;
         }
@@ -39,7 +38,6 @@
             color: #fff;
             font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
             background: #000;
-            /* la imagen va en .bg-layer */
         }
 
         /* ===== Fondo a pantalla completa ===== */
@@ -80,6 +78,8 @@
             place-items: center;
             text-align: center;
             padding: 24px;
+            /* Deja espacio para la barra fija */
+            padding-bottom: calc(var(--bar-height) + env(safe-area-inset-bottom, 0px) + 24px);
         }
 
         .card {
@@ -101,46 +101,39 @@
             opacity: .9;
         }
 
+        /* ===== Barra SIEMPRE visible ===== */
         .ingreso-bar {
             position: fixed;
             left: 0;
             right: 0;
             bottom: 0;
-            transform: translateY(100%);
             background: var(--bar-bg);
             color: var(--bar-fg);
-            height: var(--bar-height);
+            height: calc(var(--bar-height) + env(safe-area-inset-bottom, 0px));
+            padding-bottom: env(safe-area-inset-bottom, 0px);
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform .28s ease;
             z-index: 30;
-        }
-
-        .ingreso-bar.active {
-            transform: translateY(0);
+            box-shadow: 0 -6px 18px rgba(0, 0, 0, .35);
         }
 
         .ingreso-link {
             color: #fff;
             text-decoration: none;
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: var(--bar-height);
             width: 100%;
-            height: 100%;
-            line-height: var(--bar-height);
-            text-align: center;
             font-weight: 700;
             letter-spacing: .4px;
             font-size: clamp(16px, 2.5vw, 20px);
         }
 
+        /* Hot zone ya no se usa, pero la dejamos por si quieres reactivar el comportamiento en el futuro */
         .hot-zone {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: var(--hot-zone);
-            z-index: 10;
+            display: none;
         }
 
         .login-overlay {
@@ -239,12 +232,6 @@
             padding: 8px 10px;
             margin-bottom: 10px;
         }
-
-        @media (hover: none) and (pointer: coarse) {
-            .ingreso-bar {
-                transform: translateY(0);
-            }
-        }
     </style>
 </head>
 
@@ -256,7 +243,7 @@
 
     <div class="backdrop" aria-hidden="true"></div>
 
-    <!-- Barra inferior de ingreso -->
+    <!-- Barra inferior SIEMPRE visible -->
     <div class="ingreso-bar" id="ingresoBar">
         <a class="ingreso-link" id="openLogin" href="#">Ingresar</a>
     </div>
@@ -312,35 +299,11 @@
             window.addEventListener('orientationchange', update);
         })();
 
+        // Lógica de abrir/cerrar login (la barra ya siempre está visible)
         (function() {
-            const bar = document.getElementById('ingresoBar');
-            const hot = document.getElementById('hotZone');
-            const open = document.getElementById('openLogin');
             const overlay = document.getElementById('loginOverlay');
+            const open = document.getElementById('openLogin');
             const closeBtn = document.getElementById('closeLogin');
-
-            let hideTimer = null;
-
-            function showBar() {
-                bar.classList.add('active');
-                if (hideTimer) clearTimeout(hideTimer);
-                hideTimer = setTimeout(() => bar.classList.remove('active'), 3000);
-            }
-
-            function immediateShow() {
-                bar.classList.add('active');
-                if (hideTimer) clearTimeout(hideTimer);
-            }
-
-            hot.addEventListener('mouseenter', showBar);
-            document.addEventListener('mousemove', e => {
-                if ((window.innerHeight - e.clientY) <= 70) showBar();
-            });
-            bar.addEventListener('mouseenter', immediateShow);
-            bar.addEventListener('mouseleave', () => {
-                if (hideTimer) clearTimeout(hideTimer);
-                hideTimer = setTimeout(() => bar.classList.remove('active'), 800);
-            });
 
             function openLogin(e) {
                 if (e) e.preventDefault();

@@ -153,19 +153,28 @@ Route::prefix('campaigns/{campaign}')->group(function () {
     Route::put('toys/{toy}',      [CampaignToyController::class, 'update'])->name('campaigns.toys.update');
     Route::post('toys/{toy}/image/fetch', [CampaignToyController::class, 'fetchImageFromSharePoint'])
         ->name('campaigns.toys.image.fetch');
+
+    // 👉 NUEVA: eliminar
+    Route::delete('toys/{toy}', [CampaignToyController::class, 'destroy'])
+        ->name('campaigns.toys.destroy');
 });
 
-Route::middleware(['auth', 'role:Admin|Ejecutiva-Empresas'])->group(function () {
-    Route::get('/campaigns/{campaign}/collaborators', [CampaignCollaboratorController::class, 'index'])
-        ->name('campaigns.collaborators');
+Route::middleware(['auth', 'role:Admin'])->group(function () {
+    // Listado y datos
+    Route::get('/campaigns/{campaign}/collaborators',       [CampaignCollaboratorController::class, 'index'])->name('campaigns.collaborators');
+    Route::get('/campaigns/{campaign}/collaborators/data',  [CampaignCollaboratorController::class, 'data'])->name('campaigns.collaborators.data');
 
-    Route::get('/campaigns/{campaign}/collaborators/data', [CampaignCollaboratorController::class, 'data'])
-        ->name('campaigns.collaborators.data');
+    // Acciones
+    Route::post('/campaigns/{campaign}/collaborators/email-all', [CampaignCollaboratorController::class, 'emailAll'])->name('campaigns.collaborators.emailAll');
+    Route::post('/campaigns/{campaign}/collaborators/email-one', [CampaignCollaboratorController::class, 'emailOne'])->name('campaigns.collaborators.emailOne');
+    Route::post('/campaigns/{campaign}/collaborators/update',    [CampaignCollaboratorController::class, 'updateOne'])->name('campaigns.collaborators.updateOne');
+
+    // 👉 Nuevo: eliminar (por documento) de la campaña
+    Route::delete('/campaigns/{campaign}/collaborators/{documento}', [CampaignCollaboratorController::class, 'destroy'])
+        ->where('documento', '[A-Za-z0-9\-\.]+')
+        ->name('campaigns.collaborators.destroy');
 });
 
-Route::post('/campaigns/{campaign}/collaborators/email-all', [CampaignCollaboratorController::class, 'emailAll'])->name('campaigns.collaborators.emailAll');
-
-Route::post('/campaigns/{campaign}/collaborators/email-one', [CampaignCollaboratorController::class, 'emailOne'])->name('campaigns.collaborators.emailOne');
 
 Route::prefix('colaboradores')->name('colaboradores.')->group(function () {
     Route::get('/data', [ColaboradorController::class, 'data'])->name('data');

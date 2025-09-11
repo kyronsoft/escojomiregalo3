@@ -6,6 +6,8 @@ use App\Models\Campaign;
 use App\Models\Colaborador;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+// Si usas el Job en emailOne:
 use App\Jobs\SendWelcomeCredentialsMail;
 
 class CampaignCollaboratorController extends Controller
@@ -51,6 +53,93 @@ class CampaignCollaboratorController extends Controller
         return response()->json($rows);
     }
 
+    /**
+     * Actualiza (desde Tabulator) los campos del registro:
+     *  - colaboradores: nombre, email
+     *  - pivot campaing_colaboradores: sucursal (y opcionalmente email_notified)
+     */
+    public function updateOne(Campaign $campaign, Request $request)
+    {
+        $validated = $request->validate([
+            'documento'       => ['required', 'string', 'max:15'],
+            'nombre'          => ['nullable', 'string', 'max:255'],
+            'email'           => ['nullable', 'email', 'max:255'],
+            'sucursal'        => ['nullable', 'string', 'max:150'],
+            'email_notified'  => ['nullable', 'boolean'], // opcional
+        ]);
+
+        $documento = $validated['documento'];
+
+        // Verifica que exista relación en el pivot para esta campaña / nit
+        $pivotExists = DB::table(self::PIVOT_TABLE)
+            ->where('idcampaign', $campaign->id)
+            ->where('nit', (string)$campaign->nit)
+            ->where('documento', $documento)
+            ->exists();
+
+        if (!$pivotExists) {
+            return response()->json(['message' => 'No existe el colaborador en esta campaña.'], 404);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1) Actualizar colaborador (nombre/email) si existen cambios
+            $col = Colaborador::where('documento', $documento)->first();
+            if ($col) {
+                $dirty = false;
+                if (array_key_exists('nombre', $validated) && $validated['nombre'] !== null) {
+                    $col->nombre = $validated['nombre'];
+                    $dirty = true;
+                }
+                if (array_key_exists('email', $validated) && $validated['email'] !== null) {
+                    $col->email = $validated['email'];
+                    $dirty = true;
+                }
+                if ($dirty) {
+                    $col->save();
+                }
+            }
+
+            // 2) Actualizar pivot (sucursal, email_notified opcional)
+            $pivotUpdate = ['updated_at' => now()];
+            if (array_key_exists('sucursal', $validated)) {
+                $pivotUpdate['sucursal'] = $validated['sucursal'];
+            }
+            if (array_key_exists('email_notified', $validated)) {
+                $pivotUpdate['email_notified'] = $validated['email_notified'] ? 1 : 0;
+            }
+
+            if (count($pivotUpdate) > 1) {
+                DB::table(self::PIVOT_TABLE)
+                    ->where('idcampaign', $campaign->id)
+                    ->where('nit', (string)$campaign->nit)
+                    ->where('documento', $documento)
+                    ->update($pivotUpdate);
+            }
+
+            DB::commit();
+
+            // 3) Devolver fila actualizada con el mismo shape que "data()"
+            $row = $this->oneRowPayload($campaign, $documento);
+            if (!$row) {
+                return response()->json(['message' => 'Actualizado, pero no se pudo recargar la fila.'], 200);
+            }
+
+            return response()->json([
+                'message'     => 'Registro actualizado.',
+                'updated_row' => $row,
+            ], 200);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Error updateOne colaboradores', [
+                'campaign'  => $campaign->id,
+                'documento' => $documento,
+                'e'         => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'No fue posible actualizar el registro.'], 500);
+        }
+    }
+
     public function emailAll(Campaign $campaign, Request $request)
     {
         $request->validate([
@@ -58,7 +147,7 @@ class CampaignCollaboratorController extends Controller
         ]);
 
         // Datos de colaboradores asignados
-        $rows = \Illuminate\Support\Facades\DB::table('campaing_colaboradores as cc')
+        $rows = DB::table('campaing_colaboradores as cc')
             ->join('colaboradores as c', 'c.documento', '=', 'cc.documento')
             ->where('cc.idcampaign', $campaign->id)
             ->where('cc.nit', (string) $campaign->nit)
@@ -98,21 +187,21 @@ class CampaignCollaboratorController extends Controller
             }
 
             try {
-                dispatch(new \App\Jobs\SendWelcomeCredentialsMail(
+                dispatch(new SendWelcomeCredentialsMail(
                     to: $email,
                     name: $nombre,
                     rawPassword: $documento,
                     loginUrl: route('login'),
                     campaignId: $campaign->id,
                     subjectLine: $subject,
-                    backgroundImage: $backgroundImage // <-- NUEVO parámetro opcional
+                    backgroundImage: $backgroundImage
                 ))->onQueue('emails');
 
                 $sentEmails[$emailKey] = true;
                 $ok++;
 
                 // Marcar como notificado en pivot
-                \Illuminate\Support\Facades\DB::table('campaing_colaboradores')
+                DB::table(self::PIVOT_TABLE)
                     ->where('idcampaign', $campaign->id)
                     ->where('documento', $documento)
                     ->where('nit', (string)$campaign->nit)
@@ -121,7 +210,7 @@ class CampaignCollaboratorController extends Controller
                         'updated_at'     => now(),
                     ]);
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('No se pudo encolar correo de bienvenida+invitación', [
+                Log::error('No se pudo encolar correo de bienvenida+invitación', [
                     'email'    => $email,
                     'campaign' => $campaign->id ?? null,
                     'error'    => $e->getMessage(),
@@ -139,7 +228,7 @@ class CampaignCollaboratorController extends Controller
         ], 200);
     }
 
-    public function emailOne(Campaign $campaign, \Illuminate\Http\Request $request)
+    public function emailOne(Campaign $campaign, Request $request)
     {
         $validated = $request->validate([
             'documento' => ['required', 'string', 'max:15'],
@@ -147,7 +236,7 @@ class CampaignCollaboratorController extends Controller
         ]);
 
         // Busca colaborador por documento vinculado a esta campaña
-        $row = \DB::table('campaing_colaboradores as cc')
+        $row = DB::table(self::PIVOT_TABLE . ' as cc')
             ->join('colaboradores as c', 'c.documento', '=', 'cc.documento')
             ->where('cc.idcampaign', $campaign->id)
             ->where('cc.nit', (string)$campaign->nit)
@@ -182,7 +271,7 @@ class CampaignCollaboratorController extends Controller
             ))->onQueue('emails');
 
             // Marca como notificado
-            \DB::table('campaing_colaboradores')
+            DB::table(self::PIVOT_TABLE)
                 ->where('idcampaign', $campaign->id)
                 ->where('documento', $validated['documento'])
                 ->where('nit', (string)$campaign->nit)
@@ -190,8 +279,71 @@ class CampaignCollaboratorController extends Controller
 
             return response()->json(['message' => 'Correo enviado', 'notified' => true], 200);
         } catch (\Throwable $e) {
-            \Log::error('No se pudo encolar correo individual', ['campaign' => $campaign->id, 'documento' => $validated['documento'], 'e' => $e->getMessage()]);
+            Log::error('No se pudo encolar correo individual', [
+                'campaign' => $campaign->id,
+                'documento' => $validated['documento'],
+                'e' => $e->getMessage()
+            ]);
             return response()->json(['message' => 'No se pudo encolar el correo.'], 500);
         }
+    }
+
+    public function destroy(\App\Models\Campaign $campaign, string $documento)
+    {
+        // Asegura el mismo criterio que usas en data(): idcampaign + nit + documento
+        $affected = \DB::table(self::PIVOT_TABLE)
+            ->where('idcampaign', $campaign->id)
+            ->where('nit', (string) $campaign->nit)
+            ->where('documento', $documento)
+            ->delete();
+
+        if ($affected > 0) {
+            return response()->json([
+                'ok'      => true,
+                'message' => 'Colaborador eliminado de la campaña.'
+            ], 200);
+        }
+
+        return response()->json([
+            'ok'      => false,
+            'message' => 'Registro no encontrado o ya había sido eliminado.'
+        ], 404);
+    }
+
+
+    /**
+     * Devuelve una fila con el mismo shape que "data()" para un documento dado.
+     */
+    private function oneRowPayload(Campaign $campaign, string $documento): ?array
+    {
+        $r = DB::table(self::PIVOT_TABLE . ' as cc')
+            ->join('colaboradores as c', 'c.documento', '=', 'cc.documento')
+            ->where('cc.idcampaign', $campaign->id)
+            ->where('cc.nit', (string)$campaign->nit)
+            ->where('cc.documento', $documento)
+            ->select([
+                'cc.documento',
+                'c.nombre',
+                'c.email',
+                'cc.sucursal',
+                'cc.email_notified',
+                'cc.nit',
+                'cc.created_at',
+                'cc.updated_at',
+            ])
+            ->first();
+
+        if (!$r) return null;
+
+        return [
+            'documento'      => $r->documento,
+            'nombre'         => $r->nombre,
+            'email'          => $r->email,
+            'sucursal'       => $r->sucursal,
+            'email_notified' => (bool)$r->email_notified,
+            'nit'            => $r->nit,
+            'created_at'     => $r->created_at,
+            'updated_at'     => $r->updated_at,
+        ];
     }
 }

@@ -59,7 +59,7 @@ class SeleccionadosController extends Controller
         $allowedSorts = [
             'referencia'   => 's.referencia',
             'created_at'   => 's.created_at',
-            'documento'    => 's.documento',
+            'documento'    => 'cc.documento', // ← ahora viene de la pivote
             'colaborador'  => 'col.nombre',
             'telefono'     => 'col.telefono',
             'nombre_hijo'  => 'h.nombre_hijo',
@@ -72,6 +72,7 @@ class SeleccionadosController extends Controller
             'sucursal'     => 'col.sucursal',
             'email'        => 'col.email',
             'empresa'      => DB::raw('COALESCE(e.nombre, c.nombre)'),
+            'selected'     => DB::raw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END'), // opcional
         ];
 
         $sorters = $request->input('sorters');
@@ -89,7 +90,10 @@ class SeleccionadosController extends Controller
                 }
             }
         } else {
-            $q->orderByDesc('s.created_at');
+            // Por defecto: seleccionados recientes arriba; luego por nombre para los no seleccionados
+            $q->orderBy(DB::raw('CASE WHEN s.created_at IS NULL THEN 1 ELSE 0 END')) // seleccionados primero
+                ->orderByDesc('s.created_at')
+                ->orderBy('col.nombre');
         }
 
         $paginator = $q->paginate($size, ['*'], 'page', $page);
@@ -108,17 +112,16 @@ class SeleccionadosController extends Controller
     public function export(Request $request)
     {
         // Reusamos los filtros del request sobre la misma baseQuery, sin paginar.
-        $q = $this->baseQuery($request)->orderByDesc('s.created_at');
+        // Orden por seleccionados/fecha como en data()
+        $q = $this->baseQuery($request)
+            ->orderBy(DB::raw('CASE WHEN s.created_at IS NULL THEN 1 ELSE 0 END'))
+            ->orderByDesc('s.created_at')
+            ->orderBy('col.nombre');
 
-        // Obtenemos la colección (sin paginate)
         $rows = $q->get();
 
-        // Mapeamos al orden EXACTO requerido por el usuario:
-        // Referencia, Fecha Selección, Documento, Colaborador, Telefono, Nombre Hijo,
-        // Genero, Rango Edad, Dirección, Indicaciones, Codigo Ciudad, Departamento,
-        // Sucursal, Email, Empresa
+        // Mapeo al orden EXACTO requerido
         $exportRows = $rows->map(function ($r) {
-            // Normaliza/da formato a fecha
             $fecha = null;
             if (!empty($r->created_at)) {
                 try {
@@ -127,27 +130,25 @@ class SeleccionadosController extends Controller
                     $fecha = (string) $r->created_at;
                 }
             }
-
             return [
-                $r->referencia,
-                $fecha,
-                $r->documento,
-                $r->colaborador,
-                $r->telefono,
-                $r->nombre_hijo,
-                $r->genero_hijo,
-                $r->rango_edad,
-                $r->direccion,
-                $r->indicaciones,
-                $r->ciudad,
-                $r->departamento,
-                $r->sucursal,
-                $r->email,
-                $r->empresa,
+                $r->referencia,                          // Referencia
+                $fecha,                                   // Fecha Selección
+                $r->documento,                            // Documento
+                $r->colaborador,                          // Colaborador
+                $r->telefono,                             // Telefono
+                $r->nombre_hijo,                          // Nombre Hijo
+                $r->genero_hijo,                          // Genero
+                $r->rango_edad,                           // Rango Edad
+                $r->direccion,                            // Dirección
+                $r->indicaciones,                         // Indicaciones
+                $r->ciudad,                               // Codigo Ciudad
+                $r->departamento,                         // Departamento
+                $r->sucursal,                             // Sucursal
+                $r->email,                                // Email
+                $r->empresa,                              // Empresa
             ];
         });
 
-        // Encabezados EXACTOS y en el MISMO orden
         $headings = [
             'Referencia',
             'Fecha Selección',
@@ -166,7 +167,6 @@ class SeleccionadosController extends Controller
             'Empresa',
         ];
 
-        // Clase anónima para exportar sin crear un archivo de export dedicado
         $export = new class($exportRows, $headings) implements FromCollection, WithHeadings {
             private $rows;
             private $headings;
@@ -194,7 +194,8 @@ class SeleccionadosController extends Controller
 
     /**
      * Builder base con filtros compartidos (index/export/data).
-     * Devuelve las columnas necesarias para Tabulator y para exportación.
+     * Ahora parte de la ASIGNACIÓN de colaboradores (cc) y LEFT JOIN a seleccionados (s),
+     * para incluir también los NO seleccionados (s.* = NULL).
      */
     private function baseQuery(Request $request)
     {
@@ -204,24 +205,31 @@ class SeleccionadosController extends Controller
         $dateFrom   = $request->input('date_from');
         $dateTo     = $request->input('date_to');
 
-        $q = DB::table('seleccionados as s')
-            ->leftJoin('campaigns as c', 'c.id', '=', 's.idcampaing')
+        $q = DB::table('campaing_colaboradores as cc')
+            // colaboradores asignados a la campaña
+            ->leftJoin('colaboradores as col', 'col.documento', '=', 'cc.documento')
+            // seleccionados (si existe selección); importantísimo el join por id de campaña
+            ->leftJoin('seleccionados as s', function ($join) {
+                $join->on('s.documento', '=', 'cc.documento')
+                    ->on('s.idcampaing', '=', 'cc.idcampaign');
+            })
+            // otros joins igual que antes pero ahora referenciando cc/s
+            ->leftJoin('colaborador_hijos as h', 'h.id', '=', 's.idhijo')
+            ->leftJoin('campaigns as c', 'c.id', '=', 'cc.idcampaign')
             ->leftJoin('campaign_toys as t', function ($join) {
-                $join->on('t.idcampaign', '=', 's.idcampaing')
+                $join->on('t.idcampaign', '=', 'cc.idcampaign')
                     ->on('t.referencia',  '=', 's.referencia');
             })
-            ->leftJoin('colaborador_hijos as h', 'h.id', '=', 's.idhijo')
-            ->leftJoin('colaboradores as col', 'col.documento', '=', 's.documento')
             ->leftJoin('ciudades as ciu', 'ciu.codigo', '=', 'col.ciudad')
             ->leftJoin('empresas as e', 'e.nit', '=', 'col.nit')
             ->select([
                 's.id',
-                's.idcampaing',
+                DB::raw('cc.idcampaign as idcampaing'), // homogeneizamos el nombre usado en vistas previas
 
                 // ===== columnas requeridas =====
                 's.referencia',
                 's.created_at',
-                's.documento',
+                DB::raw('cc.documento as documento'),
                 'col.nombre as colaborador',
                 'col.telefono',
                 'h.nombre_hijo',
@@ -236,25 +244,43 @@ class SeleccionadosController extends Controller
                 DB::raw('COALESCE(NULLIF(e.nombre,""), c.nombre) as empresa'),
 
                 // extras opcionales
-                DB::raw("COALESCE(NULLIF(t.nombre,''), CONCAT('Ref ', s.referencia)) as toy_name"),
+                DB::raw("COALESCE(NULLIF(t.nombre,''), CASE WHEN s.referencia IS NOT NULL THEN CONCAT('Ref ', s.referencia) ELSE '' END) as toy_name"),
                 'c.nombre as campaign_name',
+
+                // útil para UI: flag de seleccionado vs. no seleccionado
+                DB::raw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END as selected'),
             ]);
 
-        // Filtros
+        // ===== Filtros =====
         if (!empty($campaignId)) {
-            $q->where('s.idcampaing', (int) $campaignId);
+            $q->where('cc.idcampaign', (int) $campaignId);
         }
+
         if (!empty($referencia)) {
-            $q->where('s.referencia', 'like', '%' . str_replace('%', '\%', $referencia) . '%');
+            // Solo aplica a los que tienen selección; los que no, permanecen (si quieres excluirlos, usa whereNotNull)
+            $ref = str_replace('%', '\%', $referencia);
+            $q->where(function ($w) use ($ref) {
+                $w->where('s.referencia', 'like', '%' . $ref . '%');
+            });
         }
+
         if (!empty($documento)) {
-            $q->where('s.documento', 'like', '%' . str_replace('%', '\%', $documento) . '%');
+            $doc = str_replace('%', '\%', $documento);
+            $q->where('cc.documento', 'like', '%' . $doc . '%');
         }
+
+        // Rango de fechas: aplica sobre s.created_at (los NO seleccionados no filtran por fecha)
         if (!empty($dateFrom)) {
-            $q->whereDate('s.created_at', '>=', $dateFrom);
+            $q->where(function ($w) use ($dateFrom) {
+                $w->whereDate('s.created_at', '>=', $dateFrom)
+                    ->orWhereNull('s.created_at'); // ← conserva no seleccionados
+            });
         }
         if (!empty($dateTo)) {
-            $q->whereDate('s.created_at', '<=', $dateTo);
+            $q->where(function ($w) use ($dateTo) {
+                $w->whereDate('s.created_at', '<=', $dateTo)
+                    ->orWhereNull('s.created_at'); // ← conserva no seleccionados
+            });
         }
 
         return $q;

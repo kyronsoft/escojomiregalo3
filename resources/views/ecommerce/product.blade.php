@@ -21,7 +21,7 @@
             pointer-events: none;
             z-index: -1;
             opacity: .5;
-            background: linear-gradient(to bottom, var(--primary) 0%, var(--primary) 50%, var(--secondary) 50%, var(--secondary) 100%);
+            background: linear-gradient(to bottom, var(--secondary) 0%, var(--secondary) 100%);
         }
 
         /* Topbar */

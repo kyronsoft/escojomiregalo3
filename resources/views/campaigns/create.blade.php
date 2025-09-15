@@ -2,12 +2,9 @@
 
 @push('css')
     <link rel="stylesheet" href="https://unpkg.com/trix@2.0.8/dist/trix.css">
-    {{-- ✅ CSS base de Select2 (requerido) --}}
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    {{-- Tema Bootstrap 5 (opcional) --}}
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.6.2/dist/select2-bootstrap-5-theme.min.css"
         rel="stylesheet" />
-    {{-- ✅ CSS del DateRangePicker --}}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 @endpush
 
@@ -42,9 +39,7 @@
                                 <label class="form-label" for="nit">NIT (Empresa)</label>
                                 <select id="nit" name="nit" class="form-select @error('nit') is-invalid @enderror"
                                     data-placeholder="Buscar por NIT o nombre">
-                                    {{-- ✅ opción vacía para placeholder/allowClear --}}
                                     <option value=""></option>
-                                    {{-- Si hay old('nit'), lo precargamos vía AJAX más abajo --}}
                                 </select>
                                 @error('nit')
                                     <div class="invalid-feedback">{{ $message }}</div>
@@ -53,13 +48,14 @@
                             </div>
 
                             <div class="col-12 col-md-5">
-                                <label class="form-label" for="nombre">Nombre</label>
+                                <label class="form-label" for="nombre">Nombre de la campaña</label>
                                 <input type="text" class="form-control @error('nombre') is-invalid @enderror"
-                                    id="nombre" name="nombre" maxlength="100" value="{{ old('nombre') }}" readonly>
-                                {{-- ✅ ahora es solo lectura --}}
+                                    id="nombre" name="nombre" maxlength="100" value="{{ old('nombre') }}">
                                 @error('nombre')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
+                                <small class="text-muted">Este texto se insertará donde uses el metacampo <code>[NOMBRE
+                                        CAMPAÑA]</code> en el correo.</small>
                             </div>
 
                             <div class="col-12 col-md-2">
@@ -75,18 +71,6 @@
                                 @enderror
                             </div>
 
-
-
-                            {{-- <div class="col-12 col-md-2">
-                                <label class="form-label" for="doc_yeminus">Doc Yeminus</label>
-                                <input type="number" class="form-control @error('doc_yeminus') is-invalid @enderror"
-                                    id="doc_yeminus" name="doc_yeminus" value="{{ old('doc_yeminus', 0) }}" min="0">
-                                @error('doc_yeminus')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div> --}}
-
-                            {{-- Picker visible para seleccionar el rango --}}
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="fecharango">Rango de fechas</label>
                                 <input type="text" id="fecharango" class="form-control"
@@ -95,7 +79,6 @@
                                     campaña.</small>
                             </div>
 
-                            {{-- Campos visibles (solo lectura) en dd-mmm-yyyy --}}
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="fechaini_display">Fecha inicio</label>
                                 <input type="text" id="fechaini_display" class="form-control" value="" readonly
@@ -108,10 +91,8 @@
                                     style="background-color:#f8f9fa; cursor:not-allowed;">
                             </div>
 
-                            {{-- Campos REALES ocultos que se envían al backend (YYYY-MM-DD) --}}
                             <input type="hidden" id="fechaini" name="fechaini" value="{{ old('fechaini') }}">
                             <input type="hidden" id="fechafin" name="fechafin" value="{{ old('fechafin') }}">
-
 
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="demo">Demo</label>
@@ -147,25 +128,19 @@
                                 @enderror
                             </div>
 
-                            {{-- MAILTEXT con Trix --}}
                             <div class="col-12">
                                 <label class="form-label" for="mailtext">Contenido de correo</label>
-
-                                {{-- Campo real --}}
                                 <input id="mailtext" type="hidden" name="mailtext"
                                     value="{{ old('mailtext', $campaign->mailtext ?? '') }}">
-
-                                {{-- Editor --}}
                                 <trix-editor input="mailtext" class="trix-content"
                                     style="min-height: 220px;"></trix-editor>
 
                                 <small class="text-muted d-block mt-2">
-                                    Debe incluir los metacampos:
-                                    <code>[COLABORADOR]</code>, <code>[EMPRESA]</code>, <code>[NOMBRE CAMPAÑA]</code>,
+                                    Debe incluir: <code>[COLABORADOR]</code>, <code>[EMPRESA]</code>, <code>[NOMBRE
+                                        CAMPAÑA]</code>,
                                     <code>[LINK]</code>, <code>[LINKHTML]</code>, <code>[FECHAFIN]</code>.
                                 </small>
 
-                                {{-- Botones de inserción de metacampos y plantilla base --}}
                                 <div class="mt-2">
                                     @php $tokens = ['[COLABORADOR]','[EMPRESA]','[NOMBRE CAMPAÑA]','[LINK]','[LINKHTML]','[FECHAFIN]']; @endphp
                                     @foreach ($tokens as $tk)
@@ -188,9 +163,8 @@
                                 <div class="input-group mb-2">
                                     <textarea class="form-control @error('customlogin') is-invalid @enderror" id="customlogin" name="customlogin"
                                         rows="4">{{ old('customlogin') }}</textarea>
-                                    <button type="button" class="btn btn-outline-primary" id="btn-generate-url">
-                                        Generar URL
-                                    </button>
+                                    <button type="button" class="btn btn-outline-primary" id="btn-generate-url">Generar
+                                        URL</button>
                                 </div>
                                 @error('customlogin')
                                     <div class="invalid-feedback">{{ $message }}</div>
@@ -204,7 +178,6 @@
                                 @error('banner')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-
                                 <div class="mt-2">
                                     <img id="preview_banner" src="" alt="Vista previa banner"
                                         style="max-width:260px; display:none;">
@@ -231,18 +204,15 @@
     <script src="{{ asset('assets/js/blockui/jquery.blockUI.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    {{-- ✅ Moment + DateRangePicker --}}
     <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/min/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/locale/es.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 
     <script>
-        // Evitar adjuntar archivos en Trix (mejora para correos)
         document.addEventListener('trix-file-accept', function(e) {
             e.preventDefault();
         });
 
-        // Metacampos: insertar en cursor
         document.querySelectorAll('.js-insert-token').forEach(btn => {
             btn.addEventListener('click', () => {
                 const token = btn.getAttribute('data-token');
@@ -251,7 +221,6 @@
             });
         });
 
-        // Plantilla base
         const baseTemplate =
             '<div>Hola [COLABORADOR],<br>&nbsp;[EMPRESA] te invitan a escoger personalmente los regalos de tus hijos para el evento: [NOMBRE CAMPAÑA].<br>&nbsp;Para escoger los juguetes haz clic [LINK]<br>&nbsp;[LINKHTML]<br>&nbsp;Recuerda que tienes hasta el [FECHAFIN] para seleccionar los juguetes de tus hijos.<br>&nbsp;Porque sabemos que tus hijos son lo más importante, [EMPRESA] quiere que escojas el regalo que recibirán este año.<br><br></div>';
 
@@ -260,7 +229,6 @@
             ed.editor.loadHTML(baseTemplate);
         });
 
-        // Preview banner
         $('#banner').on('change', function(e) {
             const file = e.target.files[0];
             const img = document.getElementById('preview_banner');
@@ -277,7 +245,6 @@
             }
         });
 
-        // BlockUI al enviar
         $('#form-campaign').on('submit', function() {
             $.blockUI({
                 message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Guardando, por favor espera...</div></div>',
@@ -308,70 +275,53 @@
             });
         @endif
     </script>
+
     <script>
         $(function() {
-            // Seguridad: verificar que select2 esté cargado
             if (!$.fn.select2) {
-                console.error('Select2 no está disponible. Revisa el <script> de CDN.');
+                console.error('Select2 no está disponible.');
                 Swal.fire({
                     icon: 'error',
                     title: 'Error de Select2',
-                    text: 'No se pudo cargar Select2. Verifica el CDN en la consola del navegador.'
+                    text: 'No se pudo cargar Select2.'
                 });
                 return;
             }
 
-            // ---------- INIT SELECT2 PARA NIT ----------
+            // ---------- INIT SELECT2 ----------
             $('#nit').select2({
                 theme: 'bootstrap-5',
                 placeholder: $('#nit').data('placeholder') || 'Buscar empresa...',
                 allowClear: true,
-                width: '100%', // o 'resolve'
-                minimumInputLength: 1, // evita query vacía
+                width: '100%',
+                minimumInputLength: 1,
                 ajax: {
                     url: "{{ route('empresas.select2') }}",
                     dataType: 'json',
                     delay: 250,
-                    data: function(params) {
-                        return {
-                            q: params.term || '',
-                            page: params.page || 1
-                        };
-                    },
-                    processResults: function(data, params) {
-                        params.page = params.page || 1;
-                        return {
-                            results: (data.items || []),
-                            pagination: {
-                                more: !!data.more
-                            }
-                        };
-                    }
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: (data, params) => ({
+                        results: (data.items || []),
+                        pagination: {
+                            more: !!data.more
+                        }
+                    }),
                 },
                 language: {
-                    inputTooShort: function() {
-                        return 'Escribe al menos 1 carácter';
-                    },
-                    searching: function() {
-                        return 'Buscando…';
-                    },
-                    noResults: function() {
-                        return 'Sin resultados';
-                    },
-                    loadingMore: function() {
-                        return 'Cargando más…';
-                    },
+                    inputTooShort: () => 'Escribe al menos 1 carácter',
+                    searching: () => 'Buscando…',
+                    noResults: () => 'Sin resultados',
+                    loadingMore: () => 'Cargando más…',
                 },
-                templateResult: function(item) {
-                    if (item.loading) return item.text;
-                    return $('<div>').text(item.text || item.id || '');
-                },
-                templateSelection: function(item) {
-                    return item.text || item.id || '';
-                }
+                templateResult: item => item.loading ? item.text : $('<div>').text(item.text || item.id ||
+                    ''),
+                templateSelection: item => item.text || item.id || '',
             });
 
-            // Precarga del valor viejo si existiera (old('nit'))
+            // Precarga old('nit')
             const oldNit = @json(old('nit'));
             if (oldNit) {
                 $.ajax({
@@ -388,56 +338,21 @@
                 });
             }
 
-            // ---------- GENERAR URL Y PEGARLA EN EL TEXTAREA ----------
-            $('#btn-generate-url').on('click', function() {
-                const nit = $('#nit').val();
-                if (!nit) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Atención',
-                        text: 'Selecciona la empresa (NIT) antes de generar la URL.'
-                    });
-                    return;
-                }
-
-                $.ajax({
-                    url: "{{ route('campaigns.generateCustomUrl') }}",
-                    method: "POST",
-                    data: {
-                        nit: nit,
-                        _token: "{{ csrf_token() }}"
-                    },
-                    success: function(response) {
-                        if (response.url) {
-                            $('#customlogin').val(response.url);
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'URL generada',
-                                text: 'La URL se insertó en el campo Custom Login.'
-                            });
-                        }
-                    },
-                    error: function() {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: 'No se pudo generar la URL.'
-                        });
-                    }
-                });
-            });
-
+            // SUGERIR nombre de campaña SOLO si está vacío (no forzar el nombre de empresa)
             $('#nit').on('select2:select', function(e) {
-                const data = e.params.data;
-                if (data && data.nombre) {
-                    $('#nombre').val(data.nombre); // ✅ rellenar el campo nombre con el nombre de la empresa
+                const empresa = e.params.data?.nombre || e.params.data?.text || '';
+                const $nombre = $('#nombre');
+                if (!$nombre.val().trim() && empresa) {
+                    const y = (new Date()).getFullYear();
+                    $nombre.val(`Campaña ${y} – ${empresa}`);
                 }
             });
         });
     </script>
+
     <script>
         $(function() {
-            moment.locale('es'); // para nombres de meses en español (ene, feb, mar...)
+            moment.locale('es');
 
             const $picker = $('#fecharango');
             const $iniHidden = $('#fechaini');
@@ -445,41 +360,30 @@
             const $iniDisp = $('#fechaini_display');
             const $finDisp = $('#fechafin_display');
 
-            // Lee old() si viene del servidor
-            // Admitimos ambos formatos: ISO (YYYY-MM-DD) o "DD-MMM-YYYY"
             function parseAny(d) {
                 if (!d) return null;
                 const m = moment(d, ['YYYY-MM-DD', 'DD-MMM-YYYY', moment.ISO_8601], true);
                 return m.isValid() ? m : null;
             }
 
-            let oldIni = parseAny(@json(old('fechaini')));
-            let oldFin = parseAny(@json(old('fechafin')));
+            let start = parseAny(@json(old('fechaini'))) || moment().startOf('day');
+            let end = parseAny(@json(old('fechafin'))) || moment().add(1, 'day').startOf('day');
 
-            // Defaults si no hay old()
-            let start = oldIni || moment().startOf('day');
-            let end = oldFin || moment().add(1, 'day').startOf('day');
-
-            // Función para sincronizar visibles (dd-mmm-yyyy) y ocultos (YYYY-MM-DD)
             function syncFields(s, e) {
-                // Visibles
                 $iniDisp.val(s.format('DD-MMM-YYYY'));
                 $finDisp.val(e.format('DD-MMM-YYYY'));
-                // Ocultos (lo que se envía al backend)
                 $iniHidden.val(s.format('YYYY-MM-DD'));
                 $finHidden.val(e.format('YYYY-MM-DD'));
-                // Visual en el input del picker
                 $picker.val(s.format('DD-MMM-YYYY') + ' - ' + e.format('DD-MMM-YYYY'));
             }
 
-            // Init daterangepicker (solo fecha)
             $picker.daterangepicker({
                 startDate: start,
                 endDate: end,
                 autoUpdateInput: true,
-                timePicker: false, // ✅ sin hora
+                timePicker: false,
                 locale: {
-                    format: 'DD-MMM-YYYY', // ✅ dd-mmm-yyyy (ej: 05-ago-2025)
+                    format: 'DD-MMM-YYYY',
                     separator: ' - ',
                     applyLabel: 'Aplicar',
                     cancelLabel: 'Cancelar',
@@ -492,15 +396,12 @@
                     ],
                     firstDay: 1
                 }
-            }, function(startSel, endSel) {
-                // Cuando el usuario confirma, sincronizamos todo
-                syncFields(startSel.startOf('day'), endSel.startOf('day'));
+            }, function(s, e) {
+                syncFields(s.startOf('day'), e.startOf('day'));
             });
 
-            // Inicializa valores en pantalla y ocultos
             syncFields(start, end);
 
-            // Si el usuario cancela el rango
             $picker.on('cancel.daterangepicker', function() {
                 $(this).val('');
                 $iniDisp.val('');

@@ -2,11 +2,9 @@
 
 @push('css')
     <link rel="stylesheet" href="https://unpkg.com/trix@2.0.8/dist/trix.css">
-    {{-- ✅ CSS base Select2 + tema Bootstrap 5 --}}
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.6.2/dist/select2-bootstrap-5-theme.min.css"
         rel="stylesheet" />
-    {{-- ✅ CSS DateRangePicker --}}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 @endpush
 
@@ -33,7 +31,6 @@
                         <h5 class="mb-0">Editar campaña #{{ $campaign->id }}</h5>
                         <div>
                             <a href="{{ route('campaigns.index') }}" class="btn btn-outline-secondary me-2">Cancelar</a>
-                            {{-- ⚠️ Este botón ahora está dentro del form más abajo; aquí lo dejamos opcional como link --}}
                         </div>
                     </div>
 
@@ -47,14 +44,11 @@
                                 <label class="form-label" for="nit">NIT (Empresa)</label>
                                 <select id="nit" name="nit" class="form-select @error('nit') is-invalid @enderror"
                                     data-placeholder="Buscar por NIT o nombre" required>
-                                    {{-- opción vacía para placeholder/allowClear --}}
                                     <option value=""></option>
-                                    {{-- Pre-carga del valor actual para que Select2 lo muestre al entrar --}}
                                     @php
                                         $nitActual = old('nit', $campaign->nit);
                                         $nombreEmpresa =
-                                            optional($campaign->empresa)->nombre ?? old('nombre', $campaign->nombre);
-                                        // fallback: si no hay relación empresa, usamos el nombre actual de la campaña
+                                            optional($campaign->empresa)->nombre ?? optional($campaign)->nombre;
                                     @endphp
                                     @if ($nitActual)
                                         <option value="{{ $nitActual }}" selected>{{ $nitActual }} -
@@ -67,18 +61,20 @@
                                 <small class="text-muted">Escribe para buscar por NIT o nombre de empresa.</small>
                             </div>
 
-                            {{-- Nombre: solo lectura, se llena con el nombre de la empresa --}}
+                            {{-- Nombre de la campaña (EDITABLE) --}}
                             <div class="col-12 col-md-5">
-                                <label class="form-label" for="nombre">Nombre</label>
+                                <label class="form-label" for="nombre">Nombre de la campaña</label>
                                 <input type="text" class="form-control @error('nombre') is-invalid @enderror"
                                     id="nombre" name="nombre" maxlength="100"
-                                    value="{{ old('nombre', $nombreEmpresa) }}" readonly>
+                                    value="{{ old('nombre', $campaign->nombre) }}">
                                 @error('nombre')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
+                                <small class="text-muted">Este texto se usa para el metacampo <code>[NOMBRE CAMPAÑA]</code>
+                                    en el correo.</small>
                             </div>
 
-                            {{-- Tipo: select fijo 1/2 --}}
+                            {{-- Tipo --}}
                             <div class="col-12 col-md-2">
                                 <label class="form-label" for="idtipo">Tipo</label>
                                 @php $idtipoVal = old('idtipo', $campaign->idtipo); @endphp
@@ -93,16 +89,6 @@
                                 @enderror
                             </div>
 
-                            {{-- <div class="col-12 col-md-2">
-                                <label class="form-label" for="doc_yeminus">Doc Yeminus</label>
-                                <input type="number" class="form-control @error('doc_yeminus') is-invalid @enderror"
-                                    id="doc_yeminus" name="doc_yeminus"
-                                    value="{{ old('doc_yeminus', $campaign->doc_yeminus) }}" min="0">
-                                @error('doc_yeminus')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div> --}}
-
                             {{-- Rango de fechas (visible) --}}
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="fecharango">Rango de fechas</label>
@@ -111,20 +97,20 @@
                                 <small class="text-muted">Selecciona un rango de fechas (sin hora).</small>
                             </div>
 
-                            {{-- Fechas visibles (solo lectura) --}}
+                            {{-- Fechas visibles --}}
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="fechaini_display">Fecha inicio</label>
-                                <input type="text" id="fechaini_display" class="form-control" value="" readonly
+                                <input type="text" id="fechaini_display" class="form-control" readonly
                                     style="background-color:#f8f9fa; cursor:not-allowed;">
                             </div>
 
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="fechafin_display">Fecha fin</label>
-                                <input type="text" id="fechafin_display" class="form-control" value="" readonly
+                                <input type="text" id="fechafin_display" class="form-control" readonly
                                     style="background-color:#f8f9fa; cursor:not-allowed;">
                             </div>
 
-                            {{-- Fechas REALES ocultas (formato YYYY-MM-DD) --}}
+                            {{-- Fechas REALES ocultas (YYYY-MM-DD) --}}
                             <input type="hidden" id="fechaini" name="fechaini"
                                 value="{{ old('fechaini', optional($campaign->fechaini)->format('Y-m-d')) }}">
                             <input type="hidden" id="fechafin" name="fechafin"
@@ -132,9 +118,9 @@
 
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="demo">Demo</label>
+                                @php $demo = old('demo', $campaign->demo); @endphp
                                 <select id="demo" name="demo"
                                     class="form-select @error('demo') is-invalid @enderror">
-                                    @php $demo = old('demo', $campaign->demo); @endphp
                                     <option value="off" @selected($demo === 'off')>off</option>
                                     <option value="on" @selected($demo === 'on')>on</option>
                                 </select>
@@ -168,16 +154,14 @@
                             {{-- MAILTEXT con Trix --}}
                             <div class="col-12">
                                 <label class="form-label" for="mailtext">Contenido de correo</label>
-
                                 <input id="mailtext" type="hidden" name="mailtext"
                                     value="{{ old('mailtext', $campaign->mailtext) }}">
-
                                 <trix-editor input="mailtext" class="trix-content"
                                     style="min-height: 220px;"></trix-editor>
 
                                 <small class="text-muted d-block mt-2">
-                                    Debe incluir los metacampos:
-                                    <code>[COLABORADOR]</code>, <code>[EMPRESA]</code>, <code>[NOMBRE CAMPAÑA]</code>,
+                                    Debe incluir: <code>[COLABORADOR]</code>, <code>[EMPRESA]</code>, <code>[NOMBRE
+                                        CAMPAÑA]</code>,
                                     <code>[LINK]</code>, <code>[LINKHTML]</code>, <code>[FECHAFIN]</code>.
                                 </small>
 
@@ -188,9 +172,8 @@
                                             class="btn btn-sm btn-outline-secondary me-1 js-insert-token"
                                             data-token="{{ $tk }}">{{ $tk }}</button>
                                     @endforeach
-                                    <button type="button" class="btn btn-sm btn-primary ms-1" id="btn-insert-template">
-                                        Insertar plantilla base
-                                    </button>
+                                    <button type="button" class="btn btn-sm btn-primary ms-1"
+                                        id="btn-insert-template">Insertar plantilla base</button>
                                 </div>
 
                                 @error('mailtext')
@@ -245,11 +228,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="{{ asset('assets/js/blockui/jquery.blockUI.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    {{-- ✅ Select2 --}}
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-    {{-- ✅ Moment + DateRangePicker --}}
     <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/min/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/locale/es.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
@@ -263,7 +242,7 @@
                 e.preventDefault();
             });
 
-            // Tokens Trix
+            // Insertar tokens
             document.querySelectorAll('.js-insert-token').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const token = btn.getAttribute('data-token');
@@ -324,40 +303,36 @@
                     url: "{{ route('empresas.select2') }}",
                     dataType: 'json',
                     delay: 250,
-                    data: function(params) {
-                        return {
-                            q: params.term || '',
-                            page: params.page || 1
-                        };
-                    },
-                    processResults: function(data, params) {
-                        params.page = params.page || 1;
-                        return {
-                            results: (data.items || []),
-                            pagination: {
-                                more: !!data.more
-                            }
-                        };
-                    }
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: (data, params) => ({
+                        results: (data.items || []),
+                        pagination: {
+                            more: !!data.more
+                        }
+                    }),
                 },
-                templateResult: function(item) {
-                    if (item.loading) return item.text;
-                    return $('<div>').text(item.text || item.id || '');
-                },
-                templateSelection: function(item) {
-                    return item.text || item.id || '';
-                }
+                templateResult: item => item.loading ? item.text : $('<div>').text(item.text || item.id ||
+                    ''),
+                templateSelection: item => item.text || item.id || '',
             });
 
-            // Al seleccionar empresa, llenar nombre (readonly)
+            // Al seleccionar empresa, SOLO sugerir nombre si el campo está vacío
             $('#nit').on('select2:select', function(e) {
-                const data = e.params.data;
-                if (data && data.nombre) {
-                    $('#nombre').val(data.nombre);
-                } else if (data && data.text) {
-                    // fallback: si no viene 'nombre' separado, parseamos "NIT - Nombre"
-                    const parts = (data.text + '').split(' - ');
-                    $('#nombre').val(parts[1] || '');
+                const $nombre = $('#nombre');
+                if ($nombre.val().trim()) return; // el usuario ya escribió un nombre; no tocar
+
+                // Extraer "nombre de empresa"
+                let empresa = e.params.data?.nombre || e.params.data?.text || '';
+                // Si viene "NIT - Empresa", quedarnos con la parte de la derecha
+                if (empresa.includes(' - ')) {
+                    empresa = empresa.split(' - ').slice(1).join(' - ').trim();
+                }
+                if (empresa) {
+                    const y = (new Date()).getFullYear();
+                    $nombre.val(`Campaña ${y} – ${empresa}`);
                 }
             });
 
@@ -374,10 +349,8 @@
                 return m.isValid() ? m : null;
             }
 
-            let oldIni = parseAny($iniHid.val());
-            let oldFin = parseAny($finHid.val());
-            let start = oldIni || moment().startOf('day');
-            let end = oldFin || moment().add(1, 'day').startOf('day');
+            let start = parseAny($iniHid.val()) || moment().startOf('day');
+            let end = parseAny($finHid.val()) || moment().add(1, 'day').startOf('day');
 
             function syncFields(s, e) {
                 $iniDisp.val(s.format('DD-MMM-YYYY'));
@@ -406,8 +379,8 @@
                     ],
                     firstDay: 1
                 }
-            }, function(startSel, endSel) {
-                syncFields(startSel.startOf('day'), endSel.startOf('day'));
+            }, function(s, e) {
+                syncFields(s.startOf('day'), e.startOf('day'));
             });
 
             // Inicial

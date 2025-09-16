@@ -54,8 +54,10 @@
                                 @error('nombre')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-                                <small class="text-muted">Este texto se insertará donde uses el metacampo <code>[NOMBRE
-                                        CAMPAÑA]</code> en el correo.</small>
+                                <small class="text-muted">
+                                    Este texto se insertará donde uses el metacampo <code>[NOMBRE CAMPAÑA]</code> en el
+                                    correo.
+                                </small>
                             </div>
 
                             <div class="col-12 col-md-2">
@@ -137,8 +139,8 @@
 
                                 <small class="text-muted d-block mt-2">
                                     Debe incluir: <code>[COLABORADOR]</code>, <code>[EMPRESA]</code>, <code>[NOMBRE
-                                        CAMPAÑA]</code>,
-                                    <code>[LINK]</code>, <code>[LINKHTML]</code>, <code>[FECHAFIN]</code>.
+                                        CAMPAÑA]</code>, <code>[LINK]</code>, <code>[LINKHTML]</code>,
+                                    <code>[FECHAFIN]</code>.
                                 </small>
 
                                 <div class="mt-2">
@@ -163,9 +165,13 @@
                                 <div class="input-group mb-2">
                                     <textarea class="form-control @error('customlogin') is-invalid @enderror" id="customlogin" name="customlogin"
                                         rows="4">{{ old('customlogin') }}</textarea>
-                                    <button type="button" class="btn btn-outline-primary" id="btn-generate-url">Generar
-                                        URL</button>
+                                    <button type="button" class="btn btn-outline-primary" id="btn-generate-url"
+                                        disabled>Generar URL</button>
                                 </div>
+                                <small class="text-muted d-block">
+                                    Para generar la URL se usa el <strong>NIT</strong> y el <strong>Nombre de la
+                                        campaña</strong>.
+                                </small>
                                 @error('customlogin')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -209,10 +215,12 @@
     <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 
     <script>
+        // Evita adjuntos en Trix
         document.addEventListener('trix-file-accept', function(e) {
             e.preventDefault();
         });
 
+        // Insertar tokens Trix
         document.querySelectorAll('.js-insert-token').forEach(btn => {
             btn.addEventListener('click', () => {
                 const token = btn.getAttribute('data-token');
@@ -221,6 +229,7 @@
             });
         });
 
+        // Plantilla base
         const baseTemplate =
             '<div>Hola [COLABORADOR],<br>&nbsp;[EMPRESA] te invitan a escoger personalmente los regalos de tus hijos para el evento: [NOMBRE CAMPAÑA].<br>&nbsp;Para escoger los juguetes haz clic [LINK]<br>&nbsp;[LINKHTML]<br>&nbsp;Recuerda que tienes hasta el [FECHAFIN] para seleccionar los juguetes de tus hijos.<br>&nbsp;Porque sabemos que tus hijos son lo más importante, [EMPRESA] quiere que escojas el regalo que recibirán este año.<br><br></div>';
 
@@ -229,6 +238,7 @@
             ed.editor.loadHTML(baseTemplate);
         });
 
+        // Preview banner
         $('#banner').on('change', function(e) {
             const file = e.target.files[0];
             const img = document.getElementById('preview_banner');
@@ -245,6 +255,7 @@
             }
         });
 
+        // BlockUI al enviar
         $('#form-campaign').on('submit', function() {
             $.blockUI({
                 message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Guardando, por favor espera...</div></div>',
@@ -321,36 +332,113 @@
                 templateSelection: item => item.text || item.id || '',
             });
 
-            // Precarga old('nit')
-            const oldNit = @json(old('nit'));
-            if (oldNit) {
-                $.ajax({
-                    url: "{{ route('empresas.select2') }}",
-                    data: {
-                        id: oldNit
-                    },
-                    dataType: 'json'
-                }).then(function(data) {
-                    if (data && data.item) {
-                        const opt = new Option(data.item.text, data.item.id, true, true);
-                        $('#nit').append(opt).trigger('change');
-                    }
-                });
+            // Habilitar/Deshabilitar botón "Generar URL"
+            function toggleGenBtn() {
+                const hasNit = !!$('#nit').val();
+                const hasName = !!($('#nombre').val() || '').trim();
+                $('#btn-generate-url').prop('disabled', !(hasNit && hasName));
             }
+            $('#nit').on('change', toggleGenBtn);
+            $('#nombre').on('input', toggleGenBtn);
+            toggleGenBtn();
 
-            // SUGERIR nombre de campaña SOLO si está vacío (no forzar el nombre de empresa)
+            // Sugerir nombre de campaña si está vacío al seleccionar empresa
             $('#nit').on('select2:select', function(e) {
                 const empresa = e.params.data?.nombre || e.params.data?.text || '';
                 const $nombre = $('#nombre');
                 if (!$nombre.val().trim() && empresa) {
                     const y = (new Date()).getFullYear();
                     $nombre.val(`Campaña ${y} – ${empresa}`);
+                    toggleGenBtn();
                 }
+            });
+
+            // Generar URL: ahora enviamos NIT + NOMBRE (metacampo)
+            $('#btn-generate-url').on('click', function() {
+                const nit = $('#nit').val();
+                const nombre = ($('#nombre').val() || '').trim();
+
+                if (!nit) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Atención',
+                        text: 'Selecciona la empresa (NIT) antes de generar la URL.'
+                    });
+                    return;
+                }
+                if (!nombre) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Atención',
+                        text: 'Ingresa el nombre de la campaña (usado en [NOMBRE CAMPAÑA]).'
+                    });
+                    return;
+                }
+
+                $.blockUI({
+                    message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Generando URL…</div></div>',
+                    css: {
+                        border: 'none',
+                        padding: '15px',
+                        backgroundColor: '#000',
+                        opacity: 0.6,
+                        color: '#fff',
+                        borderRadius: '8px'
+                    },
+                    baseZ: 2000
+                });
+
+                $.ajax({
+                    url: "{{ route('campaigns.generateCustomUrl') }}",
+                    method: "POST",
+                    dataType: "json",
+                    data: {
+                        nit: nit,
+                        nombre: nombre, // 👈 importante para el metacampo
+                        _token: "{{ csrf_token() }}"
+                    },
+                    success: function(response) {
+                        $.unblockUI();
+                        // El backend puede devolver {url: "..."} o {html: "..."}
+                        if (response.url) {
+                            $('#customlogin').val(response.url);
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'URL generada',
+                                text: 'Se insertó la URL en Custom login.'
+                            });
+                        } else if (response.html) {
+                            $('#customlogin').val(response.html);
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Contenido generado',
+                                text: 'Se insertó el HTML en Custom login.'
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Sin datos',
+                                text: 'El servidor no devolvió una URL o HTML.'
+                            });
+                        }
+                    },
+                    error: function(xhr) {
+                        $.unblockUI();
+                        const msg = (xhr.responseJSON && (xhr.responseJSON.message || xhr
+                            .responseJSON.error)) || 'No se pudo generar la URL.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: msg
+                        });
+                    }
+                });
             });
         });
     </script>
 
     <script>
+        // Rango de fechas (solo fecha)
         $(function() {
             moment.locale('es');
 

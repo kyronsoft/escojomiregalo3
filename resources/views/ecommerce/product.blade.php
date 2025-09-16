@@ -11,9 +11,7 @@
         }
 
         /* Fondo con 50% de opacidad detrás del contenido */
-        body {
-            position: relative;
-        }
+        body { position: relative; }
         body::before {
             content: "";
             position: fixed;
@@ -35,11 +33,8 @@
             min-height: 100px;
             padding: .25rem 0;
         }
-        @media (min-width:992px) {
-            .topbar { min-height: 120px; padding: .5rem 0; }
-        }
+        @media (min-width:992px) { .topbar { min-height: 120px; padding: .5rem 0; } }
 
-        /* Contenedor 3 columnas: logo izq – acciones centro – logo der */
         .topbar-container {
             display: grid;
             grid-template-columns: auto 1fr auto;
@@ -76,27 +71,16 @@
         .btn-kid-boy:hover, .btn-kid-boy:focus,
         .btn-kid-neutral:hover, .btn-kid-neutral:focus { filter: brightness(.95); }
 
-        /* Feedback visible al seleccionar hijo */
-        .child-btn {
-            position: relative;
-            border-width: 2px;
-            transition: transform .12s ease, box-shadow .18s ease, filter .18s ease;
-            white-space: normal;
-            overflow: visible;
-            line-height: 1.2;
-            padding: .65rem .8rem;
-        }
+        .child-btn { position: relative; border-width: 2px; transition: transform .12s ease, box-shadow .18s ease, filter .18s ease; white-space: normal; overflow: visible; line-height: 1.2; padding: .65rem .8rem; }
         .child-btn:active { transform: translateY(1px) scale(.985); }
         .child-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         .child-btn.active { filter: brightness(.95); box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(0,0,0,.35); }
         .child-btn .check { display:none; font-weight:700; }
         .child-btn.active .check { display:inline-block; }
 
-        /* Contenedor enmarcado para los botones de hijos */
         .children-box { border:1px solid #e5e7eb; border-radius:12px; }
         .children-box .col .child-btn { border:2px solid rgba(0,0,0,.15); border-radius:10px; }
 
-        /* Banner */
         .campaign-banner-bleed { position: relative; }
         .badge-gender { background:#FFCD01 !important; color:#fff !important; }
 
@@ -106,29 +90,31 @@
         .product-img img { max-height:100%; width:auto; height:auto; object-fit:contain; display:block; }
         .product-img .combo-wrap img { max-width:120px; max-height:100%; }
 
-        /* --- CONTROL ESTRICTO EN MODAL PARA EVITAR DESBORDES (desktop y móvil) --- */
-        /* Evita desbordes horizontales del contenido del modal */
+        /* --- MODAL: control de tamaños (desktop y móvil) --- */
         .modal-content { overflow: hidden; }
-        .modal-body { overflow: auto; max-height: calc(100vh - 9rem); } /* cabe en viewport descontando header/footer */
+        .modal-body { overflow: auto; max-height: calc(100dvh - 9rem); }
         @media (max-width: 576px) {
-          .modal-body { max-height: calc(100vh - 7.5rem); }
+          .modal-body { max-height: calc(100dvh - 7.25rem); padding: .75rem; }
         }
-        /* Contenedor de la media */
+
         .modal-product-media {
             display:flex;
             align-items:center;
             justify-content:center;
             width:100%;
+            padding: 6px;
         }
+
         /* Imagen única */
         .modal-product-media img{
             display:block;
             width:auto !important;
             height:auto !important;
-            max-width:100%;          /* nunca más ancho que su contenedor */
-            max-height: 65vh;        /* nunca más alto que el viewport */
-            object-fit: contain;     /* mantiene proporción */
+            max-width: 100%;
+            max-height: 58vh;         /* desktop/tablet */
+            object-fit: contain;
         }
+
         /* Grilla para combos */
         .modal-combo{
             display:flex;
@@ -142,13 +128,20 @@
             width:auto !important;
             height:auto !important;
             max-width: 48%;
-            max-height: 45vh;
+            max-height: 42vh;
             object-fit: contain;
         }
+
+        /* Móviles: reducir aún más */
         @media (max-width: 576px){
-            /* En móviles, una imagen por fila para combos y altura un poco menor */
-            .modal-combo img{ max-width:100%; max-height:40vh; }
-            .modal-product-media img{ max-height:60vh; }
+            .modal-product-media img{ max-height: 40vh; max-width: 92%; }
+            .modal-combo img{ max-width:100%; max-height: 26vh; }
+        }
+
+        /* Opcional: afinar por orientación en móviles */
+        @media (max-width: 576px) and (orientation:landscape){
+            .modal-product-media img{ max-height: 48vw; }
+            .modal-combo img{ max-height: 34vw; }
         }
 
         /* Responsive topbar (móvil) */
@@ -346,14 +339,14 @@
                                                                                 <div class="modal-combo">
                                                                                     @foreach ($imgPaths as $p)
                                                                                         @if (Storage::disk('public')->exists($p))
-                                                                                            <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}">
+                                                                                            <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}" class="img-fluid">
                                                                                         @endif
                                                                                     @endforeach
                                                                                 </div>
                                                                             @else
                                                                                 @php $p = $imgPaths[0]; @endphp
                                                                                 @if (Storage::disk('public')->exists($p))
-                                                                                    <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}">
+                                                                                    <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}" class="img-fluid">
                                                                                 @endif
                                                                             @endif
                                                                         @endif
@@ -542,3 +535,5 @@
         });
     </script>
 @endpush
+
+

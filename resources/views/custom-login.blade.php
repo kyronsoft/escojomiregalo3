@@ -15,7 +15,7 @@
             --bar-bg: rgba(255,255,255,.2);
             --bar-fg: #F6C60F;
             --bar-height: 72px;
-            --vh: 1vh; /* fallback donde no haya dvh */
+            --vh: 1vh; /* fallback para 100dvh */
         }
 
         html, body{ height:100%; }
@@ -26,49 +26,28 @@
             background:#000;
         }
 
-        /* ===== Capa de fondo a pantalla completa =====
-           Estrategia sin recortes:
-           - bg-fill: misma imagen en "cover" + blur para rellenar los bordes
-           - bg-fit : imagen nítida centrada y "contain" (SIEMPRE completa) */
+        /* ===== Fondo pantalla completa (SE ESTIRA para cubrir 100%) ===== */
         .bg-layer{
             position:fixed; inset:0; z-index:-2;
             width:100vw;
-            height:100dvh;
-            height:calc(var(--vh, 1vh) * 100);
+            height:100dvh;                      /* navegadores modernos */
+            height:calc(var(--vh, 1vh) * 100);  /* fallback iOS/Android */
             overflow:hidden;
             background:#000;
         }
-
-        /* Capa de relleno: cubre todo con blur para que no se noten bandas */
-        .bg-fill{
+        .bg-stretch{
+            /* La imagen se deforma si es necesario para cubrir TODO */
             position:absolute; inset:0;
-            background-image:url('{{ $bgUrl }}');
-            background-size:cover;
-            background-position:center;
-            background-repeat:no-repeat;
-            filter: blur(18px) brightness(.9);
-            transform: scale(1.05); /* evita bordes negros tras el blur */
-        }
-
-        /* Imagen nítida SIEMPRE completa, centrada al viewport */
-        .bg-fit{
-            position:absolute;
-            top:50%; left:50%;
-            transform: translate(-50%, -50%);
+            width:100vw;
+            height:100dvh;
+            height:calc(var(--vh, 1vh) * 100);
             display:block;
-            width:auto; height:auto;
-            max-width:100vw;           /* nunca excede el ancho */
-            max-height:100dvh;         /* nunca excede el alto */
-            max-height:calc(var(--vh, 1vh) * 100);
-            object-fit:contain;        /* SIN recortes */
+            object-fit: fill;        /* << clave: rellena sin respetar proporción */
+            object-position: center; /* centrada mientras se estira */
+            transform: translateZ(0);/* evita artefactos en móviles */
         }
 
-        /* Asegura centrado también en móviles muy angostos */
-        @media (max-width: 768px){
-            .bg-fit{ object-position: center center; }
-        }
-
-        /* Velos de contraste */
+        /* Velo de contraste (opcional) */
         .backdrop{
             position:fixed; inset:0; z-index:-1;
             background:
@@ -118,10 +97,9 @@
     </style>
 </head>
 <body>
-    <!-- Fondo SIN recortes -->
+    <!-- Fondo 100% (se deforma si hace falta) -->
     <div class="bg-layer" aria-hidden="true">
-        <div class="bg-fill"></div>
-        <img src="{{ $bgUrl }}" alt="" class="bg-fit">
+        <img src="{{ $bgUrl }}" alt="" class="bg-stretch">
     </div>
     <div class="backdrop" aria-hidden="true"></div>
 
@@ -169,7 +147,7 @@
     </div>
 
     <script>
-        // Ajuste real del viewport en móviles (para 100dvh consistente)
+        // Fijar 100dvh real en móviles
         (function setRealVh(){
             const update = () => {
                 const vh = window.innerHeight * 0.01;
@@ -180,7 +158,7 @@
             window.addEventListener('orientationchange', update);
         })();
 
-        // Lógica del modal
+        // Modal
         (function(){
             const overlay  = document.getElementById('loginOverlay');
             const openBtn  = document.getElementById('openLogin');

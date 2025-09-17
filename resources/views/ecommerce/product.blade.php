@@ -81,7 +81,44 @@
         .children-box { border:1px solid #e5e7eb; border-radius:12px; }
         .children-box .col .child-btn { border:2px solid rgba(0,0,0,.15); border-radius:10px; }
 
-        .campaign-banner-bleed { position: relative; }
+        /* ===== Banner full-bleed y responsive ===== */
+        .campaign-banner-bleed{
+            width:100vw;
+            margin-left:calc(50% - 50vw);
+            margin-right:calc(50% - 50vw);
+            position:relative;
+            isolation:isolate;
+        }
+        .campaign-banner-top{
+            background-image: var(--banner-url);
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: 30% 50%;
+            height: clamp(160px, 26vw, 360px);
+        }
+        @media (min-width:1200px){
+            .campaign-banner-top{ height: clamp(200px, 22vw, 420px); }
+        }
+        /* Móviles: evitar recorte (contain + aspect-ratio) */
+        @media (max-width:768px){
+            .campaign-banner-top{
+                background-size: contain;
+                background-position: center top;
+                background-color: var(--secondary); /* relleno en letterbox */
+                aspect-ratio: 1103 / 318;
+                height: auto;
+                min-height: 0;
+            }
+        }
+        /* Fallback si no hay soporte para aspect-ratio */
+        @supports not (aspect-ratio: 1) {
+            @media (max-width:768px){
+                .campaign-banner-top{
+                    height: calc(100vw * 0.288575); /* 318/1103 */
+                }
+            }
+        }
+
         .badge-gender { background:#FFCD01 !important; color:#fff !important; }
 
         /* ==== Tarjetas de juguetes ==== */
@@ -94,7 +131,7 @@
         .modal-content { overflow: hidden; }
         .modal-body { overflow: auto; max-height: calc(100dvh - 9rem); }
         @media (max-width: 576px) {
-          .modal-body { max-height: calc(100dvh - 7.25rem); padding: .75rem; }
+        .modal-body { max-height: calc(100dvh - 7.25rem); padding: .75rem; }
         }
 
         .modal-product-media {
@@ -162,7 +199,7 @@
             .product-details h4 { font-size:1rem; }
         }
     </style>
-@endpush
+    @endpush
 
 @section('content')
     {{-- Barra superior con Logo (izq) + Acciones (centro) + Logo (der) --}}
@@ -197,14 +234,9 @@
 
     <div class="site-content">
         @if (!empty($campaignBannerUrl))
-            <style>
-                .campaign-banner-bleed { width:100vw; margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw); position:relative; }
-                .campaign-banner-bleed img { display:block; width:100%; height:25vh; object-fit:cover; }
-                @media (min-width:992px) { .campaign-banner-bleed img { height:33.333vh; } }
-            </style>
-            <div class="campaign-banner-bleed">
-                <img src="{{ $campaignBannerUrl }}" alt="Banner campaña" loading="lazy">
-            </div>
+        <div class="campaign-banner-bleed">
+            <div class="campaign-banner-top" style="--banner-url: url('{{ $campaignBannerUrl }}')"></div>
+        </div>
         @endif
 
         <div class="container product-wrapper">

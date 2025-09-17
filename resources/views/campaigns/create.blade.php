@@ -111,6 +111,8 @@
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="dashboard">Dashboard</label>
                                 <div class="form-check form-switch mt-2">
+                                    {{-- Siempre envía 0 si el switch no se marca --}}
+                                    <input type="hidden" name="dashboard" value="0">
                                     <input class="form-check-input" type="checkbox" id="dashboard" name="dashboard"
                                         value="1" {{ old('dashboard') ? 'checked' : '' }}>
                                     <label class="form-check-label" for="dashboard">Activar</label>

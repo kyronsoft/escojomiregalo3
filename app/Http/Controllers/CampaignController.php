@@ -55,35 +55,31 @@ class CampaignController extends Controller
                     }
                 }
             }],
-            'nit'         => ['required', 'string', 'max:20'],     // antes tenías 10; subo a 20 por seguridad
-            'nombre'      => ['required', 'string', 'max:100'],    // readonly en la vista pero validamos
-            'idtipo'      => ['required', 'in:1,2'],               // ahora es select fijo: 1 o 2
-
-            // ahora vienen como YYYY-MM-DD (sin hora)
+            'nit'         => ['required', 'string', 'max:20'],
+            'nombre'      => ['required', 'string', 'max:100'],
+            'idtipo'      => ['required', 'in:1,2'],
             'fechaini'    => ['required', 'date_format:Y-m-d'],
             'fechafin'    => ['required', 'date_format:Y-m-d', 'after_or_equal:fechaini'],
-
             'banner'      => ['nullable', 'image', 'mimes:jpg,jpeg,png,bmp', 'max:4096'],
             'demo'        => ['nullable', 'in:on,off'],
             'doc_yeminus' => ['nullable', 'integer', 'min:0'],
             'customlogin' => ['nullable', 'string'],
             'subject'     => ['required', 'string', 'max:150'],
-            'dashboard'   => ['nullable', 'boolean'],
+            'dashboard'   => ['required', 'boolean'], // 👈 ahora requerido porque siempre llega (0/1)
         ]);
 
         // Normalizaciones
-        $data['demo']        = $request->input('demo', 'off'); // 'on' | 'off'
-        $data['dashboard']   = (bool) $request->boolean('dashboard', false);
+        $data['demo']        = $request->input('demo', 'off');   // 'on' | 'off'
+        $data['dashboard']   = $request->boolean('dashboard');   // true/false a partir de '0'/'1'
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
 
-        // Convertir fechas: guardamos inicio de día y fin de día (si columnas son DATETIME)
-        // Si tus columnas son DATE, igual puedes enviar 'Y-m-d' directamente y omitir estos setStart/EndOfDay.
+        // Fechas
         $ini = Carbon::createFromFormat('Y-m-d', $data['fechaini'])->startOfDay();
         $fin = Carbon::createFromFormat('Y-m-d', $data['fechafin'])->endOfDay();
         $data['fechaini'] = $ini;
         $data['fechafin'] = $fin;
 
-        // Banner (guarda en disco 'public')
+        // Banner
         if ($request->hasFile('banner')) {
             $data['banner'] = $request->file('banner')->store('campaigns', 'public');
         } else {
@@ -118,46 +114,37 @@ class CampaignController extends Controller
                     }
                 }
             }],
-            'nit'         => ['required', 'string', 'max:20'],   // antes 10; ampliar si tu NIT puede ser mayor
-            'nombre'      => ['required', 'string', 'max:100'],  // readonly en la vista pero se valida igual
-            'idtipo'      => ['required', 'in:1,2'],             // ahora es select fijo 1/2
-
-            // Ahora llegan como YYYY-MM-DD (solo fecha)
+            'nit'         => ['required', 'string', 'max:20'],
+            'nombre'      => ['required', 'string', 'max:100'],
+            'idtipo'      => ['required', 'in:1,2'],
             'fechaini'    => ['required', 'date_format:Y-m-d'],
             'fechafin'    => ['required', 'date_format:Y-m-d', 'after_or_equal:fechaini'],
-
             'banner'      => ['nullable', 'image', 'mimes:jpg,jpeg,png,bmp', 'max:4096'],
             'demo'        => ['nullable', 'in:on,off'],
             'doc_yeminus' => ['nullable', 'integer', 'min:0'],
             'customlogin' => ['nullable', 'string'],
             'subject'     => ['required', 'string', 'max:150'],
-            'dashboard'   => ['nullable', 'boolean'],
+            'dashboard'   => ['required', 'boolean'], // 👈 requerido
         ]);
 
         // Normalizaciones
-        $data['demo']        = $request->input('demo', 'off');         // 'on' | 'off'
-        $data['dashboard']   = (bool) $request->boolean('dashboard');  // checkbox
+        $data['demo']        = $request->input('demo', 'off');
+        $data['dashboard']   = $request->boolean('dashboard');
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
 
-        // Convertir fechas
-        // Si columnas son DATETIME/TIMESTAMP:
+        // Fechas
         $ini = Carbon::createFromFormat('Y-m-d', $data['fechaini'])->startOfDay();
         $fin = Carbon::createFromFormat('Y-m-d', $data['fechafin'])->endOfDay();
         $data['fechaini'] = $ini;
         $data['fechafin'] = $fin;
 
-        // Si en tu BD las columnas son DATE, en lugar de lo anterior podrías hacer:
-        // $data['fechaini'] = $data['fechaini']; // 'Y-m-d'
-        // $data['fechafin'] = $data['fechafin']; // 'Y-m-d'
-
-        // Banner: reemplazar y borrar el anterior (si no es 'ND')
+        // Banner (reemplazo)
         if ($request->hasFile('banner')) {
             if ($campaign->banner && $campaign->banner !== 'ND' && Storage::disk('public')->exists($campaign->banner)) {
                 Storage::disk('public')->delete($campaign->banner);
             }
             $data['banner'] = $request->file('banner')->store('campaigns', 'public');
         }
-        // Si no suben banner, se conserva el existente
 
         $campaign->update($data);
 
@@ -165,7 +152,6 @@ class CampaignController extends Controller
             ->route('campaigns.index')
             ->with('success', 'Campaña actualizada correctamente');
     }
-
 
     public function destroy(Campaign $campaign)
     {

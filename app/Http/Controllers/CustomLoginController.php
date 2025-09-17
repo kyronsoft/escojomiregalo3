@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\PermissionRegistrar;
 use Illuminate\Support\Facades\Route as RouteFacade;
 
@@ -26,7 +27,7 @@ class CustomLoginController extends Controller
             abort(404);
         }
 
-        // 2) Buscar empresa por NIT
+        // 2) Empresa por NIT
         $empresa = Empresa::find($nit);
         if (!$empresa) {
             return view('admin.errors.error-page1', [
@@ -34,11 +35,8 @@ class CustomLoginController extends Controller
             ]);
         }
 
-        // 3) Buscar campaña por NIT
-        //    Primero intentamos una campaña activa (hoy dentro del rango),
-        //    si no existe, tomamos la más reciente por fechaini.
+        // 3) Campaña activa para el NIT (requerida para el flujo)
         $today = Carbon::today();
-
         $campaign = Campaign::where('nit', $nit)
             ->whereDate('fechaini', '<=', $today)
             ->whereDate('fechafin', '>=', $today)
@@ -51,23 +49,36 @@ class CustomLoginController extends Controller
             ]);
         }
 
-        // 4) Preparar URL de ingreso (ajusta según tu app)
-        //    Si existe ruta('login'), usamos esa. Si no, '/login' por defecto.
+        // 4) URL de ingreso
         $ingresoUrl = RouteFacade::has('login') ? route('login') : url('/login');
 
-        // 5) Banner absoluto (fallback si ND o vacío)
-        $bannerUrl = null;
-        if (!empty($campaign->banner) && $campaign->banner !== 'ND') {
-            // asumiendo que guardaste en disco 'public'
-            $bannerUrl = asset('storage/' . ltrim($campaign->banner, '/'));
+        // 5) Imagen de fondo desde EMPRESA.imagen_login (NO desde campaign.banner)
+        $bgUrl = null;
+        if (!empty($empresa->imagen_login) && $empresa->imagen_login !== 'ND') {
+            $path = ltrim((string)$empresa->imagen_login, '/');
+            if (Str::startsWith($path, ['http://', 'https://'])) {
+                $bgUrl = $path; // URL absoluta
+            } elseif (Storage::disk('public')->exists($path)) {
+                $bgUrl = Storage::disk('public')->url($path); // storage público
+            } else {
+                // Por compatibilidad si no existe físicamente pero lo quieres servir igual
+                $bgUrl = asset('storage/' . $path);
+            }
+        }
+
+        // Fallback SVG si no hay imagen_login válida
+        if (!$bgUrl) {
+            $bgUrl = 'data:image/svg+xml;charset=UTF-8,' . rawurlencode(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#111"/><stop offset="100%" stop-color="#333"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>'
+            );
         }
 
         return view('custom-login', [
             'empresa'    => $empresa,
             'campaign'   => $campaign,
             'ingresoUrl' => $ingresoUrl,
-            'bannerUrl'  => $bannerUrl,
-            'token'      => $token, // opcional si lo necesitas
+            'bgUrl'      => $bgUrl,
+            'token'      => $token,
         ]);
     }
 
@@ -75,20 +86,19 @@ class CustomLoginController extends Controller
     {
         $data = $request->validate([
             'token'          => ['required', 'string'],
-            'identificacion' => ['required', 'string', 'max:50'],
-            // 'email'       => ['nullable','email'],
+            'documento'      => ['required', 'string', 'max:50'],
         ]);
 
         // 1) Desencriptar token -> NIT
         try {
             $nit = Crypt::decryptString($data['token']);
         } catch (\Throwable $e) {
-            return back()->withErrors(['identificacion' => 'Token inválido'])->withInput();
+            return back()->withErrors(['documento' => 'Token inválido'])->withInput();
         }
 
         // 2) Empresa existente
         $empresa = Empresa::find($nit);
-        if (!$empresa) return back()->withErrors(['identificacion' => 'Empresa no encontrada'])->withInput();
+        if (!$empresa) return back()->withErrors(['documento' => 'Empresa no encontrada'])->withInput();
 
         // 3) Campaña activa (o la más reciente)
         $today = Carbon::today();
@@ -99,51 +109,41 @@ class CustomLoginController extends Controller
             ->first()
             ?? Campaign::where('nit', $nit)->orderByDesc('fechaini')->first();
 
-        if (!$campaign) return back()->withErrors(['identificacion' => 'No hay campañas disponibles'])->withInput();
+        if (!$campaign) return back()->withErrors(['documento' => 'No hay campañas disponibles'])->withInput();
 
         // 4) Verificar colaborador asignado a esta campaña
-        // Ajusta esta consulta a tu esquema real:
         $asignado = DB::table('campaing_colaboradores')
-            ->where('documento', $data['identificacion'])
+            ->where('documento', $data['documento'])
             ->where('idcampaign', $campaign->id)
-            ->where('nit', $nit) // amarra a la misma empresa del token
+            ->where('nit', $nit)
             ->exists();
 
         if (!$asignado) {
             return back()
-                ->withErrors(['identificacion' => 'No estás asignado a esta campaña.'])
+                ->withErrors(['documento' => 'No estás asignado a esta campaña.'])
                 ->withInput();
         }
 
-        // 🔐 Autenticar al usuario web por documento
-        $user = User::where('documento', $data['identificacion'])->first();
-
+        // 5) Autenticar usuario por documento
+        $user = User::where('documento', $data['documento'])->first();
         if (!$user) {
-            return back()
-                ->withErrors(['identificacion' => 'No existe un usuario con ese documento.'])
-                ->withInput();
+            return back()->withErrors(['documento' => 'No existe un usuario con ese documento.'])->withInput();
         }
 
-        // (Opcional) Si por diseño todo colaborador debe tener el rol 'colaborador':
         if (!$user->hasRole('colaborador')) {
-            // Asegúrate que el rol exista con guard 'web' (ver nota abajo)
             $user->assignRole('colaborador');
         }
 
-        // ⚠️ Muy importante: autenticarlo en el guard 'web'
         Auth::login($user);
-
-        // (Opcional) resetear cache de permisos si has cambiado roles/permisos recientemente
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // 5) Marcar sesión de colaborador y campaña
+        // 6) Marcar sesión y redirigir
         session([
-            'collab_identificacion' => $data['identificacion'],
+            'collab_identificacion' => $data['documento'],
             'campaign_id'           => $campaign->id,
             'empresa_nit'           => $nit,
         ]);
 
-        // 6) Redirigir a product
         return redirect()->route('product');
     }
 }

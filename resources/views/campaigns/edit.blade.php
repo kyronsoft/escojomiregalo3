@@ -36,23 +36,21 @@
 
                     <div class="card-body">
                         <form id="form-campaign" class="row g-3" method="POST" enctype="multipart/form-data"
-                            action="{{ route('campaigns.update', $campaign) }}">
+                              action="{{ route('campaigns.update', $campaign) }}">
                             @csrf @method('PUT')
 
                             {{-- NIT como Select2 --}}
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="nit">NIT (Empresa)</label>
                                 <select id="nit" name="nit" class="form-select @error('nit') is-invalid @enderror"
-                                    data-placeholder="Buscar por NIT o nombre" required>
+                                        data-placeholder="Buscar por NIT o nombre" required>
                                     <option value=""></option>
                                     @php
                                         $nitActual = old('nit', $campaign->nit);
-                                        $nombreEmpresa =
-                                            optional($campaign->empresa)->nombre ?? optional($campaign)->nombre;
+                                        $nombreEmpresa = optional($campaign->empresa)->nombre ?? optional($campaign)->nombre;
                                     @endphp
                                     @if ($nitActual)
-                                        <option value="{{ $nitActual }}" selected>{{ $nitActual }} -
-                                            {{ $nombreEmpresa }}</option>
+                                        <option value="{{ $nitActual }}" selected>{{ $nitActual }} - {{ $nombreEmpresa }}</option>
                                     @endif
                                 </select>
                                 @error('nit')
@@ -65,13 +63,12 @@
                             <div class="col-12 col-md-5">
                                 <label class="form-label" for="nombre">Nombre de la campaña</label>
                                 <input type="text" class="form-control @error('nombre') is-invalid @enderror"
-                                    id="nombre" name="nombre" maxlength="100"
-                                    value="{{ old('nombre', $campaign->nombre) }}">
+                                       id="nombre" name="nombre" maxlength="100"
+                                       value="{{ old('nombre', $campaign->nombre) }}">
                                 @error('nombre')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-                                <small class="text-muted">Este texto se usa para el metacampo <code>[NOMBRE CAMPAÑA]</code>
-                                    en el correo.</small>
+                                <small class="text-muted">Este texto se usa para el metacampo <code>[NOMBRE CAMPAÑA]</code> en el correo.</small>
                             </div>
 
                             {{-- Tipo --}}
@@ -79,7 +76,7 @@
                                 <label class="form-label" for="idtipo">Tipo</label>
                                 @php $idtipoVal = old('idtipo', $campaign->idtipo); @endphp
                                 <select id="idtipo" name="idtipo"
-                                    class="form-select @error('idtipo') is-invalid @enderror" required>
+                                        class="form-select @error('idtipo') is-invalid @enderror" required>
                                     <option value="">-- Selecciona --</option>
                                     <option value="1" @selected($idtipoVal == 1)>Domicilio</option>
                                     <option value="2" @selected($idtipoVal == 2)>Empresarial</option>
@@ -93,7 +90,7 @@
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="fecharango">Rango de fechas</label>
                                 <input type="text" id="fecharango" class="form-control"
-                                    placeholder="Selecciona inicio y fin">
+                                       placeholder="Selecciona inicio y fin">
                                 <small class="text-muted">Selecciona un rango de fechas (sin hora).</small>
                             </div>
 
@@ -101,39 +98,46 @@
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="fechaini_display">Fecha inicio</label>
                                 <input type="text" id="fechaini_display" class="form-control" readonly
-                                    style="background-color:#f8f9fa; cursor:not-allowed;">
+                                       style="background-color:#f8f9fa; cursor:not-allowed;">
                             </div>
 
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="fechafin_display">Fecha fin</label>
                                 <input type="text" id="fechafin_display" class="form-control" readonly
-                                    style="background-color:#f8f9fa; cursor:not-allowed;">
+                                       style="background-color:#f8f9fa; cursor:not-allowed;">
                             </div>
 
                             {{-- Fechas REALES ocultas (YYYY-MM-DD) --}}
                             <input type="hidden" id="fechaini" name="fechaini"
-                                value="{{ old('fechaini', optional($campaign->fechaini)->format('Y-m-d')) }}">
+                                   value="{{ old('fechaini', optional($campaign->fechaini)->format('Y-m-d')) }}">
                             <input type="hidden" id="fechafin" name="fechafin"
-                                value="{{ old('fechafin', optional($campaign->fechafin)->format('Y-m-d')) }}">
+                                   value="{{ old('fechafin', optional($campaign->fechafin)->format('Y-m-d')) }}">
 
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="demo">Demo</label>
                                 @php $demo = old('demo', $campaign->demo); @endphp
                                 <select id="demo" name="demo"
-                                    class="form-select @error('demo') is-invalid @enderror">
+                                        class="form-select @error('demo') is-invalid @enderror">
                                     <option value="off" @selected($demo === 'off')>off</option>
-                                    <option value="on" @selected($demo === 'on')>on</option>
+                                    <option value="on"  @selected($demo === 'on')>on</option>
                                 </select>
                                 @error('demo')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
 
+                            {{-- Dashboard (switch con hidden para enviar 0/1) --}}
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="dashboard">Dashboard</label>
                                 <div class="form-check form-switch mt-2">
-                                    <input class="form-check-input" type="checkbox" id="dashboard" name="dashboard"
-                                        value="1" {{ old('dashboard', $campaign->dashboard) ? 'checked' : '' }}>
+                                    {{-- Siempre envía 0 si no está marcado --}}
+                                    <input type="hidden" name="dashboard" value="0">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="dashboard"
+                                           name="dashboard"
+                                           value="1"
+                                           {{ old('dashboard', $campaign->dashboard) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="dashboard">Activar</label>
                                 </div>
                                 @error('dashboard')
@@ -144,8 +148,8 @@
                             <div class="col-12">
                                 <label class="form-label" for="subject">Asunto</label>
                                 <input type="text" class="form-control @error('subject') is-invalid @enderror"
-                                    id="subject" name="subject" maxlength="150"
-                                    value="{{ old('subject', $campaign->subject) }}" required>
+                                       id="subject" name="subject" maxlength="150"
+                                       value="{{ old('subject', $campaign->subject) }}" required>
                                 @error('subject')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -155,13 +159,11 @@
                             <div class="col-12">
                                 <label class="form-label" for="mailtext">Contenido de correo</label>
                                 <input id="mailtext" type="hidden" name="mailtext"
-                                    value="{{ old('mailtext', $campaign->mailtext) }}">
-                                <trix-editor input="mailtext" class="trix-content"
-                                    style="min-height: 220px;"></trix-editor>
+                                       value="{{ old('mailtext', $campaign->mailtext) }}">
+                                <trix-editor input="mailtext" class="trix-content" style="min-height: 220px;"></trix-editor>
 
                                 <small class="text-muted d-block mt-2">
-                                    Debe incluir: <code>[COLABORADOR]</code>, <code>[EMPRESA]</code>, <code>[NOMBRE
-                                        CAMPAÑA]</code>,
+                                    Debe incluir: <code>[COLABORADOR]</code>, <code>[EMPRESA]</code>, <code>[NOMBRE CAMPAÑA]</code>,
                                     <code>[LINK]</code>, <code>[LINKHTML]</code>, <code>[FECHAFIN]</code>.
                                 </small>
 
@@ -169,11 +171,12 @@
                                     @php $tokens = ['[COLABORADOR]','[EMPRESA]','[NOMBRE CAMPAÑA]','[LINK]','[LINKHTML]','[FECHAFIN]']; @endphp
                                     @foreach ($tokens as $tk)
                                         <button type="button"
-                                            class="btn btn-sm btn-outline-secondary me-1 js-insert-token"
-                                            data-token="{{ $tk }}">{{ $tk }}</button>
+                                                class="btn btn-sm btn-outline-secondary me-1 js-insert-token"
+                                                data-token="{{ $tk }}">{{ $tk }}</button>
                                     @endforeach
-                                    <button type="button" class="btn btn-sm btn-primary ms-1"
-                                        id="btn-insert-template">Insertar plantilla base</button>
+                                    <button type="button" class="btn btn-sm btn-primary ms-1" id="btn-insert-template">
+                                        Insertar plantilla base
+                                    </button>
                                 </div>
 
                                 @error('mailtext')
@@ -184,7 +187,7 @@
                             <div class="col-12">
                                 <label class="form-label" for="customlogin">Custom login (HTML opcional)</label>
                                 <textarea class="form-control @error('customlogin') is-invalid @enderror" id="customlogin" name="customlogin"
-                                    rows="4">{{ old('customlogin', $campaign->customlogin) }}</textarea>
+                                          rows="4">{{ old('customlogin', $campaign->customlogin) }}</textarea>
                                 @error('customlogin')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -193,7 +196,7 @@
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="banner">Banner</label>
                                 <input class="form-control @error('banner') is-invalid @enderror" id="banner"
-                                    type="file" name="banner" accept=".bmp,.jpg,.jpeg,.png">
+                                       type="file" name="banner" accept=".bmp,.jpg,.jpeg,.png">
                                 @error('banner')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -203,11 +206,11 @@
                                         <div class="mb-2">
                                             <small class="text-muted d-block">Actual:</small>
                                             <img src="{{ asset('storage/' . $campaign->banner) }}" alt="banner actual"
-                                                style="max-width:260px; display:block;">
+                                                 style="max-width:260px; display:block;">
                                         </div>
                                     @endif
                                     <img id="preview_banner" src="" alt="Vista previa banner"
-                                        style="max-width:260px; display:none;">
+                                         style="max-width:260px; display:none;">
                                 </div>
                             </div>
 
@@ -238,9 +241,7 @@
             moment.locale('es');
 
             // Evitar adjuntos en Trix
-            document.addEventListener('trix-file-accept', function(e) {
-                e.preventDefault();
-            });
+            document.addEventListener('trix-file-accept', function(e) { e.preventDefault(); });
 
             // Insertar tokens
             document.querySelectorAll('.js-insert-token').forEach(btn => {
@@ -265,14 +266,10 @@
                 const img = document.getElementById('preview_banner');
                 if (file && file.type.match('image.*')) {
                     const reader = new FileReader();
-                    reader.onload = ev => {
-                        img.src = ev.target.result;
-                        img.style.display = 'block';
-                    };
+                    reader.onload = ev => { img.src = ev.target.result; img.style.display = 'block'; };
                     reader.readAsDataURL(file);
                 } else {
-                    img.src = '';
-                    img.style.display = 'none';
+                    img.src = ''; img.style.display = 'none';
                 }
             });
 
@@ -280,14 +277,7 @@
             $('#form-campaign').on('submit', function() {
                 $.blockUI({
                     message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Guardando, por favor espera...</div></div>',
-                    css: {
-                        border: 'none',
-                        padding: '15px',
-                        backgroundColor: '#000',
-                        opacity: 0.6,
-                        color: '#fff',
-                        borderRadius: '8px'
-                    },
+                    css: { border: 'none', padding: '15px', backgroundColor: '#000', opacity: 0.6, color: '#fff', borderRadius: '8px' },
                     baseZ: 2000
                 });
             });
@@ -303,33 +293,22 @@
                     url: "{{ route('empresas.select2') }}",
                     dataType: 'json',
                     delay: 250,
-                    data: params => ({
-                        q: params.term || '',
-                        page: params.page || 1
-                    }),
-                    processResults: (data, params) => ({
+                    data: params => ({ q: params.term || '', page: params.page || 1 }),
+                    processResults: (data) => ({
                         results: (data.items || []),
-                        pagination: {
-                            more: !!data.more
-                        }
+                        pagination: { more: !!data.more }
                     }),
                 },
-                templateResult: item => item.loading ? item.text : $('<div>').text(item.text || item.id ||
-                    ''),
+                templateResult: item => item.loading ? item.text : $('<div>').text(item.text || item.id || ''),
                 templateSelection: item => item.text || item.id || '',
             });
 
             // Al seleccionar empresa, SOLO sugerir nombre si el campo está vacío
             $('#nit').on('select2:select', function(e) {
                 const $nombre = $('#nombre');
-                if ($nombre.val().trim()) return; // el usuario ya escribió un nombre; no tocar
-
-                // Extraer "nombre de empresa"
+                if ($nombre.val().trim()) return;
                 let empresa = e.params.data?.nombre || e.params.data?.text || '';
-                // Si viene "NIT - Empresa", quedarnos con la parte de la derecha
-                if (empresa.includes(' - ')) {
-                    empresa = empresa.split(' - ').slice(1).join(' - ').trim();
-                }
+                if (empresa.includes(' - ')) empresa = empresa.split(' - ').slice(1).join(' - ').trim();
                 if (empresa) {
                     const y = (new Date()).getFullYear();
                     $nombre.val(`Campaña ${y} – ${empresa}`);
@@ -337,9 +316,9 @@
             });
 
             // ---------- INIT DATE RANGE PICKER (solo fecha) ----------
-            const $picker = $('#fecharango');
-            const $iniHid = $('#fechaini');
-            const $finHid = $('#fechafin');
+            const $picker  = $('#fecharango');
+            const $iniHid  = $('#fechaini');
+            const $finHid  = $('#fechafin');
             const $iniDisp = $('#fechaini_display');
             const $finDisp = $('#fechafin_display');
 
@@ -350,7 +329,7 @@
             }
 
             let start = parseAny($iniHid.val()) || moment().startOf('day');
-            let end = parseAny($finHid.val()) || moment().add(1, 'day').startOf('day');
+            let end   = parseAny($finHid.val()) || moment().add(1, 'day').startOf('day');
 
             function syncFields(s, e) {
                 $iniDisp.val(s.format('DD-MMM-YYYY'));
@@ -374,14 +353,11 @@
                     toLabel: 'Hasta',
                     customRangeLabel: 'Personalizado',
                     daysOfWeek: ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'],
-                    monthNames: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto',
-                        'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-                    ],
+                    monthNames: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
                     firstDay: 1
                 }
-            }, function(s, e) {
-                syncFields(s.startOf('day'), e.startOf('day'));
-            });
+            }, function(s, e) { syncFields(s.startOf('day'), e.startOf('day')); });
 
             // Inicial
             syncFields(start, end);
@@ -389,25 +365,15 @@
             // Cancelar limpia campos
             $picker.on('cancel.daterangepicker', function() {
                 $(this).val('');
-                $iniDisp.val('');
-                $finDisp.val('');
-                $iniHid.val('');
-                $finHid.val('');
+                $iniDisp.val(''); $finDisp.val('');
+                $iniHid.val('');  $finHid.val('');
             });
 
             @if (session('success'))
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Éxito',
-                    text: @json(session('success'))
-                });
+                Swal.fire({ icon: 'success', title: 'Éxito', text: @json(session('success')) });
             @endif
             @if (session('error'))
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: @json(session('error'))
-                });
+                Swal.fire({ icon: 'error', title: 'Error', text: @json(session('error')) });
             @endif
         });
     </script>

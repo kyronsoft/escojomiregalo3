@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -51,7 +49,7 @@ class DashboardController extends Controller
                     $q->whereRaw('1=0');
                 }
                 $q->whereDate('c.fechaini', '<=', $today)
-                    ->whereDate('c.fechafin', '>=', $today);
+                  ->whereDate('c.fechafin', '>=', $today);
                 return;
             }
 
@@ -69,19 +67,20 @@ class DashboardController extends Controller
             }
         };
 
-        // ===== Top 10 juguetes seleccionados =====
+        // ===== Top 10 juguetes seleccionados (solo campañas con dashboard activo) =====
         $top10Q = \DB::table('seleccionados as s')
             ->join('campaigns as c', 'c.id', '=', 's.idcampaing')
             ->leftJoin('empresas as e', 'e.nit', '=', 'c.nit')
             ->leftJoin('campaign_toys as t', function ($join) {
                 $join->on('t.idcampaign', '=', 's.idcampaing')
-                    ->on('t.referencia', '=', 's.referencia');
+                     ->on('t.referencia',  '=', 's.referencia');
             })
+            ->where('c.dashboard', 1) // <<— filtro clave
             ->selectRaw("
-            COALESCE(NULLIF(t.nombre, ''), CONCAT('Ref ', s.referencia)) AS toy_name,
-            s.referencia,
-            COUNT(*) AS total
-        ")
+                COALESCE(NULLIF(t.nombre, ''), CONCAT('Ref ', s.referencia)) AS toy_name,
+                s.referencia,
+                COUNT(*) AS total
+            ")
             ->groupBy('s.idcampaing', 's.referencia', 't.nombre')
             ->orderByDesc('total')
             ->limit(10);
@@ -89,23 +88,24 @@ class DashboardController extends Controller
         $applyRoleFilter($top10Q, false);
 
         $top10     = $top10Q->get();
-        $topLabels = $top10->pluck('toy_name')->values();     // nombres (para KPI y fallback)
-        $topRefs   = $top10->pluck('referencia')->values();   // ← códigos de referencia (para el gráfico)
+        $topLabels = $top10->pluck('toy_name')->values();
+        $topRefs   = $top10->pluck('referencia')->values();
         $topCounts = $top10->pluck('total')->values();
 
-        // ===== Avance por campaña (activas) =====
+        // ===== Avance por campaña (solo campañas activas y con dashboard activo) =====
         $progressQ = \DB::table('campaigns as c')
             ->leftJoin('empresas as e', 'e.nit', '=', 'c.nit')
             ->leftJoin('campaing_colaboradores as pc', 'pc.idcampaign', '=', 'c.id')
             ->leftJoin('seleccionados as s', 's.idcampaing', '=', 'c.id')
+            ->where('c.dashboard', 1) // <<— filtro clave
             ->whereDate('c.fechaini', '<=', $today)
             ->whereDate('c.fechafin', '>=', $today)
             ->selectRaw("
-            c.id,
-            c.nombre AS campaign_name,
-            COUNT(DISTINCT pc.documento) AS colaboradores,
-            COUNT(DISTINCT s.documento)  AS seleccionados
-        ")
+                c.id,
+                c.nombre AS campaign_name,
+                COUNT(DISTINCT pc.documento) AS colaboradores,
+                COUNT(DISTINCT s.documento)  AS seleccionados
+            ")
             ->groupBy('c.id', 'c.nombre')
             ->orderBy('c.updated_at', 'desc');
 
@@ -130,8 +130,8 @@ class DashboardController extends Controller
         }
 
         return view('dashboard.index', [
-            'topLabels'    => $topLabels,   // se usa para KPI y como fallback
-            'topRefs'      => $topRefs,     // ← etiquetas del gráfico (códigos)
+            'topLabels'    => $topLabels,
+            'topRefs'      => $topRefs,
             'topCounts'    => $topCounts,
             'campLabels'   => $campLabels,
             'campSelected' => $campSelected,

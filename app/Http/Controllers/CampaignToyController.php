@@ -103,6 +103,62 @@ class CampaignToyController extends Controller
         return view('campaigns.toys.edit', compact('campaign', 'toy'));
     }
 
+    public function update(Request $request, Campaign $campaign, CampaignToy $toy)
+{
+    // Asegura pertenencia del toy a la campaña de la ruta
+    if ((int) $toy->idcampaign !== (int) $campaign->id) {
+        abort(404);
+    }
+
+    // Valida campos que esperas editar desde el formulario
+    $validated = $request->validate([
+        'referencia'       => ['required', 'string', 'max:190'],
+        'nombre'           => ['required', 'string', 'max:255'],
+        'genero'           => ['nullable', 'string', 'max:50'],
+        'unidades'         => ['nullable', 'integer', 'min:0'],
+        'precio_unitario'  => ['nullable', 'numeric', 'min:0'],
+        'porcentaje'       => ['nullable', 'numeric', 'min:0', 'max:100'],
+        'imagenppal'       => ['nullable', 'string', 'max:2048'], // si guardas ruta/URL como texto
+        // si subes archivo, cambia a: 'imagenppal' => ['nullable', 'image', 'max:2048'],
+    ]);
+
+    // Si decides soportar subida de archivo para imagen:
+    // if ($request->hasFile('imagenppal')) {
+    //     $path = $request->file('imagenppal')->store("campaign_toys/{$campaign->id}", 'public');
+    //     $validated['imagenppal'] = $path;
+    // }
+
+    // No permitas cambiar la campaña por el request (se mantiene la de la ruta)
+    $validated['idcampaign'] = $campaign->id;
+
+    // Asigna y guarda
+    $toy->fill([
+        'idcampaign'      => $validated['idcampaign'],
+        'referencia'      => $validated['referencia'],
+        'nombre'          => $validated['nombre'],
+        'genero'          => $validated['genero'] ?? $toy->genero,
+        'unidades'        => array_key_exists('unidades', $validated) ? $validated['unidades'] : $toy->unidades,
+        'precio_unitario' => array_key_exists('precio_unitario', $validated) ? $validated['precio_unitario'] : $toy->precio_unitario,
+        'porcentaje'      => array_key_exists('porcentaje', $validated) ? $validated['porcentaje'] : $toy->porcentaje,
+        'imagenppal'      => $validated['imagenppal'] ?? $toy->imagenppal,
+    ]);
+
+    $toy->save();
+
+    // Respuesta amigable para ambos casos (HTML/JSON)
+    if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
+        return response()->json([
+            'ok' => true,
+            'message' => 'Juguete actualizado correctamente.',
+            'toy' => $toy->only(['id','idcampaign','referencia','nombre','genero','unidades','precio_unitario','porcentaje','imagenppal']),
+        ]);
+    }
+
+return redirect()
+    ->route('campaigns.toys.edit', ['campaign' => $campaign->id, 'toy' => $toy->id])
+    ->with('success', 'Juguete actualizado correctamente.');
+}
+
     // === Eliminar (anidado) ===
     public function destroy(Campaign $campaign, CampaignToy $toy)
     {

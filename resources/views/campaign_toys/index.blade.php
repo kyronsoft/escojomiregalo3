@@ -45,7 +45,23 @@
             const CSRF = '{{ csrf_token() }}';
             const STORAGE_BASE = @json(asset('storage'));
             const PLACEHOLDER = @json(asset('assets/images/placeholder.png'));
-            const IS_EXEC = @json(auth()->user()->hasRole('Ejecutiva-Empresas')); // 👈 rol Ejecutiva-Empresas
+            const IS_EXEC = @json(auth()->user()->hasRole('Ejecutiva-Empresas')); // rol Ejecutiva-Empresas
+
+            function encodeTail(path) {
+                const segs = String(path).split('/');
+                if (!segs.length) return path;
+                const tail = segs.pop();
+                segs.push(encodeURIComponent(tail));
+                return segs.join('/');
+            }
+
+            function lowercaseFilename(path) {
+                const segs = String(path).split('/');
+                if (!segs.length) return path;
+                const tail = segs.pop();
+                segs.push(tail.toLowerCase());
+                return segs.join('/');
+            }
 
             function buildCandidates(firstName, campaignId) {
                 const name = String(firstName || '').trim();
@@ -72,22 +88,6 @@
                 return out;
             }
 
-            function encodeTail(path) {
-                const segs = String(path).split('/');
-                if (!segs.length) return path;
-                const tail = segs.pop();
-                segs.push(encodeURIComponent(tail));
-                return segs.join('/');
-            }
-
-            function lowercaseFilename(path) {
-                const segs = String(path).split('/');
-                if (!segs.length) return path;
-                const tail = segs.pop();
-                segs.push(tail.toLowerCase());
-                return segs.join('/');
-            }
-
             window.toyImgFallback = function(img) {
                 try {
                     const list = JSON.parse(img.dataset.altList || '[]');
@@ -106,7 +106,8 @@
                 }
             };
 
-            window.deleteToy = function(id) {
+            // 🔧 Actualizado: recibe campaignId y toyId
+            window.deleteToy = function(campaignId, toyId) {
                 Swal.fire({
                     title: '¿Eliminar registro?',
                     text: 'Esta acción no se puede deshacer.',
@@ -116,64 +117,42 @@
                     cancelButtonText: 'Cancelar'
                 }).then(res => {
                     if (!res.isConfirmed) return;
-                    $.blockUI({
-                        message: 'Eliminando...'
-                    });
-                    const url = `{{ route('campaign_toys.destroy', ':id') }}`.replace(':id', id);
+                    $.blockUI({ message: 'Eliminando...' });
+
+                    // Ruta anidada correcta: campaigns.toys.destroy
+                    const url = `{{ route('campaigns.toys.destroy', [':campaign', ':toy']) }}`
+                        .replace(':campaign', campaignId)
+                        .replace(':toy', toyId);
+
                     fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRF-TOKEN': CSRF,
-                                'Accept': 'application/json'
-                            },
-                            body: new URLSearchParams({
-                                _method: 'DELETE'
-                            })
-                        })
-                        .then(async r => {
-                            $.unblockUI();
-                            if (r.ok) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Eliminado'
-                                });
-                                table.replaceData();
-                            } else {
-                                const t = await r.text();
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Error',
-                                    text: t || 'No se pudo eliminar'
-                                });
-                            }
-                        })
-                        .catch(() => {
-                            $.unblockUI();
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error de red'
-                            });
-                        });
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': CSRF,
+                            'Accept': 'application/json'
+                        },
+                        body: new URLSearchParams({ _method: 'DELETE' })
+                    })
+                    .then(async r => {
+                        $.unblockUI();
+                        if (r.ok) {
+                            Swal.fire({ icon: 'success', title: 'Eliminado' });
+                            table.replaceData();
+                        } else {
+                            const t = await r.text();
+                            Swal.fire({ icon: 'error', title: 'Error', text: t || 'No se pudo eliminar' });
+                        }
+                    })
+                    .catch(() => {
+                        $.unblockUI();
+                        Swal.fire({ icon: 'error', title: 'Error de red' });
+                    });
                 });
             };
 
-            const columns = [{
-                    title: "ID",
-                    field: "id",
-                    width: 80
-                },
-                {
-                    title: "Campaña",
-                    field: "idcampaign",
-                    width: 110,
-                    headerFilter: "input"
-                },
-                {
-                    title: "Ref.",
-                    field: "referencia",
-                    width: 140,
-                    headerFilter: "input"
-                },
+            const columns = [
+                { title: "ID", field: "id", width: 80 },
+                { title: "Campaña", field: "idcampaign", width: 110, headerFilter: "input" },
+                { title: "Ref.", field: "referencia", width: 140, headerFilter: "input" },
                 {
                     title: "Nombre",
                     field: "nombre",
@@ -193,9 +172,9 @@
                     formatter: function(cell) {
                         const src = cell.getValue();
                         const partsCount = cell.getRow().getData().image_parts_count || 0;
-                        const badge = partsCount > 1 ?
-                            `<span class="badge bg-secondary ms-1 align-middle">+${partsCount-1}</span>` :
-                            '';
+                        const badge = partsCount > 1
+                            ? `<span class="badge bg-secondary ms-1 align-middle">+${partsCount-1}</span>`
+                            : '';
                         if (!src) return `<img src="${PLACEHOLDER}" class="toy-thumb" alt="thumb">`;
                         return `
                             <div class="d-inline-flex align-items-center">
@@ -205,38 +184,24 @@
                             </div>`;
                     }
                 },
-                {
-                    title: "Género",
-                    field: "genero",
-                    width: 110,
-                    headerFilter: "input"
-                },
-                {
-                    title: "Unid.",
-                    field: "unidades",
-                    width: 90,
-                    hozAlign: "right",
-                    headerFilter: "input"
-                },
-                {
-                    title: "Restantes",
-                    field: "porcentaje",
-                    width: 110,
-                    headerFilter: "input",
-                    formatter: c => c.getValue() || '0'
-                },
+                { title: "Género", field: "genero", width: 110, headerFilter: "input" },
+                { title: "Unid.", field: "unidades", width: 90, hozAlign: "right", headerFilter: "input" },
+                { title: "Restantes", field: "porcentaje", width: 110, headerFilter: "input", formatter: c => c.getValue() || '0' },
                 {
                     title: "Acciones",
                     field: "_act",
-                    width: IS_EXEC ? 140 : 260, // más angosto si no hay "Eliminar"
+                    width: IS_EXEC ? 140 : 260,
                     hozAlign: "center",
                     headerSort: false,
                     formatter: cell => {
                         const r = cell.getRow().getData();
-                        const showUrl = `{{ route('campaign_toys.show', ':id') }}`.replace(':id', r.id);
+                        // Ruta "Ver" correcta: campaigns.toys.show (anidada)
+                        const showUrl = `{{ route('campaigns.toys.show', [':campaign', ':toy']) }}`
+                          .replace(':campaign', r.idcampaign)
+                          .replace(':toy', r.id);
 
-                        // Ejecutiva-Empresas: SIN eliminar
                         if (IS_EXEC) {
+                            // Ejecutiva-Empresas: solo "Ver"
                             return `
                                 <div class="d-flex gap-1 justify-content-center flex-wrap">
                                     <a href="${showUrl}" class="btn btn-sm btn-outline-info">Ver</a>
@@ -248,7 +213,7 @@
                         return `
                             <div class="d-flex gap-1 justify-content-center flex-wrap">
                                 <a href="${showUrl}" class="btn btn-sm btn-outline-info">Ver</a>
-                                <button class="btn btn-sm btn-outline-danger" onclick="deleteToy(${r.id})">Eliminar</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteToy(${r.idcampaign}, ${r.id})">Eliminar</button>
                             </div>
                         `;
                     }
@@ -262,7 +227,7 @@
                 rowHeight: 68,
                 columns,
                 placeholder: "No hay registros",
-                ajaxURL: "{{ route('campaign_toys.data') }}",
+                ajaxURL: "{{ route('campaign_toys.data') }}", // ✅ ruta AJAX definida en web.php
                 ajaxConfig: "GET",
                 pagination: false,
                 sortMode: "local",
@@ -271,18 +236,10 @@
             });
 
             @if (session('success'))
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Éxito',
-                    text: @json(session('success'))
-                });
+                Swal.fire({ icon: 'success', title: 'Éxito', text: @json(session('success')) });
             @endif
             @if (session('error'))
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: @json(session('error'))
-                });
+                Swal.fire({ icon: 'error', title: 'Error', text: @json(session('error')) });
             @endif
         })();
     </script>

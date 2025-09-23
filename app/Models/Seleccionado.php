@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Seleccionado extends Model
 {
+    use Auditable;
     protected $table = 'seleccionados';
 
     protected $fillable = [

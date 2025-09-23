@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Support\Str;
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CampaignToy extends Model
 {
+    use Auditable;
+
     protected $table = 'campaign_toys';
 
     protected $fillable = [

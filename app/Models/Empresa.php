@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
 class Empresa extends Model
 {
+    use Auditable;
+
     protected $table = 'empresas';
 
     // Clave primaria string

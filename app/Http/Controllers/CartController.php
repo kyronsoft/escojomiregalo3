@@ -82,7 +82,7 @@ class CartController extends Controller
         $data = $request->validate([
             'idhijo'      => ['required', 'integer', 'min:1', 'exists:colaborador_hijos,id'],
             'referencia'  => ['required', 'string', 'max:100'],
-            'idcampaign'  => ['nullable', 'integer', 'min:1'], // ← opcional, si lo mandas desde la vista
+            'idcampaign'  => ['nullable', 'integer', 'min:1'], // opcional
         ]);
 
         // Debe estar logueado y ser Colaborador
@@ -105,7 +105,7 @@ class CartController extends Controller
             ]);
         }
 
-        // Normaliza referencia (quita NBSP/control chars y trim)
+        // Normaliza referencia
         $refRaw = (string) $data['referencia'];
         $ref    = preg_replace('/[\x{00A0}\p{C}]+/u', '', $refRaw);
         $ref    = trim($ref);
@@ -113,41 +113,38 @@ class CartController extends Controller
         // ===== Resolver campaignId con múltiples fallbacks =====
         $campaignId = (int) ($data['idcampaign'] ?? 0);
         if ($campaignId <= 0) {
-            // Soporta ambos nombres de columna por si tu tabla conserva "idcampaing"
             $campaignId = (int) ($hijo->getAttribute('idcampaign') ?? 0);
         }
         if ($campaignId <= 0) {
             $campaignId = (int) ($hijo->getAttribute('idcampaing') ?? 0);
         }
         if ($campaignId <= 0) {
-            // Campaña más reciente por pivot (campaing_colaboradores)
             $campaignId = (int) DB::table('campaing_colaboradores')
                 ->where('documento', $userDoc)
                 ->orderByDesc('created_at')
                 ->value('idcampaign');
         }
 
-        // Si aún no lo tenemos, intenta encontrar la referencia en campañas del colaborador
+        // Buscar toy en la campaña (y si no, en campañas del colaborador)
         $toy = null;
         if ($campaignId > 0) {
             $toy = CampaignToy::where('idcampaign', $campaignId)
                 ->where(function ($q) use ($ref) {
                     $q->where('referencia', $ref)
-                        ->orWhereRaw('TRIM(referencia) = ?', [$ref])
-                        ->orWhereRaw('REPLACE(referencia," ","") = REPLACE(?, " ", "")', [$ref]);
+                    ->orWhereRaw('TRIM(referencia) = ?', [$ref])
+                    ->orWhereRaw('REPLACE(referencia," ","") = REPLACE(?, " ", "")', [$ref]);
                 })
                 ->first();
         }
 
         if (!$toy) {
-            // Buscar esa referencia en campañas a las que esté asignado el colaborador
             $toy = DB::table('campaign_toys as t')
                 ->join('campaing_colaboradores as pc', 'pc.idcampaign', '=', 't.idcampaign')
                 ->where('pc.documento', $userDoc)
                 ->where(function ($q) use ($ref) {
                     $q->where('t.referencia', $ref)
-                        ->orWhereRaw('TRIM(t.referencia) = ?', [$ref])
-                        ->orWhereRaw('REPLACE(t.referencia," ","") = REPLACE(?, " ", "")', [$ref]);
+                    ->orWhereRaw('TRIM(t.referencia) = ?', [$ref])
+                    ->orWhereRaw('REPLACE(t.referencia," ","") = REPLACE(?, " ", "")', [$ref]);
                 })
                 ->select('t.*')
                 ->first();
@@ -159,10 +156,10 @@ class CartController extends Controller
 
         if (!$toy || $campaignId <= 0) {
             Log::warning('addcart: no se pudo resolver toy/campaign', [
-                'ref_in'    => $refRaw,
-                'ref_norm'  => $ref,
-                'child_id'  => $hijo->id,
-                'doc'       => $userDoc,
+                'ref_in'     => $refRaw,
+                'ref_norm'   => $ref,
+                'child_id'   => $hijo->id,
+                'doc'        => $userDoc,
                 'campaignId' => $campaignId,
             ]);
 
@@ -174,32 +171,53 @@ class CartController extends Controller
         }
 
         // ===== Chequeo de elegibilidad: edad + género =====
-        $edad = (int) ($hijo->rango_edad ?? 0); // numérico desde tu ajuste en el form
+        $edad = (int) ($hijo->rango_edad ?? 0); // años
 
-        // Normaliza género del hijo a clave M/F/'' aceptando NIÑO/NIÑA/UNISEX
-        $gH = strtoupper(trim((string) ($hijo->genero ?? '')));
-        $gHKey = match ($gH) {
-            'M', 'NIÑO', 'NINO', 'BOY', 'MALE'   => 'M',
-            'F', 'NIÑA', 'NINA', 'GIRL', 'FEMALE' => 'F',
-            default                              => '',
+        // Normalizador robusto de género (hijo y toy)
+        $normalizeGender = function (?string $v): string {
+            $v = strtoupper(trim((string) $v));
+            // quita tildes / ñ para comparaciones amplias
+            $map = ['Á'=>'A','É'=>'E','Í'=>'I','Ó'=>'O','Ú'=>'U','Ü'=>'U','Ñ'=>'N'];
+            $v = strtr($v, $map);
+
+            // M / F / U (unisex o desconocido)
+            if (in_array($v, ['M','NINO','NINO.','NIÑO','BOY','MALE','MASCULINO','VARON','HOMBRE','KID BOY'], true)) {
+                return 'M';
+            }
+            if (in_array($v, ['F','NINA','NIÑA','GIRL','FEMALE','FEMENINO','MUJER','KID GIRL'], true)) {
+                return 'F';
+            }
+            if (in_array($v, ['U','UNI','UNISEX','NEUTRO','NEUTRAL',''], true)) {
+                return 'U';
+            }
+            // por defecto: comodín
+            return 'U';
         };
 
-        $desde  = (int) (($toy->desde ?? 0));
-        $hasta  = (int) (($toy->hasta ?? 99));
-        $gT     = strtoupper(trim((string) ($toy->genero ?? '')));
-        $isUni  = in_array($gT, ['', 'UNISEX', 'U', 'UNI'], true);
+        $gChild = $normalizeGender($hijo->genero ?? '');
+        $gToy   = $normalizeGender($toy->genero ?? '');
 
-        // Permite emparejar M/F con NIÑO/NIÑA también
-        $genOk = $isUni || (
-            $gHKey !== '' && (
-                $gT === $gHKey ||           // M/F
-                ($gHKey === 'M' && in_array($gT, ['NIÑO', 'NINO'], true)) ||
-                ($gHKey === 'F' && in_array($gT, ['NIÑA', 'NINA'], true))
-            )
-        );
+        // Edad (usa 99 como tope sólo si hasta viene NULL; 0–0 se respeta para bebés)
+        $desde = (int) (($toy->desde ?? 0));
+        $hasta = is_null($toy->hasta) ? 99 : (int) $toy->hasta;
+        if ($hasta < $desde) {
+            [$desde, $hasta] = [$hasta, $desde];
+        }
+
+        // Regla: si el hijo es UNISEX (o desconocido) => puede elegir cualquier género;
+        // si el juguete es UNISEX => aplica a cualquier hijo; si no, M debe empatar con M y F con F.
+        $genOk  = ($gChild === 'U') || ($gToy === 'U') || ($gChild === $gToy);
         $edadOk = ($edad >= $desde && $edad <= $hasta);
 
         if (!($edadOk && $genOk)) {
+            Log::info('addcart: juguete no elegible', [
+                'hijo'       => ['id' => $hijo->id, 'nombre' => $hijo->nombre_hijo, 'edad' => $edad, 'genero_norm' => $gChild, 'genero_raw' => $hijo->genero],
+                'toy'        => ['ref' => $toy->referencia, 'nombre' => $toy->nombre ?? null, 'desde' => $desde, 'hasta' => $hasta, 'genero_norm' => $gToy, 'genero_raw' => $toy->genero],
+                'motivos'    => ['edadOk' => $edadOk, 'genOk' => $genOk],
+                'campaignId' => $campaignId,
+                'doc'        => $userDoc,
+            ]);
+
             return back()->with('active_child_id', $hijo->id)->with('swal', [
                 'icon'  => 'error',
                 'title' => 'Juguete no elegible',
@@ -209,7 +227,7 @@ class CartController extends Controller
 
         // ===== Solo 1 selección por hijo en esa campaña =====
         $yaHay = Seleccionado::where('documento', $userDoc)
-            ->where('idcampaing', $campaignId) // nombre en BD de tu tabla seleccionados
+            ->where('idcampaing', $campaignId)
             ->where('idhijo', $hijo->id)
             ->exists();
 
@@ -226,7 +244,7 @@ class CartController extends Controller
             Seleccionado::updateOrCreate(
                 [
                     'documento'  => $userDoc,
-                    'idcampaing' => $campaignId,        // ← respeta el nombre real de la columna
+                    'idcampaing' => $campaignId,
                     'idhijo'     => $hijo->id,
                     'referencia' => $toy->referencia,
                 ],

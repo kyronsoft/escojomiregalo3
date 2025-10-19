@@ -493,13 +493,17 @@ class CartController extends Controller
         $data = $request->validate([
             'direccion'     => ['nullable', 'string', 'max:255'],
             'telefono'      => ['nullable', 'string', 'max:50'],
-            'ciudad'        => ['nullable', 'string', 'max:100'],
+            // ✅ Ahora es obligatorio y debe existir en la tabla ciudades
+            'ciudad'        => ['required', 'string', 'max:100', 'exists:ciudades,codigo'],
             'barrio'        => ['nullable', 'string', 'max:100'],
             'observaciones' => ['nullable', 'string', 'max:1000'],
-            'updatedatos' => ['Y'],
+            'updatedatos'   => ['Y'],
+        ], [
+            'ciudad.required' => 'La ciudad es obligatoria.',
+            'ciudad.exists'   => 'La ciudad seleccionada no es válida.',
         ]);
 
-        $user        = $request->user();
+        $user = $request->user();
         $colaborador = Colaborador::where('email', $user->email)->firstOrFail();
 
         // Actualiza solo los campos provistos
@@ -516,7 +520,7 @@ class CartController extends Controller
         // Limpia flag de campaña usada para finish
         $request->session()->forget('_finish_campaign_id');
 
-        // Ahora sí, cerrar sesión y a checkout
+        // Cerrar sesión y redirigir a checkout
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

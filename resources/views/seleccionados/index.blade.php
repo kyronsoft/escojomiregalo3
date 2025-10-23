@@ -213,6 +213,12 @@
                         }
                     },
 
+                    {
+                        title: "Politica Datos",
+                        field: "politicadatos",
+                        minWidth: 140
+                    },
+
                     // 5) Teléfono
                     {
                         title: "Telefono",

@@ -98,7 +98,7 @@ class SeleccionadosController extends Controller
         }
 
         $paginator = $q->paginate($size, ['*'], 'page', $page);
-
+        
         return response()->json(
             $paginator,
             200,
@@ -136,6 +136,7 @@ class SeleccionadosController extends Controller
                 $fecha,             // Fecha Selección
                 $r->documento,      // Documento
                 $r->colaborador,    // Colaborador
+                $r->politicadatos,    // Politica Datos
                 $r->telefono,       // Telefono
                 $r->nombre_hijo,    // Nombre Hijo (incluye aunque no haya selección)
                 $r->genero_hijo,    // Genero
@@ -155,6 +156,7 @@ class SeleccionadosController extends Controller
             'Fecha Selección',
             'Documento',
             'Colaborador',
+            'Politica Datos',
             'Telefono',
             'Nombre Hijo',
             'Genero',
@@ -239,6 +241,7 @@ class SeleccionadosController extends Controller
                 DB::raw('cc.documento as documento'),
                 'col.nombre as colaborador',
                 'col.telefono',
+                'col.politicadatos',
                 'h.nombre_hijo',
                 'h.genero as genero_hijo',
                 'h.rango_edad',
@@ -246,7 +249,7 @@ class SeleccionadosController extends Controller
                 DB::raw("COALESCE(NULLIF(col.observaciones,''), '') as indicaciones"),
                 'col.ciudad',
                 'ciu.departamento',
-                'col.sucursal',
+                'cc.sucursal',
                 'col.email',
                 DB::raw('COALESCE(NULLIF(e.nombre,""), c.nombre) as empresa'),
 

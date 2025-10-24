@@ -2,34 +2,46 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\Campaign;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 // Para exportar a Excel (xlsx)
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
-use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\FromCollection;
 
 class SeleccionadosController extends Controller
 {
-    /**
-     * Vista con filtros (Tabulator se alimenta desde data()).
-     */
+
     public function index(Request $request)
     {
+        // Tamaño de página seguro
         $perPage = (int) $request->input('per_page', 25);
         $perPage = max(5, min($perPage, 200));
 
-        $campaigns = Campaign::orderBy('updated_at', 'desc')->get(['id', 'nombre']);
+        // NIT del usuario logueado
+        $userNit = Auth::user()?->nit;
 
-        // mantener valores en inputs
+        // Campañas visibles SOLO por NIT del usuario
+        $campaigns = Campaign::query()
+            ->when($userNit, fn($q) => $q->where('nit', $userNit))
+            ->orderBy('updated_at', 'desc')
+            ->get(['id', 'nombre', 'nit']); // incluyo 'nit' para validación
+
+        // mantener valores en inputs (aceptando ambas variantes del parámetro)
         $campaignId = $request->input('idcampaign', $request->input('idcampaing'));
         $referencia = $request->input('referencia');
         $documento  = $request->input('documento');
         $dateFrom   = $request->input('date_from');
         $dateTo     = $request->input('date_to');
+
+        // Validar que el idcampaign seleccionado pertenezca a las campañas del usuario
+        if (!empty($campaignId) && !$campaigns->firstWhere('id', (int) $campaignId)) {
+            $campaignId = null; // si no pertenece, lo anulamos
+        }
 
         return view('seleccionados.index', compact(
             'campaigns',

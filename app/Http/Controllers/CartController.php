@@ -399,6 +399,65 @@ class CartController extends Controller
                 ]);
         }
 
+        // === Validación de stock por referencia (bloquea si no hay unidades disponibles) ===
+        // 1) Tomamos las unidades por referencia en la campaña
+        $unitsByRef = DB::table('campaign_toys')
+            ->where('idcampaign', $campaignId)
+            ->select('referencia', 'unidades')
+            ->pluck('unidades', 'referencia'); // ['REF1' => 10, 'REF2' => 0, ...]
+
+        // 2) Cantidad de seleccionados por referencia en la campaña
+        $takenByRef = DB::table('seleccionados')
+            ->where('idcampaing', $campaignId)
+            ->where('selected', 'Y')
+            ->select('referencia', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('referencia')
+            ->pluck('cnt', 'referencia'); // ['REF1' => 9, 'REF2' => 12, ...]
+
+        // 3) Referencias agotadas (sin stock disponible)
+        //    - Sin unidades configuradas o <= 0
+        //    - O ya alcanzaron/superaron el máximo permitido
+        $exhausted = collect();
+        foreach ($unitsByRef as $ref => $u) {
+            $u = (int) $u;
+            $taken = (int) ($takenByRef[$ref] ?? 0);
+            if ($u <= 0 || $taken >= $u) {
+                $exhausted->push($ref);
+            }
+        }
+
+        // 4) ¿El colaborador seleccionó alguna referencia agotada?
+        $userRefs = DB::table('seleccionados')
+            ->where('documento', $documento)
+            ->where('idcampaing', $campaignId)
+            ->where('selected', 'Y')
+            ->pluck('referencia')
+            ->unique();
+
+        $blockedRefs = $userRefs->intersect($exhausted)->values();
+
+        if ($blockedRefs->isNotEmpty()) {
+            // Opcional: ubicar primer hijo con referencia bloqueada para activar su pestaña
+            $firstBlockedChild = DB::table('seleccionados')
+                ->where('documento', $documento)
+                ->where('idcampaing', $campaignId)
+                ->where('selected', 'Y')
+                ->whereIn('referencia', $blockedRefs)
+                ->orderBy('idhijo')
+                ->value('idhijo');
+
+            return redirect()
+                ->route('product')
+                ->with('active_child_id', $firstBlockedChild)
+                ->with('swal', [
+                    'icon'  => 'error',
+                    'title' => 'Sin stock',
+                    'html'  => 'Las siguientes referencias ya no tienen unidades disponibles en la campaña:<br><b>' .
+                        e($blockedRefs->implode(', ')) .
+                        '</b><br><br>Por favor, selecciona otra referencia.',
+                ]);
+        }
+
         // Traer selección (para el correo)
         $items = Seleccionado::query()
             ->select([

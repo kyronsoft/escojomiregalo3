@@ -129,14 +129,9 @@ class ProductController extends Controller
         return Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : null;
     }
 
-    /**
-     * Si COUNT(*) en `seleccionados` (por idcampaing + referencia) >= unidades de `campaign_toys`,
-     * esa referencia queda EXCLUIDA del dataset final.
-     * (Implementado con subconsulta COUNT(*) sin GROUP BY → compatible con ONLY_FULL_GROUP_BY)
-     */
-private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId = null)
+    private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId = null)
 {
-    // Hijos del colaborador (tabla usa idcampaing)
+    // ===== Subconsulta: hijos del colaborador (tabla usa idcampaing) =====
     $childrenSub = \App\Models\ColaboradorHijo::query()
         ->select([
             'colaborador_hijos.id         as hijo_id',
@@ -158,23 +153,43 @@ private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId 
         ->where('colaborador_hijos.identificacion', $documento)
         ->when($campaignId, fn($q) => $q->where('colaborador_hijos.idcampaing', $campaignId));
 
-    // Agregado de seleccionados por campaña + referencia (normalizada)
-    // (contamos TODAS las filas; si quisieras solo confirmadas, agrega AND UPPER(TRIM(selected))='Y' en el origen)
+    // ===== Normalizadores de referencia (seguros y sin CONVERT/USING) =====
+    // NBSP (0xC2A0) como literal binario:
+    $normSelSql = "UPPER(
+        REPLACE(
+        REPLACE(
+        REPLACE(
+        REPLACE(
+        REPLACE(TRIM(COALESCE(referencia,'')), x'C2A0', ''), ' ', ''), '-', ''), '_', ''), '.', ''
+    ))";
+
+    $normToySql = "UPPER(
+        REPLACE(
+        REPLACE(
+        REPLACE(
+        REPLACE(
+        REPLACE(TRIM(COALESCE(campaign_toys.referencia,'')), x'C2A0', ''), ' ', ''), '-', ''), '_', ''), '.', ''
+    ))";
+
+    // ===== Subconsulta: agregación de seleccionados (por campaña + ref normalizada) =====
     $selAgg = DB::table('seleccionados')
         ->select([
             'idcampaing',
-            DB::raw('UPPER(TRIM(referencia)) as ref_norm'),
+            DB::raw("$normSelSql as ref_norm"),
             DB::raw('COUNT(*) as total_sel'),
         ])
-        ->groupBy('idcampaing', DB::raw('UPPER(TRIM(referencia))'));
+        ->where('selected', 'Y')
+        ->whereRaw("$normSelSql <> ''")
+        ->when($campaignId, fn($q) => $q->where('idcampaing', $campaignId))
+        ->groupBy('idcampaing', DB::raw($normSelSql));
 
-    // Juguetes disponibles de la campaña (tabla usa idcampaign)
+    // ===== Subconsulta: juguetes con stock disponible en la campaña =====
     $toysSub = DB::table('campaign_toys')
         ->select([
             'campaign_toys.id            as toy_id',
             'campaign_toys.idcampaign    as idcampaign',
             'campaign_toys.referencia    as referencia',
-            DB::raw('UPPER(TRIM(campaign_toys.referencia)) as referencia_norm'),
+            DB::raw("$normToySql as referencia_norm"),
             'campaign_toys.nombre        as toy_nombre',
             'campaign_toys.imagenppal    as imagenppal',
             'campaign_toys.descripcion   as descripcion',
@@ -182,7 +197,6 @@ private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId 
             DB::raw('CAST(campaign_toys.hasta AS UNSIGNED) as hasta_int'),
             'campaign_toys.genero        as genero_toy',
             DB::raw('CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) as unidades'),
-            // para depurar / usar en Blade:
             DB::raw('COALESCE(sa.total_sel, 0) as total_sel'),
             DB::raw('(CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) - COALESCE(sa.total_sel, 0)) as stock_disponible'),
             DB::raw("
@@ -195,15 +209,15 @@ private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId 
                 END as genero_norm_toy
             "),
         ])
-        ->leftJoinSub($selAgg, 'sa', function ($j) {
+        ->leftJoinSub($selAgg, 'sa', function ($j) use ($normToySql) {
             $j->on('sa.idcampaing', '=', 'campaign_toys.idcampaign')
-              ->whereRaw('sa.ref_norm = UPPER(TRIM(campaign_toys.referencia))');
+              ->whereRaw("sa.ref_norm = $normToySql");
         })
         ->when($campaignId, fn($q) => $q->where('campaign_toys.idcampaign', $campaignId))
-        // FILTRO CLAVE: solo juguetes con stock global (unidades > seleccionados)
+        // Mostrar solo juguetes con stock global de campaña (unidades > total_sel campaña)
         ->whereRaw('CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) > COALESCE(sa.total_sel, 0)');
 
-    // JOIN hijos + juguetes disponibles
+    // ===== JOIN hijos + juguetes (edad/género + stock) =====
     $rows = DB::query()
         ->fromSub($childrenSub, 'ch')
         ->joinSub($toysSub, 'ct', function ($join) {
@@ -233,12 +247,12 @@ private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId 
             'ct.desde_int     as desde',
             'ct.hasta_int     as hasta',
             'ct.descripcion',
-            // datos útiles (también para corte en Blade)
             'ct.stock_disponible',
             'ct.unidades',
             'ct.total_sel',
         ]);
 
+    // ===== Estructura final por hijo =====
     return $rows->groupBy('hijo_id')->map(function ($items) {
         $f = $items->first();
         return [
@@ -259,9 +273,9 @@ private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId 
                 'desde'       => $r->desde,
                 'hasta'       => $r->hasta,
                 'descripcion' => $r->descripcion,
-                'stock'       => (int) $r->stock_disponible, // <-- para Blade
-                'unidades'    => (int) $r->unidades,         // debug opcional
-                'seleccion'   => (int) $r->total_sel,        // debug opcional
+                'stock'       => (int) $r->stock_disponible,
+                'unidades'    => (int) $r->unidades,
+                'seleccion'   => (int) $r->total_sel,
             ])->values(),
         ];
     })->values();

@@ -199,7 +199,7 @@
             .product-details h4 { font-size:1rem; }
         }
     </style>
-    @endpush
+@endpush
 
 @section('content')
     {{-- Barra superior con Logo (izq) + Acciones (centro) + Logo (der) --}}
@@ -287,6 +287,9 @@
                     <div id="toyGrid" class="row">
                         @foreach ($resultado as $grupo)
                             @foreach ($grupo['juguetes'] as $toy)
+                                {{-- Corte de seguridad: si no hay stock, no se muestra --}}
+                                @continue(isset($toy['stock']) && (int)$toy['stock'] <= 0)
+
                                 @php
                                     $idCampaign = $grupo['hijo']['idcampaign'] ?? null;
                                     $imgRel = trim((string) ($toy['imagenppal'] ?? ''));
@@ -410,6 +413,9 @@
                                             <div class="product-details">
                                                 <a href="javascript:void(0)"><h4 class="mb-1">{{ $toy['nombre'] }}</h4></a>
                                                 <span class="badge badge-gender">{{ $toyGenderBadge }}</span>
+                                                {{-- Debug opcional de stock:
+                                                <span class="badge bg-dark ms-2">Stock: {{ (int)($toy['stock'] ?? -1) }}</span>
+                                                --}}
                                             </div>
                                         </div>
                                     </div>
@@ -567,5 +573,3 @@
         });
     </script>
 @endpush
-
-

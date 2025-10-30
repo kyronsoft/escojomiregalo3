@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
+
 
 class CampaignToyController extends Controller
 {
@@ -100,64 +102,85 @@ class CampaignToyController extends Controller
         $toy->image_map = $imageMap;
         $toy->image_url = $this->toyImagePublicUrl($toy->imagenppal, $campaign);
 
+        // 👉 Si no hay imagen principal, intenta con la primera parte
+        if (!$toy->image_url && count($parts) > 0) {
+            $first = reset($parts);
+            $fallback = $this->findPublicUrlForRefInFolder($campaign->id, $first);
+            if ($fallback) {
+                $toy->image_url = $fallback;
+            }
+        }
+
         return view('campaigns.toys.edit', compact('campaign', 'toy'));
     }
 
     public function update(Request $request, Campaign $campaign, CampaignToy $toy)
-{
-    // Asegura pertenencia del toy a la campaña de la ruta
-    if ((int) $toy->idcampaign !== (int) $campaign->id) {
-        abort(404);
-    }
+    {
+        if ((int) $toy->idcampaign !== (int) $campaign->id) {
+            abort(404);
+        }
 
-    // Valida campos que esperas editar desde el formulario
-    $validated = $request->validate([
-        'referencia'       => ['required', 'string', 'max:190'],
-        'nombre'           => ['required', 'string', 'max:255'],
-        'genero'           => ['nullable', 'string', 'max:50'],
-        'unidades'         => ['nullable', 'integer', 'min:0'],
-        'precio_unitario'  => ['nullable', 'numeric', 'min:0'],
-        'porcentaje'       => ['nullable', 'numeric', 'min:0', 'max:100'],
-        'imagenppal'       => ['nullable', 'string', 'max:2048'], // si guardas ruta/URL como texto
-        // si subes archivo, cambia a: 'imagenppal' => ['nullable', 'image', 'max:2048'],
-    ]);
+        $rules = [
+            'referencia'       => ['required', 'string', 'max:190'],
+            'nombre'           => ['required', 'string', 'max:255'],
+            'genero'           => ['nullable', 'string', 'max:50'],
+            'unidades'         => ['nullable', 'integer', 'min:0'],
+            'precio_unitario'  => ['nullable', 'numeric', 'min:0'],
+            'porcentaje'       => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'imagenppal'       => ['nullable', 'string', 'max:2048'],
+            // 👇 Edades
+            'desde'            => ['nullable', 'integer', 'min:0', 'max:120'],
+            'hasta'            => ['nullable', 'integer', 'min:0', 'max:120'],
+        ];
 
-    // Si decides soportar subida de archivo para imagen:
-    // if ($request->hasFile('imagenppal')) {
-    //     $path = $request->file('imagenppal')->store("campaign_toys/{$campaign->id}", 'public');
-    //     $validated['imagenppal'] = $path;
-    // }
+        $validator = Validator::make($request->all(), $rules);
 
-    // No permitas cambiar la campaña por el request (se mantiene la de la ruta)
-    $validated['idcampaign'] = $campaign->id;
+        // Validación cruzada: hasta >= desde (si ambos vienen)
+        $validator->after(function ($v) use ($request) {
+            $d = $request->input('desde');
+            $h = $request->input('hasta');
+            if ($d !== null && $h !== null) {
+                if ((int)$h < (int)$d) {
+                    $v->errors()->add('hasta', 'La edad "hasta" debe ser mayor o igual que "desde".');
+                }
+            }
+        });
 
-    // Asigna y guarda
-    $toy->fill([
-        'idcampaign'      => $validated['idcampaign'],
-        'referencia'      => $validated['referencia'],
-        'nombre'          => $validated['nombre'],
-        'genero'          => $validated['genero'] ?? $toy->genero,
-        'unidades'        => array_key_exists('unidades', $validated) ? $validated['unidades'] : $toy->unidades,
-        'precio_unitario' => array_key_exists('precio_unitario', $validated) ? $validated['precio_unitario'] : $toy->precio_unitario,
-        'porcentaje'      => array_key_exists('porcentaje', $validated) ? $validated['porcentaje'] : $toy->porcentaje,
-        'imagenppal'      => $validated['imagenppal'] ?? $toy->imagenppal,
-    ]);
+        $validated = $validator->validate();
+        $validated['idcampaign'] = $campaign->id;
 
-    $toy->save();
-
-    // Respuesta amigable para ambos casos (HTML/JSON)
-    if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
-        return response()->json([
-            'ok' => true,
-            'message' => 'Juguete actualizado correctamente.',
-            'toy' => $toy->only(['id','idcampaign','referencia','nombre','genero','unidades','precio_unitario','porcentaje','imagenppal']),
+        // Asignar asegurando enteros para edades cuando existan
+        $toy->fill([
+            'idcampaign'      => $validated['idcampaign'],
+            'referencia'      => $validated['referencia'],
+            'nombre'          => $validated['nombre'],
+            'genero'          => $validated['genero'] ?? $toy->genero,
+            'unidades'        => array_key_exists('unidades', $validated) ? $validated['unidades'] : $toy->unidades,
+            'precio_unitario' => array_key_exists('precio_unitario', $validated) ? $validated['precio_unitario'] : $toy->precio_unitario,
+            'porcentaje'      => array_key_exists('porcentaje', $validated) ? $validated['porcentaje'] : $toy->porcentaje,
+            'imagenppal'      => $validated['imagenppal'] ?? $toy->imagenppal,
+            'desde'           => array_key_exists('desde', $validated) ? (int)$validated['desde'] : $toy->desde,
+            'hasta'           => array_key_exists('hasta', $validated) ? (int)$validated['hasta'] : $toy->hasta,
         ]);
-    }
 
-return redirect()
-    ->route('campaigns.toys.edit', ['campaign' => $campaign->id, 'toy' => $toy->id])
-    ->with('success', 'Juguete actualizado correctamente.');
-}
+        $toy->save();
+
+        if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'ok'      => true,
+                'message' => 'Juguete actualizado correctamente.',
+                'toy'     => $toy->only([
+                    'id','idcampaign','referencia','nombre','genero',
+                    'unidades','precio_unitario','porcentaje','imagenppal',
+                    'desde','hasta',
+                ]),
+            ]);
+        }
+
+        return redirect()
+            ->route('campaigns.toys.edit', ['campaign' => $campaign->id, 'toy' => $toy->id])
+            ->with('success', 'Juguete actualizado correctamente.');
+    }
 
     // === Eliminar (anidado) ===
     public function destroy(Campaign $campaign, CampaignToy $toy)
@@ -214,6 +237,7 @@ return redirect()
         $request->validate(['sp_path' => ['nullable', 'string', 'max:2048']]);
 
         $ctx = $this->resolveSpContext(); // shareUrl/siteId/driveId
+        $ctx = $this->ensureGraphIds($ctx); 
         $rawPath     = trim((string)$request->input('sp_path', ''));
         $folderLocal = "campaign_toys/{$campaign->id}";
         Storage::disk('public')->makeDirectory($folderLocal);
@@ -224,6 +248,14 @@ return redirect()
         $results   = [];
         $okCount   = 0;
         $failCount = 0;
+
+        \Log::debug('SP fetch request', [
+            'campaign' => $campaign->id,
+            'toy'      => $toy->id,
+            'refs'     => $defaultRefs,
+            'items'    => $items,
+            'ctx'      => $ctx,
+        ]);
 
         foreach ($items as $it) {
             $refLabel = $it['label'] ?? null;
@@ -272,6 +304,12 @@ return redirect()
             $graphOK ? $okCount++ : $failCount++;
         }
 
+        \Log::debug('SP fetch results', [
+            'okCount' => $okCount,
+            'failCount' => $failCount,
+            'results' => $results,
+        ]);
+
         if ($okCount > 0) {
             $firstOk = collect($results)->firstWhere('ok', true);
             if (!empty($firstOk['local_rel'])) {
@@ -297,21 +335,50 @@ return redirect()
 
     private function findPublicUrlForRefInFolder(int $campaignId, string $ref): ?string
     {
+        // carpeta lógica donde guardas
         $base = "campaign_toys/{$campaignId}/";
-        $exts = ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG'];
 
-        foreach ($exts as $ext) {
+        // normalizador: quita espacios, guiones, _, puntos y pasa a minúscula
+        $norm = function (string $s): string {
+            $s = strtolower($s);
+            // quita extensión
+            $s = pathinfo($s, PATHINFO_FILENAME);
+            // deja solo letras y números
+            return preg_replace('/[^a-z0-9]/', '', $s) ?? '';
+        };
+
+        $refNorm = $norm($ref);
+
+        // 1) Búsqueda directa por nombres esperados
+        foreach (['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG'] as $ext) {
             $rel = $base . $ref . '.' . $ext;
             if (Storage::disk('public')->exists($rel)) {
                 return Storage::disk('public')->url($rel);
             }
         }
 
+        // 2) Búsqueda por prefijo normalizado más flexible
         $files = Storage::disk('public')->files($base);
         foreach ($files as $f) {
-            $name = pathinfo($f, PATHINFO_FILENAME);
-            if (stripos($name, $ref) === 0) {
+            $filename = pathinfo($f, PATHINFO_BASENAME);
+            $nameNorm = $norm($filename);
+
+            // coincide si el "inicio" del nombre es el ref normalizado
+            if ($refNorm !== '' && str_starts_with($nameNorm, $refNorm)) {
                 return Storage::disk('public')->url($f);
+            }
+        }
+
+        // 3) Plan C: si guardaste directamente en public_path (no recomendado), intenta construir URL
+        $publicAbs = public_path($base);
+        if (is_dir($publicAbs)) {
+            foreach (glob($publicAbs . '*') as $abs) {
+                $basename = basename($abs);
+                $nameNorm = $norm($basename);
+                if ($refNorm !== '' && str_starts_with($nameNorm, $refNorm)) {
+                    // Devuelve como /campaign_toys/{id}/{archivo}
+                    return '/' . trim($base, '/') . '/' . $basename;
+                }
             }
         }
 
@@ -323,23 +390,28 @@ return redirect()
         if (empty($value)) return null;
         if (preg_match('#^https?://#i', $value)) return $value;
 
+        // Normaliza separadores y quita prefijos comunes
         $p = str_replace('\\', '/', $value);
         $p = ltrim($p, '/');
-        $p = preg_replace('#^storage/app/public/#', '', $p);
-        $p = preg_replace('#^app/public/#', '', $p);
-        $p = preg_replace('#^public/#', '', $p);
+        $p = preg_replace('#^(storage/app/)?public/#i', '', $p); // quita "storage/app/public/" o "public/"
 
-        if (preg_match('#^storage/#i', $p)) return '/' . $p;
-
+        // 1) Si existe en el disco 'public', arma la URL del disco
         if (Storage::disk('public')->exists($p)) {
             return Storage::disk('public')->url($p);
         }
 
-        if (strpos($p, '/') === false) {
+        // 2) Si no tenía subcarpeta, intenta en la carpeta del campaign
+        if (!str_contains($p, '/')) {
             $guess = "campaign_toys/{$campaign->id}/{$p}";
             if (Storage::disk('public')->exists($guess)) {
                 return Storage::disk('public')->url($guess);
             }
+        }
+
+        // 3) Fallback: si físicamente está en public_path
+        $abs = public_path($p);
+        if (is_file($abs)) {
+            return '/' . $p;
         }
 
         return null;
@@ -352,6 +424,157 @@ return redirect()
         if (preg_match('#^https?://#i', $p)) return $p;
         if (preg_match('#^storage/#i', $p)) return '/' . $p;
         return Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : null;
+    }
+
+    private function tryServiceDownloadOne(
+        \App\Services\SharePointDownloader $sp,
+        string $remotePath,
+        string $folderLocal,
+        ?string $localName = null,
+        ?string $refLabel = null
+    ): array {
+        // ⚠️ Si tu servicio necesita siteId/driveId y no existen, saltar a fallback
+        $siteId = config('sharepoint.site_id', env('SP_SITE_ID'));
+        $driveId = config('sharepoint.drive_id', env('SP_DRIVE_ID'));
+        if (empty($siteId) || empty($driveId)) {
+            return [false, ['ok'=>false,'ref'=>$refLabel,'remote'=>$remotePath,'message'=>'Sin siteId/driveId => usar fallback Graph']];
+        }
+
+        $localName = $localName ?: basename($remotePath);
+        $destRel = rtrim($folderLocal, '/').'/'.$localName;
+        $destAbs = storage_path('app/public/'.$destRel);
+        @mkdir(dirname($destAbs), 0775, true);
+
+        try {
+            if (method_exists($sp, 'downloadToLocal')) {
+                $sp->downloadToLocal($remotePath, $destAbs);
+            } elseif (method_exists($sp, 'download')) {
+                $bytes = $sp->download($remotePath);
+                if (!$bytes) return [false, ['ok'=>false,'ref'=>$refLabel,'remote'=>$remotePath,'message'=>'Servicio devolvió vacío']];
+                file_put_contents($destAbs, $bytes);
+            } else {
+                return [false, ['ok'=>false,'ref'=>$refLabel,'remote'=>$remotePath,'message'=>'Servicio SP sin método download*']];
+            }
+
+            return [true, [
+                'ok'=>true,'ref'=>$refLabel,'remote'=>$remotePath,'local_rel'=>$destRel,
+                'image_url'=>Storage::disk('public')->url($destRel),'source'=>'service',
+            ]];
+        } catch (\Throwable $e) {
+            \Log::warning('tryServiceDownloadOne fallo', ['remote'=>$remotePath,'dest'=>$destAbs,'e'=>$e->getMessage()]);
+            return [false, ['ok'=>false,'ref'=>$refLabel,'remote'=>$remotePath,'message'=>$e->getMessage()]];
+        }
+    }
+
+    private function ensureGraphIds(array $ctx): array
+    {
+        if (!empty($ctx['driveId']) && !empty($ctx['siteId'])) return $ctx;
+
+        $token = $this->graphToken();
+        // Esto te da driveId y rootItemId. El siteId no viene directo; podrías no necesitarlo si tu servicio acepta sólo driveId.
+        [$driveId, $rootItemId] = $this->graphGetShareRoot($token, (string)($ctx['shareUrl'] ?? ''));
+
+        $ctx['driveId'] = $driveId;
+        // opcional: intenta inferir siteId si tu servicio lo pide; si no, omítelo
+        $ctx['siteId']  = $ctx['siteId'] ?? null;
+
+        // Si quieres persistirlos en config/env cache, puedes setearlos aquí (o guardarlos en DB)
+        return $ctx;
+    }
+
+    /**
+     * Fallback completo usando Microsoft Graph (search + crawl), luego descarga el ítem.
+     *
+     * $it puede tener:
+     * - ['remote' => 'Ruta/archivo.ext', 'localName' => '...']  (cuando se especificó explícito)
+     * - ['remoteCandidates' => [...], 'localNameCandidates' => [...]]  (cuando generamos candidatos .jpg/.jpeg/.png)
+     *
+     * @return array{0:bool,1:array}
+     */
+    private function tryGraphFindAndDownload(
+        array $ctx,
+        array $it,
+        string $folderLocal,
+        ?string $refLabel = null
+    ): array {
+        $token = $this->graphToken();
+
+        // Obtén el root del share (driveId y rootItemId del share)
+        [$driveId, $rootItemId] = $this->graphGetShareRoot($token, (string)($ctx['shareUrl'] ?? ''));
+
+        // Arma candidatos de nombre (para search/crawl)
+        $candNames   = [];
+        $candLocals  = [];
+
+        if (!empty($it['remote'])) {
+            $candNames[]  = $it['remote'];
+            $candLocals[] = $it['localName'] ?? basename($it['remote']);
+        } elseif (!empty($it['remoteCandidates'])) {
+            foreach ($it['remoteCandidates'] as $i => $cand) {
+                $candNames[] = $cand;
+                $candLocals[] = $it['localNameCandidates'][$i] ?? basename($cand);
+            }
+        }
+
+        // 1) Search directo por cada candidato
+        foreach ($candNames as $i => $name) {
+            $hit = $this->graphSearchByName($token, $driveId, $rootItemId, $name);
+            if ($hit && !empty($hit['id'])) {
+                $fileName = $candLocals[$i] ?? ($hit['name'] ?? 'file.bin');
+
+                // Asegura extensión desde el nombre real en Graph
+                $ext = pathinfo((string)($hit['name'] ?? ''), PATHINFO_EXTENSION);
+                if ($ext && !str_ends_with(strtolower($fileName), '.'.strtolower($ext))) {
+                    $fileName .= '.'.$ext;
+                }
+
+                $destRel = rtrim($folderLocal, '/').'/'.$fileName;
+                $destAbs = storage_path('app/public/'.$destRel);
+                @mkdir(dirname($destAbs), 0775, true);
+
+                $this->graphDownloadItemToLocal($token, $driveId, (string)$hit['id'], $destAbs);
+
+                return [true, [
+                    'ok'        => true,
+                    'ref'       => $refLabel,
+                    'query'     => $name,
+                    'local_rel' => $destRel,
+                    'image_url' => Storage::disk('public')->url($destRel),
+                    'source'    => 'graph-search',
+                ]];
+            }
+        }
+
+        // 2) Crawl si el search no encontró
+        if (!empty($candNames)) {
+            $hit = $this->graphCrawlByName($token, $driveId, $rootItemId, $candNames);
+            if ($hit && !empty($hit['id'])) {
+                // Usa nombre real encontrado para conservar extensión
+                $realName = (string)($hit['name'] ?? 'file.bin');
+                $destRel  = rtrim($folderLocal, '/').'/'.$realName;
+                $destAbs  = storage_path('app/public/'.$destRel);
+                @mkdir(dirname($destAbs), 0775, true);
+
+                $this->graphDownloadItemToLocal($token, $driveId, (string)$hit['id'], $destAbs);
+
+                return [true, [
+                    'ok'        => true,
+                    'ref'       => $refLabel,
+                    'query'     => implode(' | ', $candNames),
+                    'local_rel' => $destRel,
+                    'image_url' => Storage::disk('public')->url($destRel),
+                    'source'    => 'graph-crawl',
+                ]];
+            }
+        }
+
+        return [false, [
+            'ok'     => false,
+            'ref'    => $refLabel,
+            'query'  => $candNames,
+            'source' => 'graph',
+            'message'=> 'No se encontró el archivo en el share.',
+        ]];
     }
 
     // ---------- Graph/SharePoint utilities (idéntico a tu versión con try/catch) ----------

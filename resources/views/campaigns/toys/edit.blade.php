@@ -88,12 +88,50 @@
                             @enderror
                         </div>
 
+                        
+
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="unidades">Unidades</label>
                             <input type="number" id="unidades" name="unidades" min="0" step="1"
                                 class="form-control @error('unidades') is-invalid @enderror"
                                 value="{{ old('unidades', $toy->unidades) }}">
                             @error('unidades')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="desde">Edad desde</label>
+                            <input
+                                type="number"
+                                id="desde"
+                                name="desde"
+                                min="0"
+                                max="120"
+                                step="1"
+                                class="form-control @error('desde') is-invalid @enderror"
+                                value="{{ old('desde', $toy->desde) }}"
+                                placeholder="0"
+                            >
+                            @error('desde')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="hasta">Edad hasta</label>
+                            <input
+                                type="number"
+                                id="hasta"
+                                name="hasta"
+                                min="0"
+                                max="120"
+                                step="1"
+                                class="form-control @error('hasta') is-invalid @enderror"
+                                value="{{ old('hasta', $toy->hasta) }}"
+                                placeholder="12"
+                            >
+                            @error('hasta')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>

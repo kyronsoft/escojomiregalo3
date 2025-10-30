@@ -172,25 +172,48 @@ class CampaignCollaboratorController extends Controller
         $skipped = 0;
 
         foreach ($rows as $r) {
-            $email     = trim((string)$r->email);
-            $nombre    = (string)$r->nombre;
-            $documento = (string)$r->documento;
+            $email     = trim((string) $r->email);
+            $nombre    = (string) $r->nombre;
+            $documento = (string) $r->documento;
 
+            // Validación de email
             if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $skipped++;
                 continue;
             }
 
+            // Evitar duplicados en esta corrida
             $emailKey = mb_strtolower($email);
             if (isset($sentEmails[$emailKey])) {
-                continue; // ya encolado en esta corrida
+                continue;
             }
 
             try {
+                // 1) Actualizar password del usuario por documento ANTES de enviar correo
+                //    Si el usuario no existe, no enviamos el correo y registramos el fallo.
+                $affected = DB::table('users')
+                    ->where('documento', $documento)
+                    ->update([
+                        'password'   => Hash::make($documento),
+                        'updated_at' => now(),
+                    ]);
+
+                if ($affected === 0) {
+                    // Usuario no encontrado por documento: no se envía correo
+                    Log::warning('Usuario no encontrado para actualización de password', [
+                        'documento' => $documento,
+                        'email'     => $email,
+                        'campaign'  => $campaign->id ?? null,
+                    ]);
+                    $fail++;
+                    continue;
+                }
+
+                // 2) Encolar correo con credenciales
                 dispatch(new SendWelcomeCredentialsMail(
                     to: $email,
                     name: $nombre,
-                    rawPassword: $documento,
+                    rawPassword: $documento, // la contraseña en texto plano para el correo
                     loginUrl: route('login'),
                     campaignId: $campaign->id,
                     subjectLine: $subject,
@@ -200,18 +223,19 @@ class CampaignCollaboratorController extends Controller
                 $sentEmails[$emailKey] = true;
                 $ok++;
 
-                // Marcar como notificado en pivot
+                // 3) Marcar como notificado en pivot
                 DB::table(self::PIVOT_TABLE)
                     ->where('idcampaign', $campaign->id)
                     ->where('documento', $documento)
-                    ->where('nit', (string)$campaign->nit)
+                    ->where('nit', (string) $campaign->nit)
                     ->update([
                         'email_notified' => 1,
                         'updated_at'     => now(),
                     ]);
             } catch (\Throwable $e) {
-                Log::error('No se pudo encolar correo de bienvenida+invitación', [
+                Log::error('No se pudo actualizar password o encolar correo de bienvenida+invitación', [
                     'email'    => $email,
+                    'documento'=> $documento,
                     'campaign' => $campaign->id ?? null,
                     'error'    => $e->getMessage(),
                 ]);
@@ -248,6 +272,10 @@ class CampaignCollaboratorController extends Controller
             return response()->json(['message' => 'Colaborador sin email válido.'], 422);
         }
 
+        $documento = (string)$row->documento;
+        $email = trim((string)$row->email);
+        $nombre = (string)$row->nombre;
+
         // Subject de la campaña
         $subject = (string)($campaign->subject ?? 'Invitación');
 
@@ -260,33 +288,57 @@ class CampaignCollaboratorController extends Controller
         }
 
         try {
+            // 1️⃣ Actualizar password antes del envío
+            $affected = DB::table('users')
+                ->where('documento', $documento)
+                ->update([
+                    'password'   => Hash::make($documento),
+                    'updated_at' => now(),
+                ]);
+
+            if ($affected === 0) {
+                // Usuario no encontrado -> no se envía correo
+                Log::warning('Usuario no encontrado para actualización de password (envío individual)', [
+                    'documento' => $documento,
+                    'email'     => $email,
+                    'campaign'  => $campaign->id ?? null,
+                ]);
+                return response()->json(['message' => 'Usuario no encontrado en la tabla users.'], 404);
+            }
+
+            // 2️⃣ Enviar correo
             dispatch(new SendWelcomeCredentialsMail(
-                to: $row->email,
-                name: (string)$row->nombre,
-                rawPassword: (string)$row->documento,
+                to: $email,
+                name: $nombre,
+                rawPassword: $documento,
                 loginUrl: route('login'),
                 campaignId: $campaign->id,
                 subjectLine: $subject,
                 backgroundImage: $bg
             ))->onQueue('emails');
 
-            // Marca como notificado
+            // 3️⃣ Marcar como notificado
             DB::table(self::PIVOT_TABLE)
                 ->where('idcampaign', $campaign->id)
-                ->where('documento', $validated['documento'])
+                ->where('documento', $documento)
                 ->where('nit', (string)$campaign->nit)
-                ->update(['email_notified' => 1, 'updated_at' => now()]);
+                ->update([
+                    'email_notified' => 1,
+                    'updated_at'     => now(),
+                ]);
 
             return response()->json(['message' => 'Correo enviado', 'notified' => true], 200);
         } catch (\Throwable $e) {
-            Log::error('No se pudo encolar correo individual', [
-                'campaign' => $campaign->id,
-                'documento' => $validated['documento'],
-                'e' => $e->getMessage()
+            Log::error('No se pudo actualizar password o encolar correo individual', [
+                'campaign'  => $campaign->id,
+                'documento' => $documento,
+                'email'     => $email,
+                'error'     => $e->getMessage(),
             ]);
             return response()->json(['message' => 'No se pudo encolar el correo.'], 500);
         }
     }
+
 
     public function destroy(\App\Models\Campaign $campaign, string $documento)
     {

@@ -88,13 +88,36 @@
                     ?.split('=')[1];
             }
 
-            function getCsrfToken() {
-                // Prioriza cookie XSRF-TOKEN (Laravel la publica y rota según sesión)
-                const fromCookie = getCookie('XSRF-TOKEN');
-                if (fromCookie) return decodeURIComponent(fromCookie);
-                // Fallback a meta y luego a blade token render-time
-                const fromMeta = document.querySelector('meta[name="csrf-token"]')?.content;
-                return fromMeta || '{{ csrf_token() }}';
+            // Si hay cookie XSRF-TOKEN => usar header X-XSRF-TOKEN.
+            // Si no, fallback a meta csrf-token => usar X-CSRF-TOKEN.
+            function csrfHeader() {
+                const xsrfCookie = getCookie('XSRF-TOKEN'); // Laravel la firma y rota
+                if (xsrfCookie) {
+                    return { name: 'X-XSRF-TOKEN', value: decodeURIComponent(xsrfCookie) };
+                }
+                const meta = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
+                return { name: 'X-CSRF-TOKEN', value: meta };
+            }
+
+            function commonHeaders(json = true) {
+                const h = csrfHeader();
+                const base = {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    [h.name]: h.value
+                };
+                return json
+                    ? { ...base, 'Content-Type': 'application/json', 'Accept': 'application/json' }
+                    : base;
+            }
+
+            // Reintento suave si el token rotó entre renders (estatus 419)
+            async function retryAfterCsrf(url, init, isJson) {
+                try {
+                    // Fuerza refrescar cookies/headers desde el mismo origen
+                    await fetch(window.location.href, { credentials: 'same-origin', cache: 'no-store' });
+                } catch {}
+                const newInit = { ...init, headers: commonHeaders(!!isJson) };
+                return fetch(url, newInit);
             }
 
             // ========= Utilitarios UI =========
@@ -118,12 +141,11 @@
             }
 
             // ========= Rutas =========
-            const dataURL     = `{{ route('campaigns.collaborators.data', $campaign) }}`;
-            const sendAllURL  = `{{ route('campaigns.collaborators.emailAll', $campaign) }}`;
-            const sendOneURL  = `{{ route('campaigns.collaborators.emailOne', $campaign) }}`;
-            const updateOneURL= `{{ route('campaigns.collaborators.updateOne', $campaign) }}`;
-            const destroyTpl  =
-                `{{ route('campaigns.collaborators.destroy', ['campaign' => $campaign, 'documento' => '__DOC__']) }}`;
+            const dataURL      = `{{ route('campaigns.collaborators.data', $campaign) }}`;
+            const sendAllURL   = `{{ route('campaigns.collaborators.emailAll', $campaign) }}`;
+            const sendOneURL   = `{{ route('campaigns.collaborators.emailOne', $campaign) }}`;
+            const updateOneURL = `{{ route('campaigns.collaborators.updateOne', $campaign) }}`;
+            const destroyTpl   = `{{ route('campaigns.collaborators.destroy', ['campaign' => $campaign, 'documento' => '__DOC__']) }}`;
 
             const IS_EXEC = @json($isExec);
 
@@ -239,25 +261,33 @@
                         baseZ: 2000
                     });
 
-                    fetch(sendOneURL, {
+                    const init = {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': getCsrfToken(),
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json'
-                        },
+                        headers: commonHeaders(true),
                         body: JSON.stringify({ documento, plantilla })
-                    })
-                    .then(async r => {
-                        $.unblockUI();
-                        const { data, txt } = await parseResponseSafe(r);
+                    };
 
+                    fetch(sendOneURL, init)
+                    .then(async r => {
                         if (r.status === 419) {
-                            showExpiredAndSuggestReload();
+                            // reintento por posible rotación de token
+                            const r2 = await retryAfterCsrf(sendOneURL, init, true);
+                            if (!r2.ok) {
+                                $.unblockUI();
+                                showExpiredAndSuggestReload();
+                                return;
+                            }
+                            const { data: d2, txt: t2 } = await parseResponseSafe(r2);
+                            $.unblockUI();
+                            if (row) row.update({ email_notified: 1, updated_at: new Date().toISOString() });
+                            await reloadTable();
+                            Swal.fire({ icon: 'success', title: 'Envío de Correo', text: (d2 && (d2.message||d2.msg)) || 'El sistema procesó el envío.' });
                             return;
                         }
+
+                        const { data, txt } = await parseResponseSafe(r);
+                        $.unblockUI();
 
                         if (r.ok) {
                             if (row) row.update({ email_notified: 1, updated_at: new Date().toISOString() });
@@ -325,25 +355,29 @@
                         baseZ: 2000
                     });
 
-                    fetch(updateOneURL, {
+                    const init = {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': getCsrfToken(),
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json'
-                        },
+                        headers: commonHeaders(true),
                         body: JSON.stringify(payload)
-                    })
-                    .then(async r => {
-                        $.unblockUI();
-                        const { data, txt } = await parseResponseSafe(r);
+                    };
 
+                    fetch(updateOneURL, init)
+                    .then(async r => {
                         if (r.status === 419) {
-                            showExpiredAndSuggestReload();
+                            const r2 = await retryAfterCsrf(updateOneURL, init, true);
+                            if (!r2.ok) { $.unblockUI(); showExpiredAndSuggestReload(); return; }
+                            const { data: d2 } = await parseResponseSafe(r2);
+                            $.unblockUI();
+                            if (row && d2 && d2.row) row.update(d2.row);
+                            else if (row) row.update({ ...payload, updated_at: new Date().toISOString() });
+                            await reloadTable();
+                            Swal.fire({ icon: 'success', title: 'Actualizado', text: (d2 && (d2.message||d2.msg)) || 'Datos guardados correctamente.' });
                             return;
                         }
+
+                        const { data, txt } = await parseResponseSafe(r);
+                        $.unblockUI();
 
                         if (r.ok) {
                             if (row && data && data.row) {
@@ -396,23 +430,31 @@
                         baseZ: 2000
                     });
 
-                    fetch(delUrl, {
+                    const init = {
                         method: 'DELETE',
                         credentials: 'same-origin',
-                        headers: {
-                            'X-CSRF-TOKEN': getCsrfToken(),
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json'
-                        }
-                    })
-                    .then(async r => {
-                        $.unblockUI();
-                        const { data, txt } = await parseResponseSafe(r);
+                        headers: commonHeaders(false)
+                    };
 
+                    fetch(delUrl, init)
+                    .then(async r => {
                         if (r.status === 419) {
-                            showExpiredAndSuggestReload();
+                            const r2 = await retryAfterCsrf(delUrl, init, false);
+                            if (!r2.ok) { $.unblockUI(); showExpiredAndSuggestReload(); return; }
+                            const { data: d2, txt: t2 } = await parseResponseSafe(r2);
+                            $.unblockUI();
+                            if (r2.ok && d2 && d2.ok) {
+                                if (row) row.delete();
+                                else await reloadTable();
+                                Swal.fire({ icon: 'success', title: 'Eliminado', text: d2.message || 'Colaborador quitado de la campaña.' });
+                            } else {
+                                Swal.fire({ icon: 'error', title: 'Error', text: (d2 && (d2.message||d2.error||d2.msg)) || (t2 && t2.trim()) || 'No se pudo eliminar.' });
+                            }
                             return;
                         }
+
+                        const { data, txt } = await parseResponseSafe(r);
+                        $.unblockUI();
 
                         if (r.ok && data && data.ok) {
                             if (row) row.delete();
@@ -460,25 +502,31 @@
                         baseZ: 2000
                     });
 
-                    fetch(sendAllURL, {
+                    const init = {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': getCsrfToken(),
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json'
-                        },
+                        headers: commonHeaders(true),
                         body: JSON.stringify({ plantilla })
-                    })
-                    .then(async r => {
-                        $.unblockUI();
-                        const { data, txt } = await parseResponseSafe(r);
+                    };
 
+                    fetch(sendAllURL, init)
+                    .then(async r => {
                         if (r.status === 419) {
-                            showExpiredAndSuggestReload();
+                            const r2 = await retryAfterCsrf(sendAllURL, init, true);
+                            if (!r2.ok) { $.unblockUI(); showExpiredAndSuggestReload(); return; }
+                            const { data: d2, txt: t2 } = await parseResponseSafe(r2);
+                            $.unblockUI();
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Correos encolados',
+                                text: (d2 && (d2.message || d2.msg)) || 'Se inició el envío de correos.'
+                            });
+                            reloadTable();
                             return;
                         }
+
+                        const { data, txt } = await parseResponseSafe(r);
+                        $.unblockUI();
 
                         if (r.ok) {
                             Swal.fire({

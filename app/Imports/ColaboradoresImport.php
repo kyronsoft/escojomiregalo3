@@ -223,7 +223,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     $user = User::create([
                         'name'              => $nombre,
                         'email'             => $email,
-                        'password'          => Hash::make('escojomiregalo'), // opcional: forzar cambio en primer login
+                        'password'          => Hash::make($documento), // opcional: forzar cambio en primer login
                         'documento'         => $documento,
                         'email_verified_at' => now(),
                         'remember_token'    => Str::random(20),

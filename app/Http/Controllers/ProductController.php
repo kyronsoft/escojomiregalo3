@@ -37,6 +37,12 @@ class ProductController extends Controller
 
         // Campaña y empresa
         $campaign = Campaign::with('empresa')->find($campaignId);
+        if (!$campaign) {
+            abort(404, 'La campaña seleccionada no existe.');
+        }
+
+        // 👇 Leer flag de la campaña (0/1) y exponerlo como booleano a la vista
+        $mostrarGenero = (bool) ($campaign->mostrargenero ?? false);
 
         // Empresa (fallback por NIT si falta relación)
         $empresa = $campaign?->empresa;
@@ -91,6 +97,7 @@ class ProductController extends Controller
             'showWelcome'       => $showWelcome,
             'empresaLogoUrl'    => $empresaLogoUrl,
             'colaborador'       => $colaborador,
+            'mostrarGenero'     => $mostrarGenero, // 👈 disponible en la vista
         ]);
     }
 

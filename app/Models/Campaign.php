@@ -21,6 +21,7 @@ class Campaign extends Model
         'mailtext',
         'subject',
         'dashboard',
+        'mostrargenero',
     ];
 
     protected $casts = [

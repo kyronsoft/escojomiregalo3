@@ -145,6 +145,25 @@
                                 @enderror
                             </div>
 
+                            {{-- Género en Juguete (switch nuevo) --}}
+                            <div class="col-12 col-md-3">
+                                <label class="form-label" for="mostrargenero">Género en Juguete</label>
+                                <div class="form-check form-switch mt-2">
+                                    {{-- Inactivo por defecto; siempre envía 0 si no está marcado --}}
+                                    <input type="hidden" name="mostrargenero" value="0">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="mostrargenero"
+                                           name="mostrargenero"
+                                           value="1"
+                                           {{ old('mostrargenero', $campaign->mostrargenero ?? 0) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="mostrargenero">Activar</label>
+                                </div>
+                                @error('mostrargenero')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                            </div>
+
                             <div class="col-12">
                                 <label class="form-label" for="subject">Asunto</label>
                                 <input type="text" class="form-control @error('subject') is-invalid @enderror"

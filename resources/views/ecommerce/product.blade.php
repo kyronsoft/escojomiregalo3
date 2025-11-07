@@ -104,17 +104,16 @@
             .campaign-banner-top{
                 background-size: contain;
                 background-position: center top;
-                background-color: var(--secondary); /* relleno en letterbox */
+                background-color: var(--secondary);
                 aspect-ratio: 1103 / 318;
                 height: auto;
                 min-height: 0;
             }
         }
-        /* Fallback si no hay soporte para aspect-ratio */
         @supports not (aspect-ratio: 1) {
             @media (max-width:768px){
                 .campaign-banner-top{
-                    height: calc(100vw * 0.288575); /* 318/1103 */
+                    height: calc(100vw * 0.288575);
                 }
             }
         }
@@ -142,17 +141,15 @@
             padding: 6px;
         }
 
-        /* Imagen única */
         .modal-product-media img{
             display:block;
             width:auto !important;
             height:auto !important;
             max-width: 100%;
-            max-height: 58vh;         /* desktop/tablet */
+            max-height: 58vh;
             object-fit: contain;
         }
 
-        /* Grilla para combos */
         .modal-combo{
             display:flex;
             flex-wrap:wrap;
@@ -169,13 +166,11 @@
             object-fit: contain;
         }
 
-        /* Móviles: reducir aún más */
         @media (max-width: 576px){
             .modal-product-media img{ max-height: 40vh; max-width: 92%; }
             .modal-combo img{ max-width:100%; max-height: 26vh; }
         }
 
-        /* Opcional: afinar por orientación en móviles */
         @media (max-width: 576px) and (orientation:landscape){
             .modal-product-media img{ max-height: 48vw; }
             .modal-combo img{ max-height: 34vw; }
@@ -202,6 +197,11 @@
 @endpush
 
 @section('content')
+    @php
+        // Bandera booleana para mostrar/ocultar etiquetas de género
+        $__mostrarGenero = !empty($mostrarGenero);
+    @endphp
+
     {{-- Barra superior con Logo (izq) + Acciones (centro) + Logo (der) --}}
     <div class="topbar">
         <div class="container topbar-container">
@@ -389,7 +389,12 @@
                                                                 </div>
                                                                 <div class="col-12 col-lg-6 text-start">
                                                                     <h4 class="mb-2">{{ $toy['nombre'] }}</h4>
-                                                                    <span class="badge {{ $toyGenderClass }} mb-2">{{ $toyGenderBadge }}</span>
+
+                                                                    {{-- Badge de género en modal (oculto si mostrargenero = 0) --}}
+                                                                    @if ($__mostrarGenero)
+                                                                        <span class="badge {{ $toyGenderClass }} mb-2">{{ $toyGenderBadge }}</span>
+                                                                    @endif
+
                                                                     <h6 class="f-w-600">Descripción</h6>
                                                                     <p class="mb-0">{{ $toy['descripcion'] }}</p>
                                                                 </div>
@@ -412,7 +417,12 @@
 
                                             <div class="product-details">
                                                 <a href="javascript:void(0)"><h4 class="mb-1">{{ $toy['nombre'] }}</h4></a>
-                                                <span class="badge badge-gender">{{ $toyGenderBadge }}</span>
+
+                                                {{-- Badge de género debajo de la foto (oculto si mostrargenero = 0) --}}
+                                                @if ($__mostrarGenero)
+                                                    <span class="badge badge-gender">{{ $toyGenderBadge }}</span>
+                                                @endif
+
                                                 {{-- Debug opcional de stock:
                                                 <span class="badge bg-dark ms-2">Stock: {{ (int)($toy['stock'] ?? -1) }}</span>
                                                 --}}

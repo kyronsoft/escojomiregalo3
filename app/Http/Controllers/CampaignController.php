@@ -114,23 +114,25 @@ class CampaignController extends Controller
                     }
                 }
             }],
-            'nit'         => ['required', 'string', 'max:20'],
-            'nombre'      => ['required', 'string', 'max:100'],
-            'idtipo'      => ['required', 'in:1,2'],
-            'fechaini'    => ['required', 'date_format:Y-m-d'],
-            'fechafin'    => ['required', 'date_format:Y-m-d', 'after_or_equal:fechaini'],
-            'banner'      => ['nullable', 'image', 'mimes:jpg,jpeg,png,bmp', 'max:4096'],
-            'demo'        => ['nullable', 'in:on,off'],
-            'doc_yeminus' => ['nullable', 'integer', 'min:0'],
-            'customlogin' => ['nullable', 'string'],
-            'subject'     => ['required', 'string', 'max:150'],
-            'dashboard'   => ['required', 'boolean'], // 👈 requerido
+            'nit'           => ['required', 'string', 'max:20'],
+            'nombre'        => ['required', 'string', 'max:100'],
+            'idtipo'        => ['required', 'in:1,2'],
+            'fechaini'      => ['required', 'date_format:Y-m-d'],
+            'fechafin'      => ['required', 'date_format:Y-m-d', 'after_or_equal:fechaini'],
+            'banner'        => ['nullable', 'image', 'mimes:jpg,jpeg,png,bmp', 'max:4096'],
+            'demo'          => ['nullable', 'in:on,off'],
+            'doc_yeminus'   => ['nullable', 'integer', 'min:0'],
+            'customlogin'   => ['nullable', 'string'],
+            'subject'       => ['required', 'string', 'max:150'],
+            'dashboard'     => ['required', 'boolean'],
+            'mostrargenero' => ['required', 'boolean'], // 👈 nuevo campo
         ]);
 
         // Normalizaciones
-        $data['demo']        = $request->input('demo', 'off');
-        $data['dashboard']   = $request->boolean('dashboard');
-        $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
+        $data['demo']          = $request->input('demo', 'off');
+        $data['dashboard']     = $request->boolean('dashboard');
+        $data['mostrargenero'] = $request->boolean('mostrargenero'); // 👈 guardar flag
+        $data['doc_yeminus']   = (int) $request->input('doc_yeminus', 0);
 
         // Fechas
         $ini = Carbon::createFromFormat('Y-m-d', $data['fechaini'])->startOfDay();
@@ -152,6 +154,7 @@ class CampaignController extends Controller
             ->route('campaigns.index')
             ->with('success', 'Campaña actualizada correctamente');
     }
+
 
     public function destroy(Campaign $campaign)
     {

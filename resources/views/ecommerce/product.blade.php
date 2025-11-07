@@ -207,8 +207,7 @@
         <div class="container topbar-container">
             {{-- Izquierda: logo empresa --}}
             <div class="topbar-left">
-                @php $logoUrl = !empty($empresaLogoUrl) ? $empresaLogoUrl : asset('assets/images/placeholder.png'); @endphp
-                <img src="{{ $logoUrl }}" alt="Logo empresa" class="topbar-logo-img">
+                <img src="{{ asset('assets/images/moreproducts/logoemrgris.jpeg') }}" alt="Logo fijo" class="topbar-logo-img">
             </div>
 
             {{-- Centro: botones --}}
@@ -227,7 +226,8 @@
 
             {{-- Derecha: logo fijo --}}
             <div class="topbar-right">
-                <img src="{{ asset('assets/images/moreproducts/loginpage.png') }}" alt="Logo fijo" class="topbar-logo-img">
+                @php $logoUrl = !empty($empresaLogoUrl) ? $empresaLogoUrl : asset('assets/images/placeholder.png'); @endphp
+                <img src="{{ $logoUrl }}" alt="Logo empresa" class="topbar-logo-img">
             </div>
         </div>
     </div>

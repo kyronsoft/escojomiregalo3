@@ -88,7 +88,7 @@
                             @enderror
                         </div>
 
-                        
+
 
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="unidades">Unidades</label>
@@ -102,17 +102,9 @@
 
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="desde">Edad desde</label>
-                            <input
-                                type="number"
-                                id="desde"
-                                name="desde"
-                                min="0"
-                                max="120"
-                                step="1"
+                            <input type="number" id="desde" name="desde" min="0" max="120" step="1"
                                 class="form-control @error('desde') is-invalid @enderror"
-                                value="{{ old('desde', $toy->desde) }}"
-                                placeholder="0"
-                            >
+                                value="{{ old('desde', $toy->desde) }}" placeholder="0">
                             @error('desde')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
@@ -120,17 +112,9 @@
 
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="hasta">Edad hasta</label>
-                            <input
-                                type="number"
-                                id="hasta"
-                                name="hasta"
-                                min="0"
-                                max="120"
-                                step="1"
+                            <input type="number" id="hasta" name="hasta" min="0" max="120" step="1"
                                 class="form-control @error('hasta') is-invalid @enderror"
-                                value="{{ old('hasta', $toy->hasta) }}"
-                                placeholder="12"
-                            >
+                                value="{{ old('hasta', $toy->hasta) }}" placeholder="12">
                             @error('hasta')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
@@ -167,7 +151,6 @@
 
                         <div class="col-12 col-md-6">
                             <label class="form-label">Imágenes del juguete</label>
-
                             @php
                                 $placeholder = asset('assets/images/placeholder.png');
                                 $imageMap = $toy->image_map ?? [];
@@ -201,7 +184,8 @@
                                     <label class="form-label" for="sp_path">Nombre(s) de archivo en SharePoint</label>
                                     <input type="text" id="sp_path" name="sp_path" class="form-control"
                                         placeholder="Dejar vacío para usar {{ $toy->referencia }} dividido por +. Ej: ABC.jpg o ABC+DEF"
-                                        value="{{ $defaultSp }}">
+                                        value="{{ $toy->imagenppal }}">
+
                                     <div class="form-text">
                                         Si no indicas extensión, se intentará .jpg, .jpeg, .png.
                                         Si la referencia es un combo (con <code>+</code>), se descargarán <em>todas</em>.

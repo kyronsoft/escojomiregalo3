@@ -100,18 +100,24 @@ class EmpresaController extends Controller
             'color_primario'    => ['nullable', 'string', 'size:7'],
             'color_secundario'  => ['nullable', 'string', 'size:7'],
             'color_terciario'   => ['nullable', 'string', 'size:7'],
+            'color_boton_nino'  => ['nullable', 'string', 'size:7'],
+            'color_boton_nina'  => ['nullable', 'string', 'size:7'],
+            'color_boton_unisex'=> ['nullable', 'string', 'size:7'],
             'welcome_msg'       => ['nullable', 'string'],
         ]);
 
         $empresa = new Empresa([
             'nit'               => $data['nit'],
-            'nombre'            => $data['nombre']           ?? null,
-            'ciudad'            => $data['ciudad']           ?? null,
-            'direccion'         => $data['direccion']        ?? null,
-            'color_primario'    => $data['color_primario']   ?? null,
-            'color_secundario'  => $data['color_secundario'] ?? null,
-            'color_terciario'   => $data['color_terciario']  ?? null,
-            'welcome_msg'       => $data['welcome_msg']      ?? null,
+            'nombre'            => $data['nombre']            ?? null,
+            'ciudad'            => $data['ciudad']            ?? null,
+            'direccion'         => $data['direccion']         ?? null,
+            'color_primario'    => $data['color_primario']    ?? null,
+            'color_secundario'  => $data['color_secundario']  ?? null,
+            'color_terciario'   => $data['color_terciario']   ?? null,
+            'color_boton_nino'  => $data['color_boton_nino']  ?? null,
+            'color_boton_nina'  => $data['color_boton_nina']  ?? null,
+            'color_boton_unisex'=> $data['color_boton_unisex']?? null,
+            'welcome_msg'       => $data['welcome_msg']       ?? null,
             'username'          => Auth::user()->documento,
         ]);
 
@@ -193,11 +199,14 @@ class EmpresaController extends Controller
             'logo'             => ['nullable', 'image', 'mimes:bmp,jpg,jpeg,png', 'max:2048'],
             'banner'           => ['nullable', 'image', 'mimes:bmp,jpg,jpeg,png', 'max:4096'],
             'imagen_login'     => ['nullable', 'image', 'mimes:bmp,jpg,jpeg,png', 'max:2048'],
-            'color_primario'   => ['nullable', 'string', 'size:7'],
-            'color_secundario' => ['nullable', 'string', 'size:7'],
-            'color_terciario'  => ['nullable', 'string', 'size:7'],
-            'welcome_msg'      => ['nullable', 'string'],
-            'codigoVendedor'   => ['nullable', 'string', 'max:10'],
+            'color_primario'    => ['nullable', 'string', 'size:7'],
+            'color_secundario'  => ['nullable', 'string', 'size:7'],
+            'color_terciario'   => ['nullable', 'string', 'size:7'],
+            'color_boton_nino'  => ['nullable', 'string', 'size:7'],
+            'color_boton_nina'  => ['nullable', 'string', 'size:7'],
+            'color_boton_unisex'=> ['nullable', 'string', 'size:7'],
+            'welcome_msg'       => ['nullable', 'string'],
+            'codigoVendedor'    => ['nullable', 'string', 'max:10'],
         ]);
 
         // Carpeta por empresa en el disco public (campaigns/{nit})

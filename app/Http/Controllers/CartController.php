@@ -39,6 +39,7 @@ class CartController extends Controller
                 'seleccionados.referencia',
                 'campaign_toys.nombre as toy_nombre',
                 'campaign_toys.imagenppal',
+                'campaign_toys.genero',
                 'colaborador_hijos.nombre_hijo as child_nombre',
             ])
             ->join('colaborador_hijos', 'colaborador_hijos.id', '=', 'seleccionados.idhijo')
@@ -61,19 +62,31 @@ class CartController extends Controller
             ->orderByDesc('created_at')
             ->value('idcampaign');
 
-        // 4) Banner de campaña (si aplica)
+        // 4) Banner de campaña y colores de empresa
         $campaignBannerUrl = null;
+        $colorBotonNino    = '#BA895D';
+        $colorBotonNina    = '#1B4C43';
+        $colorBotonUnisex  = '#000000';
+
         if ($campaignId) {
             $campaign = \App\Models\Campaign::find($campaignId);
             if ($campaign && filled($campaign->banner) && $campaign->banner !== 'ND') {
-                // Usa disk 'public'
                 $campaignBannerUrl = url(Storage::disk('public')->url($campaign->banner));
+            }
+            if ($campaign?->nit) {
+                $empresa = \App\Models\Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$campaign->nit)])->first();
+                $colorBotonNino   = $empresa?->color_boton_nino   ?: $colorBotonNino;
+                $colorBotonNina   = $empresa?->color_boton_nina   ?: $colorBotonNina;
+                $colorBotonUnisex = $empresa?->color_boton_unisex ?: $colorBotonUnisex;
             }
         }
 
         return view('ecommerce.cart', [
             'items'             => $items,
             'campaignBannerUrl' => $campaignBannerUrl,
+            'colorBotonNino'    => $colorBotonNino,
+            'colorBotonNina'    => $colorBotonNina,
+            'colorBotonUnisex'  => $colorBotonUnisex,
         ]);
     }
 

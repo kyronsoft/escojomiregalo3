@@ -5,9 +5,25 @@
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/owlcarousel.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/range-slider.css') }}">
     <style>
+        @php
+            // Contraste YIQ: devuelve #fff o #000 según luminancia del fondo
+            $yiqContrast = function(string $hex): string {
+                $hex = ltrim($hex, '#');
+                $r = hexdec(substr($hex, 0, 2));
+                $g = hexdec(substr($hex, 2, 2));
+                $b = hexdec(substr($hex, 4, 2));
+                return (($r * 299 + $g * 587 + $b * 114) / 1000) >= 128 ? '#000000' : '#ffffff';
+            };
+        @endphp
         :root {
             --primary: {{ $primaryColor }};
             --secondary: {{ $secondaryColor }};
+            --kid-boy:          {{ $colorBotonNino }};
+            --kid-girl:         {{ $colorBotonNina }};
+            --kid-neutral:      {{ $colorBotonUnisex }};
+            --kid-boy-text:     {{ $yiqContrast($colorBotonNino) }};
+            --kid-girl-text:    {{ $yiqContrast($colorBotonNina) }};
+            --kid-neutral-text: {{ $yiqContrast($colorBotonUnisex) }};
         }
 
         /* Fondo con 50% de opacidad detrás del contenido */
@@ -63,13 +79,13 @@
 
         .site-content { position: relative; }
 
-        /* Colores botones por género */
-        .btn-kid-girl { background:#1B4C43 !important; border-color:#1B4C43 !important; color:#fff !important; }
-        .btn-kid-boy  { background:#BA895D !important; border-color:#BA895D !important; color:#fff !important; }
-        .btn-kid-neutral { background:#000 !important; border-color:#000 !important; color:#fff !important; }
+        /* Colores botones por género — configurables desde empresa */
+        .btn-kid-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl)    !important; color: var(--kid-girl-text)    !important; }
+        .btn-kid-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy)     !important; color: var(--kid-boy-text)     !important; }
+        .btn-kid-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral) !important; color: var(--kid-neutral-text) !important; }
         .btn-kid-girl:hover, .btn-kid-girl:focus,
         .btn-kid-boy:hover, .btn-kid-boy:focus,
-        .btn-kid-neutral:hover, .btn-kid-neutral:focus { filter: brightness(.95); }
+        .btn-kid-neutral:hover, .btn-kid-neutral:focus { filter: brightness(.92); }
 
         .child-btn { position: relative; border-width: 2px; transition: transform .12s ease, box-shadow .18s ease, filter .18s ease; white-space: normal; overflow: visible; line-height: 1.2; padding: .65rem .8rem; }
         .child-btn:active { transform: translateY(1px) scale(.985); }

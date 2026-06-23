@@ -79,8 +79,11 @@
                     </div>
                     <div class="col-12 col-md-12 d-flex gap-2 justify-content-end">
                         <a href="{{ route('seleccionados.index') }}" class="btn btn-outline-secondary">Limpiar</a>
-                        <a id="btnExportExcel" href="{{ route('seleccionados.export', request()->query()) }}"
-                            class="btn btn-success">
+                        <a id="btnExportExcel"
+                            href="{{ $campaignId ? route('seleccionados.export', request()->query()) : '#' }}"
+                            class="btn btn-success {{ $campaignId ? '' : 'disabled' }}"
+                            aria-disabled="{{ $campaignId ? 'false' : 'true' }}"
+                            tabindex="{{ $campaignId ? '0' : '-1' }}">
                             Exportar Excel
                         </a>
                         <button class="btn btn-primary" type="submit">Filtrar</button>
@@ -138,7 +141,18 @@
         const q = getFilters();
         delete q.size;
         delete q.page;
-        exportBtn.href = exportUrlBase + '?' + buildQuery(q);
+        const hasCampaign = (q.idcampaign || '').trim() !== '';
+        if (hasCampaign) {
+            exportBtn.href = exportUrlBase + '?' + buildQuery(q);
+            exportBtn.classList.remove('disabled');
+            exportBtn.removeAttribute('aria-disabled');
+            exportBtn.removeAttribute('tabindex');
+        } else {
+            exportBtn.href = '#';
+            exportBtn.classList.add('disabled');
+            exportBtn.setAttribute('aria-disabled', 'true');
+            exportBtn.setAttribute('tabindex', '-1');
+        }
     }
 
     function fmtDateTime(val) {
@@ -228,7 +242,10 @@
         updateExportHref();
     });
 
-    // Inicializa export vacío
+    // Actualizar href de exportar cuando cambia la campaña
+    campaignSelect.addEventListener('change', updateExportHref);
+
+    // Inicializa estado del botón exportar
     updateExportHref();
 })();
 </script>

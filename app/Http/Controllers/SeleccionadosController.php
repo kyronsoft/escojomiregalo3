@@ -124,6 +124,24 @@ class SeleccionadosController extends Controller
      */
     public function export(Request $request)
     {
+        $campaignId = $request->input('idcampaign', $request->input('idcampaing'));
+
+        if (empty($campaignId)) {
+            abort(422, 'Debe seleccionar una campaña antes de exportar.');
+        }
+
+        // Verificar que la campaña exista y pertenezca al usuario
+        $user    = Auth::user();
+        $isAdmin = $user?->hasRole('Admin');
+        $belongs = Campaign::query()
+            ->where('id', (int) $campaignId)
+            ->when(!$isAdmin, fn($q) => $q->where('nit', $user?->nit))
+            ->exists();
+
+        if (!$belongs) {
+            abort(403, 'La campaña seleccionada no existe o no tiene acceso a ella.');
+        }
+
         // Misma base query, sin paginar, y orden coherente
         $q = $this->baseQuery($request)
             ->orderBy(DB::raw('CASE WHEN s.created_at IS NULL THEN 1 ELSE 0 END'))
@@ -220,6 +238,9 @@ class SeleccionadosController extends Controller
         $dateFrom   = $request->input('date_from');
         $dateTo     = $request->input('date_to');
 
+        $user    = Auth::user();
+        $isAdmin = $user?->hasRole('Admin');
+
         $q = DB::table('campaing_colaboradores as cc')
             // Colaborador asignado a la campaña
             ->leftJoin('colaboradores as col', 'col.documento', '=', 'cc.documento')
@@ -272,6 +293,11 @@ class SeleccionadosController extends Controller
                 // útil para UI
                 DB::raw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END as selected'),
             ]);
+
+        // ===== Scope de seguridad: no-Admin solo ve su NIT =====
+        if (!$isAdmin && $user?->nit) {
+            $q->where('cc.nit', $user->nit);
+        }
 
         // ===== Filtros =====
         if (!empty($campaignId)) {

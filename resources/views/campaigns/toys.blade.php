@@ -24,6 +24,15 @@
             border-radius: .5rem;
             background: #f5f5f5;
         }
+
+        .row-sin-unidades {
+            background-color: #fff1f0 !important;
+        }
+
+        .badge-sin-unidades {
+            font-size: .7rem;
+            vertical-align: middle;
+        }
     </style>
 @endpush
 
@@ -149,8 +158,16 @@
                 {
                     title: "Unid.",
                     field: "unidades",
-                    width: 90,
-                    hozAlign: "right"
+                    width: 120,
+                    hozAlign: "right",
+                    formatter: function(cell) {
+                        const val = cell.getValue() ?? 0;
+                        if (val <= 0) {
+                            return `<span class="text-danger fw-semibold">${val}</span>
+                                <span class="badge bg-danger badge-sin-unidades ms-1">Sin unidades</span>`;
+                        }
+                        return String(val);
+                    }
                 },
                 {
                     title: "Precio",
@@ -211,6 +228,14 @@
                     column: "updated_at",
                     dir: "desc"
                 }],
+                rowFormatter: function(row) {
+                    const data = row.getData();
+                    if ((data.unidades ?? 1) <= 0) {
+                        row.getElement().classList.add('row-sin-unidades');
+                    } else {
+                        row.getElement().classList.remove('row-sin-unidades');
+                    }
+                },
             });
 
             window.addEventListener('resize', () => table.redraw(true));

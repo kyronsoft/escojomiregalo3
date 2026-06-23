@@ -25,12 +25,13 @@ class Campaign extends Model
     ];
 
     protected $casts = [
-        'fechaini'   => 'date',
-        'fechafin'   => 'date',
-        'idtipo'     => 'integer',
-        'doc_yeminus' => 'integer',
-        'dashboard'  => 'boolean',
-        'nit' => 'string'
+        'fechaini'     => 'date',
+        'fechafin'     => 'date',
+        'idtipo'       => 'integer',
+        'doc_yeminus'  => 'integer',
+        'dashboard'    => 'boolean',
+        'mostrargenero' => 'boolean',
+        'nit'          => 'string',
     ];
 
     public function setNitAttribute($value)

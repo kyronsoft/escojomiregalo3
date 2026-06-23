@@ -79,8 +79,11 @@
                     </div>
                     <div class="col-12 col-md-12 d-flex gap-2 justify-content-end">
                         <a href="{{ route('seleccionados.index') }}" class="btn btn-outline-secondary">Limpiar</a>
-                        <a id="btnExportExcel" href="{{ route('seleccionados.export', request()->query()) }}"
-                            class="btn btn-success">
+                        <a id="btnExportExcel"
+                            href="{{ route('seleccionados.export', request()->query()) }}"
+                            class="btn btn-success {{ empty($campaignId) ? 'disabled' : '' }}"
+                            aria-disabled="{{ empty($campaignId) ? 'true' : 'false' }}"
+                            title="{{ empty($campaignId) ? 'Seleccione una campaña antes de exportar' : 'Exportar Excel' }}">
                             Exportar Excel
                         </a>
                         <button class="btn btn-primary" type="submit">Filtrar</button>
@@ -139,7 +142,16 @@
         delete q.size;
         delete q.page;
         exportBtn.href = exportUrlBase + '?' + buildQuery(q);
+
+        const hasCampaign = (campaignSelect.value || '').trim() !== '';
+        exportBtn.classList.toggle('disabled', !hasCampaign);
+        exportBtn.setAttribute('aria-disabled', hasCampaign ? 'false' : 'true');
+        exportBtn.setAttribute('title', hasCampaign
+            ? 'Exportar Excel'
+            : 'Seleccione una campaña antes de exportar');
     }
+
+    campaignSelect.addEventListener('change', updateExportHref);
 
     function fmtDateTime(val) {
         if (!val) return '';

@@ -131,6 +131,18 @@
                             <label class="form-label">Confirmar contraseña</label>
                             <input type="password" name="password_confirmation" class="form-control" required>
                         </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="send_credentials"
+                                    name="send_credentials" value="1"
+                                    {{ old('send_credentials') ? 'checked' : '' }}>
+                                <label class="form-check-label" for="send_credentials">
+                                    Enviar correo de credenciales al usuario
+                                </label>
+                            </div>
+                            <small class="text-muted">Solo aplica si el usuario tiene un correo válido. El usuario siempre se crea.</small>
+                        </div>
                     </div>
 
                     <div class="d-flex justify-content-end mt-4">

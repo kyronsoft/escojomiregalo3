@@ -18,13 +18,15 @@ class ColaboradorImportController extends Controller
     public function import(Request $request)
     {
         $data = $request->validate([
-            'idcampaign' => ['required', 'integer', 'exists:campaigns,id'],
-            'file'       => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
+            'idcampaign'        => ['required', 'integer', 'exists:campaigns,id'],
+            'file'              => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
+            'send_notification' => ['nullable', 'boolean'],
         ]);
 
-        $campaign = Campaign::findOrFail($data['idcampaign']);
+        $campaign         = Campaign::findOrFail($data['idcampaign']);
+        $sendNotification = (bool) ($data['send_notification'] ?? false);
 
-        $import = new ColaboradoresImport($campaign);
+        $import = new ColaboradoresImport($campaign, $sendNotification);
         Excel::import($import, $data['file']);
 
         return back()

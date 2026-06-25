@@ -22,12 +22,13 @@ class SeleccionadosController extends Controller
         $perPage = (int) $request->input('per_page', 25);
         $perPage = max(5, min($perPage, 200));
 
-        // NIT del usuario logueado
-        $userNit = Auth::user()?->nit;
+        $user    = Auth::user();
+        $userNit = $user?->nit;
+        $isAdmin = $user?->hasRole('Admin');
 
-        // Campañas visibles SOLO por NIT del usuario
+        // Campañas visibles: Admin ve todas; los demás solo su NIT.
         $campaigns = Campaign::query()
-            ->when($userNit, fn($q) => $q->where('nit', $userNit))
+            ->when(!$isAdmin && $userNit, fn($q) => $q->where('nit', $userNit))
             ->orderBy('updated_at', 'desc')
             ->get(['id', 'nombre', 'nit']); // incluyo 'nit' para validación
 
@@ -126,20 +127,27 @@ class SeleccionadosController extends Controller
     {
         $campaignId = $request->input('idcampaign', $request->input('idcampaing'));
 
-        if (empty($campaignId)) {
-            abort(422, 'Debe seleccionar una campaña antes de exportar.');
-        }
-
-        // Verificar que la campaña exista y pertenezca al usuario
         $user    = Auth::user();
         $isAdmin = $user?->hasRole('Admin');
-        $belongs = Campaign::query()
-            ->where('id', (int) $campaignId)
-            ->when(!$isAdmin, fn($q) => $q->where('nit', $user?->nit))
-            ->exists();
 
-        if (!$belongs) {
-            abort(403, 'La campaña seleccionada no existe o no tiene acceso a ella.');
+        // Si viene campaña, se respeta solo si el usuario tiene acceso.
+        // Para no-Admin con campaña ajena manipulada, se ignora el filtro y baseQuery mantiene el scope por NIT.
+        if (!empty($campaignId)) {
+            $belongs = Campaign::query()
+                ->where('id', (int) $campaignId)
+                ->when(!$isAdmin, fn($q) => $q->where('nit', $user?->nit))
+                ->exists();
+
+            if (!$belongs) {
+                if ($isAdmin) {
+                    abort(403, 'La campaña seleccionada no existe o no tiene acceso a ella.');
+                }
+
+                $request->merge([
+                    'idcampaign' => null,
+                    'idcampaing' => null,
+                ]);
+            }
         }
 
         // Misma base query, sin paginar, y orden coherente
@@ -238,29 +246,19 @@ class SeleccionadosController extends Controller
         $dateFrom   = $request->input('date_from');
         $dateTo     = $request->input('date_to');
 
-        $user          = Auth::user();
-        $userNit       = $user?->nit;
-        $isRrhhCliente = $user?->hasRole('RRHH-Cliente');
-
-        // Para RRHH-Cliente: validar que el idcampaign pertenezca a su NIT antes de aplicarlo
-        if ($isRrhhCliente && $userNit && !empty($campaignId)) {
-            $campaignBelongsToNit = DB::table('campaigns')
-                ->where('id', (int) $campaignId)
-                ->where('nit', $userNit)
-                ->exists();
-            if (!$campaignBelongsToNit) {
-                $campaignId = null;
-            }
-        }
         $user    = Auth::user();
+        $userNit = $user?->nit;
         $isAdmin = $user?->hasRole('Admin');
 
         $q = DB::table('campaing_colaboradores as cc')
             // Colaborador asignado a la campaña
             ->leftJoin('colaboradores as col', 'col.documento', '=', 'cc.documento')
 
-            // TODOS los hijos del colaborador (aunque no hayan seleccionado)
-            ->leftJoin('colaborador_hijos as h', 'h.identificacion', '=', 'cc.documento')
+            // TODOS los hijos del colaborador en la misma campaña (aunque no hayan seleccionado)
+            ->leftJoin('colaborador_hijos as h', function ($join) {
+                $join->on('h.identificacion', '=', 'cc.documento')
+                    ->on('h.idcampaing', '=', 'cc.idcampaign');
+            })
 
             // Selección por hijo y campaña (si existe)
             ->leftJoin('seleccionados as s', function ($join) {
@@ -308,9 +306,6 @@ class SeleccionadosController extends Controller
                 DB::raw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END as selected'),
             ]);
 
-        // Restringir RRHH-Cliente a los datos de su propio NIT
-        if ($isRrhhCliente && $userNit) {
-            $q->where('cc.nit', $userNit);
         // ===== Scope de seguridad: no-Admin solo ve su NIT =====
         if (!$isAdmin && $user?->nit) {
             $q->where('cc.nit', $user->nit);

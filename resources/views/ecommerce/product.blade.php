@@ -21,6 +21,7 @@
             --kid-boy:          {{ $colorBotonNino }};
             --kid-girl:         {{ $colorBotonNina }};
             --kid-neutral:      {{ $colorBotonUnisex }};
+            --secondary-text:   {{ $yiqContrast($secondaryColor) }};
             --kid-boy-text:     {{ $yiqContrast($colorBotonNino) }};
             --kid-girl-text:    {{ $yiqContrast($colorBotonNina) }};
             --kid-neutral-text: {{ $yiqContrast($colorBotonUnisex) }};
@@ -74,8 +75,8 @@
         }
         @media (min-width:992px) { .topbar-logo-img { height: 100px; } }
 
-        .btn-top { background: var(--secondary) !important; border-color: var(--secondary) !important; color:#fff !important; }
-        .btn-top:hover, .btn-top:focus { filter: brightness(.92); color:#fff !important; }
+        .btn-top { background: var(--secondary) !important; border-color: var(--secondary) !important; color: var(--secondary-text) !important; }
+        .btn-top:hover, .btn-top:focus { filter: brightness(.92); color: var(--secondary-text) !important; }
 
         .site-content { position: relative; }
 

@@ -195,6 +195,12 @@ class CampaignCollaboratorController extends Controller
             $documento = (string) $r->documento;
 
             if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                Log::warning('Notificación masiva omitida: colaborador sin email válido', [
+                    'documento' => $documento,
+                    'email'     => $email,
+                    'campaign'  => $campaign->id ?? null,
+                ]);
+
                 DB::table('importerrors')->insert([
                     'row'        => 0,
                     'attribute'  => 'email',
@@ -304,7 +310,13 @@ class CampaignCollaboratorController extends Controller
         }
 
         if (empty($row->email) || !filter_var($row->email, FILTER_VALIDATE_EMAIL)) {
-            return response()->json(['message' => 'Colaborador sin email válido.'], 422);
+            Log::warning('Notificación individual omitida: colaborador sin email válido', [
+                'documento' => $row->documento,
+                'email'     => $row->email,
+                'campaign'  => $campaign->id ?? null,
+            ]);
+
+            return response()->json(['message' => 'Colaborador sin email válido. No se envió notificación.'], 422);
         }
 
         $documento = (string)$row->documento;

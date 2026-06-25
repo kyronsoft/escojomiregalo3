@@ -238,6 +238,20 @@ class SeleccionadosController extends Controller
         $dateFrom   = $request->input('date_from');
         $dateTo     = $request->input('date_to');
 
+        $user          = Auth::user();
+        $userNit       = $user?->nit;
+        $isRrhhCliente = $user?->hasRole('RRHH-Cliente');
+
+        // Para RRHH-Cliente: validar que el idcampaign pertenezca a su NIT antes de aplicarlo
+        if ($isRrhhCliente && $userNit && !empty($campaignId)) {
+            $campaignBelongsToNit = DB::table('campaigns')
+                ->where('id', (int) $campaignId)
+                ->where('nit', $userNit)
+                ->exists();
+            if (!$campaignBelongsToNit) {
+                $campaignId = null;
+            }
+        }
         $user    = Auth::user();
         $isAdmin = $user?->hasRole('Admin');
 
@@ -284,7 +298,7 @@ class SeleccionadosController extends Controller
                 'ciu.departamento',
                 'cc.sucursal',
                 'col.email',
-                DB::raw('COALESCE(NULLIF(e.nombre,""), c.nombre) as empresa'),
+                DB::raw("COALESCE(NULLIF(e.nombre,''), c.nombre) as empresa"),
 
                 // extra opcional de juguete
                 DB::raw("COALESCE(NULLIF(t.nombre,''), CASE WHEN s.referencia IS NOT NULL THEN CONCAT('Ref ', s.referencia) ELSE '' END) as toy_name"),
@@ -294,6 +308,9 @@ class SeleccionadosController extends Controller
                 DB::raw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END as selected'),
             ]);
 
+        // Restringir RRHH-Cliente a los datos de su propio NIT
+        if ($isRrhhCliente && $userNit) {
+            $q->where('cc.nit', $userNit);
         // ===== Scope de seguridad: no-Admin solo ve su NIT =====
         if (!$isAdmin && $user?->nit) {
             $q->where('cc.nit', $user->nit);

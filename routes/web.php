@@ -135,8 +135,10 @@ Route::prefix('empresas')->name('empresas.')->group(function () {
 /**
  * Listado (por campaña) manejado por CampaignToysController
  */
-Route::get('/campaigns/{campaign}/toys',      [CampaignToysController::class, 'index'])->name('campaigns.toys');
-Route::get('/campaigns/{campaign}/toys/data', [CampaignToysController::class, 'data'])->name('campaigns.toys.data');
+Route::get('/campaigns/{campaign}/toys',             [CampaignToysController::class, 'index'])->name('campaigns.toys');
+Route::get('/campaigns/{campaign}/toys/data',        [CampaignToysController::class, 'data'])->name('campaigns.toys.data');
+Route::get('/campaigns/{campaign}/toys/export',      [CampaignToysController::class, 'export'])->name('campaigns.toys.export');
+Route::patch('/campaigns/{campaign}/toys/{toy}/unidades', [CampaignToysController::class, 'updateUnidades'])->name('campaigns.toys.unidades');
 
 /**
  * CRUD de campañas

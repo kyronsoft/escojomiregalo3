@@ -141,11 +141,12 @@
             }
 
             // ========= Rutas =========
-            const dataURL      = `{{ route('campaigns.collaborators.data', $campaign) }}`;
-            const sendAllURL   = `{{ route('campaigns.collaborators.emailAll', $campaign) }}`;
-            const sendOneURL   = `{{ route('campaigns.collaborators.emailOne', $campaign) }}`;
-            const updateOneURL = `{{ route('campaigns.collaborators.updateOne', $campaign) }}`;
-            const destroyTpl   = `{{ route('campaigns.collaborators.destroy', ['campaign' => $campaign, 'documento' => '__DOC__']) }}`;
+            const dataURL         = `{{ route('campaigns.collaborators.data', $campaign) }}`;
+            const sendAllURL      = `{{ route('campaigns.collaborators.emailAll', $campaign) }}`;
+            const sendOneURL      = `{{ route('campaigns.collaborators.emailOne', $campaign) }}`;
+            const updateOneURL    = `{{ route('campaigns.collaborators.updateOne', $campaign) }}`;
+            const toggleNotifyURL = `{{ route('campaigns.collaborators.toggleNotify', $campaign) }}`;
+            const destroyTpl      = `{{ route('campaigns.collaborators.destroy', ['campaign' => $campaign, 'documento' => '__DOC__']) }}`;
 
             const IS_EXEC = @json($isExec);
 
@@ -177,6 +178,22 @@
                 return `<div class="d-flex gap-1 justify-content-center flex-wrap">${resendBtn}${editBtn}${delBtn}</div>`;
             }
 
+            function notifyToggleFormatter(cell) {
+                if (IS_EXEC) {
+                    const v = cell.getValue();
+                    return v
+                        ? '<span class="badge bg-success">Habilitada</span>'
+                        : '<span class="badge bg-secondary">Deshabilitada</span>';
+                }
+                const r = cell.getRow().getData();
+                const doc = String(r.documento || '');
+                const docEnc = encodeURIComponent(doc);
+                const enabled = cell.getValue();
+                const label = enabled ? 'Habilitada' : 'Deshabilitada';
+                const cls   = enabled ? 'btn-success' : 'btn-secondary';
+                return `<button class="btn btn-sm ${cls}" onclick="toggleNotify('${docEnc}', ${enabled ? 0 : 1})">${label}</button>`;
+            }
+
             const columns = [
                 { title: 'Documento', field: 'documento', width: 140, headerFilter: 'input' },
                 { title: 'Nombre', field: 'nombre', minWidth: 220, headerFilter: 'input' },
@@ -199,6 +216,14 @@
                     formatter: c => c.getValue()
                         ? '<span class="badge bg-success">Sí</span>'
                         : '<span class="badge bg-secondary">No</span>'
+                },
+                {
+                    title: 'Notificación',
+                    field: 'notify_enabled',
+                    width: 150,
+                    hozAlign: 'center',
+                    formatter: notifyToggleFormatter,
+                    headerSort: false,
                 },
                 { title: 'NIT', field: 'nit', width: 110, headerFilter: 'input' },
                 {
@@ -236,6 +261,54 @@
             });
 
             window.addEventListener('resize', () => table.redraw(true));
+
+            // -------- Activar/desactivar notificación --------
+            window.toggleNotify = function (docEnc, newValue) {
+                if (IS_EXEC) return;
+                const documento = decodeURIComponent(docEnc);
+                const row = (table.getRows() || []).find(r => (r.getData()?.documento || '') == documento);
+                const d = row ? row.getData() : {};
+                const accion = newValue ? 'habilitar' : 'deshabilitar';
+
+                Swal.fire({
+                    title: `¿${accion.charAt(0).toUpperCase() + accion.slice(1)} notificación?`,
+                    html: `Se va a <b>${accion}</b> la notificación para:<br><b>${d?.nombre || documento}</b>`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirmar',
+                    cancelButtonText: 'Cancelar'
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+
+                    const init = {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: commonHeaders(true),
+                        body: JSON.stringify({ documento, notify_enabled: newValue })
+                    };
+
+                    fetch(toggleNotifyURL, init)
+                    .then(async r => {
+                        if (r.status === 419) {
+                            const r2 = await retryAfterCsrf(toggleNotifyURL, init, true);
+                            if (!r2.ok) { showExpiredAndSuggestReload(); return; }
+                            if (row) row.update({ notify_enabled: !!newValue });
+                            await reloadTable();
+                            return;
+                        }
+                        const { data } = await parseResponseSafe(r);
+                        if (r.ok) {
+                            if (row) row.update({ notify_enabled: !!newValue });
+                            await reloadTable();
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error', text: (data && data.message) || 'No se pudo actualizar.' });
+                        }
+                    })
+                    .catch(() => {
+                        Swal.fire({ icon: 'error', title: 'Error de red', text: 'No fue posible contactar el servidor.' });
+                    });
+                });
+            };
 
             // -------- Reenviar correo --------
             window.sendOne = function (docEnc) {
@@ -480,15 +553,16 @@
             $('#btn-send-all').on('click', function () {
                 if (IS_EXEC) return;
                 const plantilla = ($('#plantilla').val() || 'standard');
-                const total = (table.getData() || []).length;
-                if (!total) {
-                    Swal.fire({ icon: 'info', title: 'Sin colaboradores', text: 'No hay colaboradores para notificar.' });
+                const allData = table.getData() || [];
+                const habilitados = allData.filter(r => r.notify_enabled).length;
+                if (!habilitados) {
+                    Swal.fire({ icon: 'info', title: 'Sin colaboradores', text: 'No hay colaboradores con notificación habilitada para enviar.' });
                     return;
                 }
 
                 Swal.fire({
                     title: '¿Enviar correos?',
-                    html: `Se enviará la plantilla <b>${$('#plantilla option:selected').text()}</b> a <b>${total}</b> colaborador(es).`,
+                    html: `Se enviará la plantilla <b>${$('#plantilla option:selected').text()}</b> a <b>${habilitados}</b> colaborador(es) con notificación habilitada.`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Sí, enviar',

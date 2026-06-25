@@ -194,6 +194,9 @@ Route::middleware(['auth', 'role:Admin'])->group(function () {
     Route::post('/campaigns/{campaign}/collaborators/email-one', [CampaignCollaboratorController::class, 'emailOne'])->name('campaigns.collaborators.emailOne');
     Route::post('/campaigns/{campaign}/collaborators/update',    [CampaignCollaboratorController::class, 'updateOne'])->name('campaigns.collaborators.updateOne');
 
+    // Activar/desactivar notificación por colaborador
+    Route::post('/campaigns/{campaign}/collaborators/toggle-notify', [CampaignCollaboratorController::class, 'toggleNotify'])->name('campaigns.collaborators.toggleNotify');
+
     // Eliminar por documento
     Route::delete('/campaigns/{campaign}/collaborators/{documento}', [CampaignCollaboratorController::class, 'destroy'])
         ->where('documento', '[A-Za-z0-9\-\.]+')

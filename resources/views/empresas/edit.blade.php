@@ -299,6 +299,58 @@
                                     </div>
                                 </div>
 
+                                {{-- Colores botones género --}}
+                                <div class="row">
+                                    <div class="col-12 mb-1">
+                                        <h6 class="text-muted">Colores de botones por género</h6>
+                                    </div>
+                                    <div class="col-12 col-md-4 mb-3">
+                                        <div class="row">
+                                            <div class="col-12 col-md-4">
+                                                <label class="col-form-label" for="color_boton_nino">Botón Niño</label>
+                                            </div>
+                                            <div class="col-12 col-md-8">
+                                                <input class="form-control @error('color_boton_nino') is-invalid @enderror"
+                                                    id="color_boton_nino" type="color" name="color_boton_nino"
+                                                    value="{{ old('color_boton_nino', $empresa->color_boton_nino ?? '#BA895D') }}" />
+                                                @error('color_boton_nino')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-4 mb-3">
+                                        <div class="row">
+                                            <div class="col-12 col-md-4">
+                                                <label class="col-form-label" for="color_boton_nina">Botón Niña</label>
+                                            </div>
+                                            <div class="col-12 col-md-8">
+                                                <input class="form-control @error('color_boton_nina') is-invalid @enderror"
+                                                    id="color_boton_nina" type="color" name="color_boton_nina"
+                                                    value="{{ old('color_boton_nina', $empresa->color_boton_nina ?? '#1B4C43') }}" />
+                                                @error('color_boton_nina')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-4 mb-3">
+                                        <div class="row">
+                                            <div class="col-12 col-md-4">
+                                                <label class="col-form-label" for="color_boton_unisex">Botón Unisex</label>
+                                            </div>
+                                            <div class="col-12 col-md-8">
+                                                <input class="form-control @error('color_boton_unisex') is-invalid @enderror"
+                                                    id="color_boton_unisex" type="color" name="color_boton_unisex"
+                                                    value="{{ old('color_boton_unisex', $empresa->color_boton_unisex ?? '#000000') }}" />
+                                                @error('color_boton_unisex')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {{-- Mensaje de bienvenida --}}
                                 <div class="col-12 mb-3">
                                     <label class="col-form-label" for="welcome_msg">Mensaje de Bienvenida</label>

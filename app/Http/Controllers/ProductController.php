@@ -70,6 +70,11 @@ class ProductController extends Controller
         $secondaryColor = $empresa?->color_secundario ?: '#f2f2f2';
         $welcomeMsg     = (string) ($empresa->welcome_msg ?? '');
 
+        // Colores de botones por género (con defaults históricos)
+        $colorBotonNino   = $empresa?->color_boton_nino   ?: '#BA895D';
+        $colorBotonNina   = $empresa?->color_boton_nina   ?: '#1B4C43';
+        $colorBotonUnisex = $empresa?->color_boton_unisex ?: '#000000';
+
         // Colaborador (para modales)
         $colaborador = Colaborador::where('documento', $documento)->first();
 
@@ -97,7 +102,10 @@ class ProductController extends Controller
             'showWelcome'       => $showWelcome,
             'empresaLogoUrl'    => $empresaLogoUrl,
             'colaborador'       => $colaborador,
-            'mostrarGenero'     => $mostrarGenero, // 👈 disponible en la vista
+            'mostrarGenero'     => $mostrarGenero,
+            'colorBotonNino'    => $colorBotonNino,
+            'colorBotonNina'    => $colorBotonNina,
+            'colorBotonUnisex'  => $colorBotonUnisex,
         ]);
     }
 

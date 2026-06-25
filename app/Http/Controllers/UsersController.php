@@ -114,6 +114,12 @@ class UsersController extends Controller
 
         $user->syncRoles($roles);
 
+        if (!empty($data['send_credentials']) && !$email) {
+            Log::warning('Notificación de credenciales omitida al crear usuario: email vacío', [
+                'documento' => $data['documento'],
+            ]);
+        }
+
         if (!empty($data['send_credentials']) && $email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
             try {
                 dispatch(new SendWelcomeCredentialsMail(

@@ -120,7 +120,7 @@ class CampaignToysController extends Controller
     /** Descarga Excel con todos los juguetes de la campaña */
     public function export(Campaign $campaign)
     {
-        $filename = 'juguetes_campana_' . $campaign->id . '_' . now()->format('Ymd_His') . '.xlsx';
+        $filename = 'referencias_campana_' . $campaign->id . '_' . now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(new CampaignToysExport($campaign->id), $filename);
     }

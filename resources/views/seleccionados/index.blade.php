@@ -20,6 +20,53 @@
         .tabulator .tabulator-header .tabulator-col {
             white-space: nowrap;
         }
+
+        .toast-notice {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1080;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            max-width: 360px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: var(--bs-warning-bg-subtle);
+            color: var(--bs-warning-text-emphasis);
+            border: 1px solid var(--bs-warning-border-subtle);
+            box-shadow: var(--bs-box-shadow);
+            transform: translateY(12px);
+            opacity: 0;
+            transition: opacity .2s ease, transform .2s ease;
+        }
+
+        .toast-notice.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast-notice__icon {
+            flex: 0 0 auto;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: var(--bs-warning);
+            color: #1f2937;
+            font-weight: 700;
+            line-height: 28px;
+            text-align: center;
+        }
+
+        .toast-notice__body {
+            font-size: .95rem;
+            line-height: 1.35;
+        }
+
+        .toast-notice__body strong {
+            display: block;
+            margin-bottom: 2px;
+        }
     </style>
 @endpush
 
@@ -35,6 +82,15 @@
         @if (session('error'))
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
+
+        <div id="campaignWarning" class="alert alert-warning {{ $campaignId ? 'd-none' : '' }}">
+            Para exportar el avance de campaña debes seleccionar una campaña en el filtro.
+        </div>
+
+        <div id="selectionToast" class="toast-notice d-none" role="status" aria-live="polite" aria-atomic="true">
+            <div class="toast-notice__icon">!</div>
+            <div class="toast-notice__body" id="selectionToastMessage"></div>
+        </div>
 
         {{-- Filtros (el JS intercepta el submit y recarga el grid vía AJAX) --}}
         <form id="filtersForm" method="GET" class="card mb-3" autocomplete="off">
@@ -83,7 +139,8 @@
                             href="{{ $campaignId ? route('seleccionados.export', request()->query()) : '#' }}"
                             class="btn btn-success {{ $campaignId ? '' : 'disabled' }}"
                             aria-disabled="{{ $campaignId ? 'false' : 'true' }}"
-                            tabindex="{{ $campaignId ? '0' : '-1' }}">
+                            tabindex="{{ $campaignId ? '0' : '-1' }}"
+                            title="{{ $campaignId ? 'Exportar Excel' : 'Selecciona una campaña para exportar' }}">
                             Exportar Excel
                         </a>
                         <button class="btn btn-primary" type="submit">Filtrar</button>
@@ -119,7 +176,22 @@
     const perPageEl = document.getElementById('perPage');
     const exportBtn = document.getElementById('btnExportExcel');
     const resumenEl = document.getElementById('tablaResumen');
+    const campaignWarning = document.getElementById('campaignWarning');
+    const selectionToast = document.getElementById('selectionToast');
+    const selectionToastMessage = document.getElementById('selectionToastMessage');
     const campaignSelect = formEl.querySelector('select[name="idcampaign"]');
+    let toastTimer = null;
+
+    function showToast(message) {
+        selectionToastMessage.innerHTML = '<strong>Atención</strong>' + message;
+        selectionToast.classList.remove('d-none');
+        requestAnimationFrame(() => selectionToast.classList.add('is-visible'));
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            selectionToast.classList.remove('is-visible');
+            setTimeout(() => selectionToast.classList.add('d-none'), 220);
+        }, 2800);
+    }
 
     function getFilters() {
         const fd = new FormData(formEl);
@@ -147,11 +219,15 @@
             exportBtn.classList.remove('disabled');
             exportBtn.removeAttribute('aria-disabled');
             exportBtn.removeAttribute('tabindex');
+            exportBtn.title = 'Exportar Excel';
+            campaignWarning.classList.add('d-none');
         } else {
             exportBtn.href = '#';
             exportBtn.classList.add('disabled');
             exportBtn.setAttribute('aria-disabled', 'true');
             exportBtn.setAttribute('tabindex', '-1');
+            exportBtn.title = 'Selecciona una campaña para exportar';
+            campaignWarning.classList.remove('d-none');
         }
     }
 
@@ -227,7 +303,7 @@
         const idcamp = campaignSelect.value.trim();
 
         if (!idcamp) {
-            alert('Por favor seleccione una campaña antes de filtrar.');
+            showToast('Por favor seleccione una campaña antes de filtrar.');
             return;
         }
 
@@ -245,9 +321,15 @@
     // Actualizar href de exportar cuando cambia la campaña
     campaignSelect.addEventListener('change', updateExportHref);
 
+    exportBtn.addEventListener('click', function(e) {
+        if (this.classList.contains('disabled')) {
+            e.preventDefault();
+            showToast('Selecciona una campaña antes de exportar el avance.');
+        }
+    });
+
     // Inicializa estado del botón exportar
     updateExportHref();
 })();
 </script>
 @endpush
-

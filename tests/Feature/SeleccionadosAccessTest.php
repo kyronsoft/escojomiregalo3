@@ -295,14 +295,24 @@ class SeleccionadosAccessTest extends TestCase
 
     public function test_rrhh_cliente_export_devuelve_xlsx(): void
     {
+        [$rrhhA, , $campaignAId] = $this->seedTwoCompanies();
+
+        $response = $this->actingAs($rrhhA)
+            ->get(route('seleccionados.export', ['idcampaign' => $campaignAId]));
+
+        $response->assertOk();
+        $contentType = $response->headers->get('Content-Type') ?? '';
+        $this->assertStringContainsStringIgnoringCase('spreadsheet', $contentType);
+    }
+
+    public function test_export_sin_campana_rechaza_la_solicitud(): void
+    {
         [$rrhhA] = $this->seedTwoCompanies();
 
         $response = $this->actingAs($rrhhA)
             ->get(route('seleccionados.export'));
 
-        $response->assertOk();
-        $contentType = $response->headers->get('Content-Type') ?? '';
-        $this->assertStringContainsStringIgnoringCase('spreadsheet', $contentType);
+        $response->assertStatus(422);
     }
 
     public function test_rrhh_cliente_export_con_idcampaign_ajeno_mantiene_restriccion(): void

@@ -127,6 +127,10 @@ class SeleccionadosController extends Controller
     {
         $campaignId = $request->input('idcampaign', $request->input('idcampaing'));
 
+        if (empty($campaignId)) {
+            abort(422, 'Debes seleccionar una campaña para exportar el avance.');
+        }
+
         $user    = Auth::user();
         $isAdmin = $user?->hasRole('Admin');
 

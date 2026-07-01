@@ -47,7 +47,7 @@
             <div class="d-flex gap-2">
                 <a href="{{ route('campaigns.toys.export', $campaign) }}"
                    class="btn btn-success btn-sm">
-                    Exportar Excel
+                    Descargar referencias
                 </a>
                 <a href="{{ route('campaigns.index') }}" class="btn btn-outline-secondary btn-sm">Volver a campañas</a>
             </div>

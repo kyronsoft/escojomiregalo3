@@ -39,10 +39,32 @@ class MsGraphClient
         $encoded = rtrim(strtr(base64_encode($shareUrl), '+/', '-_'), '=');
         $url     = "https://graph.microsoft.com/v1.0/shares/u!{$encoded}/driveItem";
 
+        $resp = Http::withToken($token)->get($url);
+        $json = $resp->json();
+
+        if (!$json || isset($json['error'])) {
+            return [];
+        }
+
+        // Obtener el driveId desde parentReference o remoteItem
+        $driveId = $json['parentReference']['driveId'] ?? null;
+        if (!$driveId) {
+            $driveId = $json['remoteItem']['parentReference']['driveId'] ?? null;
+        }
+
         $items = [];
 
-        // Inicia en el folder compartido raíz
-        $this->walkFolder($url, $token, $items);
+        // Si es carpeta → recorrer children
+        if (isset($json['folder'])) {
+            $childrenUrl = $url . '/children';
+            $this->walkChildren($childrenUrl, $token, $driveId, $items);
+        } else {
+            // Si es archivo → guardar
+            $items[] = [
+                'name'        => $json['name'] ?? null,
+                'downloadUrl' => $json['@microsoft.graph.downloadUrl'] ?? null,
+            ];
+        }
 
         return $items;
     }
@@ -50,41 +72,46 @@ class MsGraphClient
     /**
      * 🔹 Recorre en profundidad un folder (recursivo)
      */
-    private function walkFolder(string $itemUrl, string $token, array &$items): void
+    private function walkFolder(string $itemUrl, string $token, ?string $driveId, array &$items): void
     {
         $resp = Http::withToken($token)->get($itemUrl);
         $json = $resp->json();
 
-        if (!$json) return;
+        if (!$json || isset($json['error'])) return;
 
         // Si es carpeta → recorrer children
         if (isset($json['folder'])) {
             $childrenUrl = $itemUrl . '/children';
-            $this->walkChildren($childrenUrl, $token, $items);
+            $this->walkChildren($childrenUrl, $token, $driveId, $items);
         } else {
             // Si es archivo → guardar
             $items[] = [
-                'name'        => $json['name'],
+                'name'        => $json['name'] ?? null,
                 'downloadUrl' => $json['@microsoft.graph.downloadUrl'] ?? null,
             ];
         }
     }
 
-    private function walkChildren(string $childrenUrl, string $token, array &$items): void
+    private function walkChildren(string $childrenUrl, string $token, ?string $driveId, array &$items): void
     {
         $next = $childrenUrl;
         while ($next) {
             $resp = Http::withToken($token)->get($next);
             $json = $resp->json();
 
+            if (!$json || isset($json['error'])) break;
+
             foreach ($json['value'] ?? [] as $child) {
                 if (isset($child['folder'])) {
-                    // 🔁 Subcarpeta → recursión
-                    $this->walkFolder("https://graph.microsoft.com/v1.0/me/drive/items/{$child['id']}", $token, $items);
+                    // 🔁 Subcarpeta → recursión usando el driveId correcto en lugar de /me
+                    if ($driveId) {
+                        $folderUrl = "https://graph.microsoft.com/v1.0/drives/{$driveId}/items/{$child['id']}";
+                        $this->walkFolder($folderUrl, $token, $driveId, $items);
+                    }
                 } else {
                     // 📄 Archivo → guardar
                     $items[] = [
-                        'name'        => $child['name'],
+                        'name'        => $child['name'] ?? null,
                         'downloadUrl' => $child['@microsoft.graph.downloadUrl'] ?? null,
                     ];
                 }

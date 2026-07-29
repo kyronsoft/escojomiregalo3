@@ -71,7 +71,7 @@
         .hot-zone{ display:none; }
 
         /* ===== Modal de login ===== */
-        .login-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
+        .login-overlay{ position:fixed; inset:0; background:transparent; display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
         .login-overlay.active{ display:flex; }
         .login-modal{
             width:100%; max-width:420px; background:#0e0e0e; color:#fff;

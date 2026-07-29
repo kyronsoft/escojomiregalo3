@@ -221,7 +221,8 @@
                                                 <form id="finishForm" action="{{ route('ecommerce.cart.finish') }}"
                                                     method="POST" class="d-inline">
                                                     @csrf
-                                                    <button type="button" class="btn btn-success" id="btnFinish">
+                                                    <button type="button" class="btn btn-success" id="btnFinish"
+                                                        @disabled($items->isEmpty())>
                                                         Finalizar
                                                     </button>
                                                 </form>

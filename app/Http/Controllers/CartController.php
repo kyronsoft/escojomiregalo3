@@ -335,8 +335,9 @@ class CartController extends Controller
         $userEmail = $user?->email;
         $userName  = $user?->name ?? 'Usuario';
 
-        // Documento del colaborador
-        $documento = Colaborador::where('email', $userEmail)->value('documento');
+        // Documento del colaborador (igual que index(): primero el del usuario autenticado;
+        // si no está seteado, se cae al cruce por email por compatibilidad)
+        $documento = $user?->documento ?: Colaborador::where('email', $userEmail)->value('documento');
         if (!$documento) {
             return redirect()->route('product')->with('swal', [
                 'icon'  => 'error',

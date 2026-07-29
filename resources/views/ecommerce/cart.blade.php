@@ -115,14 +115,19 @@
                                         @forelse($items as $row)
                                             @php
                                                 // Construir ruta imagen: campaign_toys/{idcampaign}/{imagenppal}
+                                                // Los combos vienen con varias imágenes separadas por "+"
+                                                // (ej: BM-61311.jpg+71D118.jpg) y se muestran una al lado de otra
                                                 $imgRel = trim((string) ($row->imagenppal ?? ''));
                                                 $imgRel = ltrim($imgRel, '/');
-                                                $imgPath =
-                                                    $imgRel !== ''
-                                                        ? (Str::startsWith($imgRel, 'campaign_toys/')
-                                                            ? $imgRel
-                                                            : "campaign_toys/{$row->idcampaing}/{$imgRel}")
-                                                        : '';
+                                                $imgNames = $imgRel !== ''
+                                                    ? array_filter(array_map('trim', explode('+', $imgRel)))
+                                                    : [];
+                                                $imgPaths = array_map(
+                                                    fn($name) => Str::startsWith($name, 'campaign_toys/')
+                                                        ? $name
+                                                        : "campaign_toys/{$row->idcampaing}/{$name}",
+                                                    $imgNames
+                                                );
 
                                                 // Normalizar género (acepta NIÑO/NIÑA/UNISEX y M/F)
                                                 $genRaw = strtoupper(trim((string) ($row->genero ?? '')));
@@ -149,10 +154,14 @@
                                                 {{-- Producto: imagen + referencia + nombre --}}
                                                 <td>
                                                     <div class="d-flex flex-column align-items-center text-center">
-                                                        @if ($imgPath !== '')
-                                                            <img src="{{ Storage::url($imgPath) }}"
-                                                                alt="{{ $row->toy_nombre }}" class="img-fluid mb-2"
-                                                                style="max-width:160px">
+                                                        @if (count($imgPaths) > 0)
+                                                            <div class="d-flex flex-row justify-content-center align-items-center gap-1 mb-2">
+                                                                @foreach ($imgPaths as $imgPath)
+                                                                    <img src="{{ Storage::url($imgPath) }}"
+                                                                        alt="{{ $row->toy_nombre }}" class="img-fluid"
+                                                                        style="max-width:{{ count($imgPaths) > 1 ? '75px' : '160px' }}">
+                                                                @endforeach
+                                                            </div>
                                                         @endif
                                                         <div class="small text-muted">
                                                             Ref: <strong>{{ $row->referencia }}</strong>

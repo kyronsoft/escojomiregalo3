@@ -223,6 +223,14 @@
                     headerFilter: "input",
                     formatter: c => c.getValue() || '0'
                 },
+                {
+                    title: "Seleccionados",
+                    field: "seleccionadas",
+                    width: 130,
+                    hozAlign: "right",
+                    bottomCalc: "sum",
+                    formatter: c => c.getValue() || '0'
+                },
             ];
 
             if (!IS_EXEC) {

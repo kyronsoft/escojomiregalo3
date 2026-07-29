@@ -6,6 +6,7 @@ use App\Exports\CampaignToysExport;
 use App\Models\Campaign;
 use App\Models\CampaignToy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
@@ -45,7 +46,14 @@ class CampaignToysController extends Controller
             'updated_at',
         ]);
 
-        $out = $rows->map(function (CampaignToy $t) {
+        $seleccionadasPorReferencia = DB::table('seleccionados')
+            ->where('idcampaing', $campaign->id)
+            ->where('selected', 'Y')
+            ->select('referencia', DB::raw('COUNT(*) as total'))
+            ->groupBy('referencia')
+            ->pluck('total', 'referencia');
+
+        $out = $rows->map(function (CampaignToy $t) use ($seleccionadasPorReferencia) {
             [$urls, $partsCnt] = $this->buildImageData($t); // ← NUEVO
 
             return [
@@ -61,6 +69,7 @@ class CampaignToysController extends Controller
                 'unidades'           => $t->unidades,
                 'precio_unitario'    => $t->precio_unitario,
                 'porcentaje'         => $t->porcentaje,
+                'seleccionadas'      => (int) ($seleccionadasPorReferencia[$t->referencia] ?? 0), // ← suma de seleccionados
                 'updated_at'         => $t->updated_at,
             ];
         });

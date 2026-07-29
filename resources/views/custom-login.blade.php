@@ -11,7 +11,6 @@
 
     <style>
         :root{
-            --overlay: rgba(0,0,0,.35);
             --bar-fg: #F6C60F;
             --bar-height: 72px;
             --vh: 1vh; /* fallback para 100dvh */
@@ -46,18 +45,11 @@
             transform: translateZ(0);/* evita artefactos en móviles */
         }
 
-        /* Velo de contraste — transparente por defecto, activo solo cuando abre modal */
+        /* Sin velo de contraste — el fondo se mantiene tal cual la imagen original */
         .backdrop{
             position:fixed; inset:0; z-index:-1;
             background: transparent;
-            transition: background .25s ease;
             pointer-events:none;
-        }
-        .backdrop.active{
-            background:
-                linear-gradient(to top, rgba(0,0,0,.65), transparent 40%),
-                linear-gradient(to bottom, rgba(0,0,0,.35), transparent 30%),
-                var(--overlay);
         }
 
         /* ===== Barra inferior fija ===== */

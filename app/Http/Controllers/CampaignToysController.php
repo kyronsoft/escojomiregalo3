@@ -43,17 +43,14 @@ class CampaignToysController extends Controller
             'unidades',
             'precio_unitario',
             'porcentaje',
+            'seleccionadas',
             'updated_at',
         ]);
 
-        $seleccionadasPorReferencia = DB::table('seleccionados')
-            ->where('idcampaing', $campaign->id)
-            ->where('selected', 'Y')
-            ->select('referencia', DB::raw('COUNT(*) as total'))
-            ->groupBy('referencia')
-            ->pluck('total', 'referencia');
-
-        $out = $rows->map(function (CampaignToy $t) use ($seleccionadasPorReferencia) {
+        // "unidades" y "seleccionadas" ya se mantienen actualizadas en tiempo real
+        // por CartController (se reservan al agregar al carrito y se liberan al
+        // eliminar), por eso se leen directo de la columna en vez de recalcularlas.
+        $out = $rows->map(function (CampaignToy $t) {
             [$urls, $partsCnt] = $this->buildImageData($t); // ← NUEVO
 
             return [
@@ -69,7 +66,7 @@ class CampaignToysController extends Controller
                 'unidades'           => $t->unidades,
                 'precio_unitario'    => $t->precio_unitario,
                 'porcentaje'         => $t->porcentaje,
-                'seleccionadas'      => (int) ($seleccionadasPorReferencia[$t->referencia] ?? 0), // ← suma de seleccionados
+                'seleccionadas'      => (int) $t->seleccionadas,
                 'updated_at'         => $t->updated_at,
             ];
         });

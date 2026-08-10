@@ -74,6 +74,20 @@ class CampaignCollaboratorController extends Controller
             return response()->json(['message' => 'No existe el colaborador en esta campaña.'], 404);
         }
 
+        $emailChanged = array_key_exists('email', $validated) && $validated['email'] !== null;
+        $linkedUser = $emailChanged ? DB::table('users')->where('documento', $documento)->first() : null;
+
+        if ($emailChanged) {
+            $emailTaken = DB::table('users')
+                ->where('email', $validated['email'])
+                ->when($linkedUser, fn ($q) => $q->where('id', '!=', $linkedUser->id))
+                ->exists();
+
+            if ($emailTaken) {
+                return response()->json(['message' => 'Ese correo ya está en uso por otro usuario.'], 422);
+            }
+        }
+
         DB::beginTransaction();
         try {
             $col = Colaborador::where('documento', $documento)->first();
@@ -83,11 +97,20 @@ class CampaignCollaboratorController extends Controller
                     $col->nombre = $validated['nombre'];
                     $dirty = true;
                 }
-                if (array_key_exists('email', $validated) && $validated['email'] !== null) {
+                if ($emailChanged) {
                     $col->email = $validated['email'];
                     $dirty = true;
                 }
                 if ($dirty) $col->save();
+            }
+
+            if ($emailChanged && $linkedUser) {
+                DB::table('users')
+                    ->where('id', $linkedUser->id)
+                    ->update([
+                        'email'      => $validated['email'],
+                        'updated_at' => now(),
+                    ]);
             }
 
             $pivotUpdate = ['updated_at' => now()];

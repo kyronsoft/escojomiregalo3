@@ -6,6 +6,7 @@ use App\Jobs\SendWelcomeCredentialsMail;
 use App\Models\User;
 use App\Models\Empresa;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
@@ -194,6 +195,13 @@ class UsersController extends Controller
 
         $user->save();
         $user->syncRoles($data['roles']);
+
+        DB::table('colaboradores')
+            ->where('documento', $user->documento)
+            ->update([
+                'email'      => $user->email,
+                'updated_at' => now(),
+            ]);
 
         return redirect()->route('users.index')->with('success', 'Usuario actualizado');
     }

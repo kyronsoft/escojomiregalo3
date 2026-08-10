@@ -6,6 +6,7 @@ use App\Models\Empresa;
 use App\Models\Campaign;
 use App\Models\Parametro;
 use App\Models\Colaborador;
+use App\Support\ColorContrast;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -68,6 +69,9 @@ class ProductController extends Controller
         // Colores & mensajes
         $primaryColor   = $empresa?->color_primario   ?: '#ffffff';
         $secondaryColor = $empresa?->color_secundario ?: '#f2f2f2';
+        $primaryTextColor   = ColorContrast::textColor($primaryColor);
+        $secondaryTextColor = ColorContrast::textColor($secondaryColor);
+        $secondaryBorder    = ColorContrast::subtleBorder($secondaryColor);
         $welcomeMsg     = (string) ($empresa->welcome_msg ?? '');
 
         // Colaborador (para modales)
@@ -86,18 +90,21 @@ class ProductController extends Controller
         $resultado = $this->juguetesPorColaboradorJoin($documento, $campaignId);
 
         return view('ecommerce.product', [
-            'resultado'         => $resultado,
-            'showPolitica'      => $showPolitica,
-            'politicaHtml'      => $politicaHtml,
-            'campaignBannerUrl' => $campaignBannerUrl,
-            'campaign'          => $campaign,
-            'primaryColor'      => $primaryColor,
-            'secondaryColor'    => $secondaryColor,
-            'welcomeMsg'        => $welcomeMsg,
-            'showWelcome'       => $showWelcome,
-            'empresaLogoUrl'    => $empresaLogoUrl,
-            'colaborador'       => $colaborador,
-            'mostrarGenero'     => $mostrarGenero, // 👈 disponible en la vista
+            'resultado'           => $resultado,
+            'showPolitica'        => $showPolitica,
+            'politicaHtml'        => $politicaHtml,
+            'campaignBannerUrl'   => $campaignBannerUrl,
+            'campaign'            => $campaign,
+            'primaryColor'        => $primaryColor,
+            'secondaryColor'      => $secondaryColor,
+            'primaryTextColor'    => $primaryTextColor,
+            'secondaryTextColor'  => $secondaryTextColor,
+            'secondaryBorder'     => $secondaryBorder,
+            'welcomeMsg'          => $welcomeMsg,
+            'showWelcome'         => $showWelcome,
+            'empresaLogoUrl'      => $empresaLogoUrl,
+            'colaborador'         => $colaborador,
+            'mostrarGenero'       => $mostrarGenero,
         ]);
     }
 

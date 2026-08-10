@@ -8,6 +8,9 @@
         :root {
             --primary: {{ $primaryColor }};
             --secondary: {{ $secondaryColor }};
+            --primary-text: {{ $primaryTextColor }};
+            --secondary-text: {{ $secondaryTextColor }};
+            --secondary-border: {{ $secondaryBorder }};
         }
 
         /* Fondo con 50% de opacidad detrás del contenido */
@@ -58,8 +61,8 @@
         }
         @media (min-width:992px) { .topbar-logo-img { height: 100px; } }
 
-        .btn-top { background: var(--secondary) !important; border-color: var(--secondary) !important; color:#fff !important; }
-        .btn-top:hover, .btn-top:focus { filter: brightness(.92); color:#fff !important; }
+        .btn-top { background: var(--secondary) !important; border-color: var(--secondary-border) !important; color: var(--secondary-text) !important; }
+        .btn-top:hover, .btn-top:focus { filter: brightness(.92); color: var(--secondary-text) !important; }
 
         .site-content { position: relative; }
 

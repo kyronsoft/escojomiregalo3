@@ -49,6 +49,11 @@ class SelectionCompleted extends Mailable
     if ($imgRel === '') {
       return asset('assets/images/email-template/placeholder.png');
     }
+    // imagenppal puede venir como combo "a.jpg+b.jpg+..."; se usa solo la primera parte.
+    $imgRel = trim((string) collect(explode('+', $imgRel))->map(fn ($v) => trim($v))->filter()->first());
+    if ($imgRel === '') {
+      return asset('assets/images/email-template/placeholder.png');
+    }
     if (Str::startsWith($imgRel, ['http://', 'https://'])) {
       return $imgRel;
     }

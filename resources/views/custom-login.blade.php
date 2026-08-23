@@ -11,8 +11,6 @@
 
     <style>
         :root{
-            --overlay: rgba(0,0,0,.35);
-            --bar-bg: rgba(255,255,255,.2);
             --bar-fg: #F6C60F;
             --bar-height: 72px;
             --vh: 1vh; /* fallback para 100dvh */
@@ -47,24 +45,23 @@
             transform: translateZ(0);/* evita artefactos en móviles */
         }
 
-        /* Velo de contraste (opcional) */
+        /* Sin velo de contraste — el fondo se mantiene tal cual la imagen original */
         .backdrop{
             position:fixed; inset:0; z-index:-1;
-            background:
-                linear-gradient(to top, rgba(0,0,0,.65), transparent 40%),
-                linear-gradient(to bottom, rgba(0,0,0,.35), transparent 30%),
-                var(--overlay);
+            background: transparent;
             pointer-events:none;
         }
 
         /* ===== Barra inferior fija ===== */
         .ingreso-bar{
             position:fixed; left:0; right:0; bottom:0;
-            background:var(--bar-bg); color:var(--bar-fg);
+            background:rgba(0,0,0,.45); color:var(--bar-fg);
             height:calc(var(--bar-height) + env(safe-area-inset-bottom, 0px));
             padding-bottom: env(safe-area-inset-bottom, 0px);
             display:flex; align-items:center; justify-content:center;
-            z-index:30; box-shadow:0 -6px 18px rgba(0,0,0,.35);
+            z-index:30; box-shadow:0 -6px 18px rgba(0,0,0,.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
         }
         .ingreso-link{
             color:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center;
@@ -74,7 +71,7 @@
         .hot-zone{ display:none; }
 
         /* ===== Modal de login ===== */
-        .login-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
+        .login-overlay{ position:fixed; inset:0; background:transparent; display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
         .login-overlay.active{ display:flex; }
         .login-modal{
             width:100%; max-width:420px; background:#0e0e0e; color:#fff;
@@ -161,11 +158,12 @@
         // Modal
         (function(){
             const overlay  = document.getElementById('loginOverlay');
+            const backdrop = document.querySelector('.backdrop');
             const openBtn  = document.getElementById('openLogin');
             const closeBtn = document.getElementById('closeLogin');
 
-            function openLogin(e){ if(e) e.preventDefault(); overlay.classList.add('active'); setTimeout(()=>document.getElementById('documento')?.focus(), 50); }
-            function closeLogin(){ overlay.classList.remove('active'); }
+            function openLogin(e){ if(e) e.preventDefault(); overlay.classList.add('active'); backdrop.classList.add('active'); setTimeout(()=>document.getElementById('documento')?.focus(), 50); }
+            function closeLogin(){ overlay.classList.remove('active'); backdrop.classList.remove('active'); }
 
             openBtn.addEventListener('click', openLogin);
             closeBtn.addEventListener('click', closeLogin);

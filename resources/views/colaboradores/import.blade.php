@@ -71,6 +71,22 @@
                                     rango_edad, genero</small>
                             </div>
 
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="send_notification"
+                                        name="send_notification" value="1"
+                                        {{ old('send_notification') ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="send_notification">
+                                        Enviar notificación de credenciales al importar
+                                    </label>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    El usuario siempre se crea. Si desactivas esta opción, las credenciales
+                                    <strong>no</strong> se envían por correo y la notificación queda deshabilitada
+                                    para ese colaborador hasta que la actives manualmente.
+                                </small>
+                            </div>
+
                             <div class="col-12 d-flex justify-content-end">
                                 <a href="{{ route('colaboradores.index') }}"
                                     class="btn btn-outline-secondary me-2">Cancelar</a>
@@ -89,27 +105,27 @@
                         </div>
                         <div class="card-body">
                             <div class="row">
-                                <div class="col-12 col-lg-6">
+                                <div class="col-12 col-lg-4">
                                     <h6>Colaboradores</h6>
                                     <ul class="mb-3">
                                         <li>Creados: <strong>{{ data_get($s, 'colaboradores.creados', 0) }}</strong></li>
-                                        <li>Actualizados:
-                                            <strong>{{ data_get($s, 'colaboradores.actualizados', 0) }}</strong>
-                                        </li>
+                                        <li>Actualizados: <strong>{{ data_get($s, 'colaboradores.actualizados', 0) }}</strong></li>
                                         <li>Omitidos: <strong>{{ data_get($s, 'colaboradores.omitidos', 0) }}</strong></li>
                                     </ul>
                                 </div>
-                                <div class="col-12 col-lg-6">
+                                <div class="col-12 col-lg-4">
                                     <h6>Usuarios</h6>
                                     <ul class="mb-0">
                                         <li>Creados: <strong>{{ data_get($s, 'users.creados', 0) }}</strong></li>
                                         <li>Actualizados: <strong>{{ data_get($s, 'users.actualizados', 0) }}</strong></li>
-                                        <li>Omitidos (sin email):
-                                            <strong>{{ data_get($s, 'users.omitidos_sin_email', 0) }}</strong>
-                                        </li>
-                                        <li>Omitidos (email inválido):
-                                            <strong>{{ data_get($s, 'users.omitidos_email_invalido', 0) }}</strong>
-                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <h6>Correos</h6>
+                                    <ul class="mb-0">
+                                        <li>Enviados: <strong class="text-success">{{ data_get($s, 'emails.enviados', 0) }}</strong></li>
+                                        <li>Omitidos (sin notificación): <strong class="text-secondary">{{ data_get($s, 'emails.omitidos', 0) }}</strong></li>
+                                        <li>Errores: <strong class="text-danger">{{ data_get($s, 'emails.errores', 0) }}</strong></li>
                                     </ul>
                                 </div>
                             </div>

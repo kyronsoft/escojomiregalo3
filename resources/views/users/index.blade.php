@@ -13,6 +13,48 @@
         #users-table .tabulator-row {
             min-height: 48px;
         }
+
+        .toast-notice {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1080;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            max-width: 360px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: var(--bs-danger-bg-subtle);
+            color: var(--bs-danger-text-emphasis);
+            border: 1px solid var(--bs-danger-border-subtle);
+            box-shadow: var(--bs-box-shadow);
+            transform: translateY(12px);
+            opacity: 0;
+            transition: opacity .2s ease, transform .2s ease;
+        }
+
+        .toast-notice.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast-notice__icon {
+            flex: 0 0 auto;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: var(--bs-danger);
+            color: #fff;
+            font-weight: 700;
+            line-height: 28px;
+            text-align: center;
+        }
+
+        .toast-notice__body {
+            font-size: .95rem;
+            line-height: 1.35;
+        }
     </style>
 @endpush
 
@@ -30,6 +72,11 @@
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
 
+        <div id="usersToast" class="toast-notice d-none" role="status" aria-live="polite" aria-atomic="true">
+            <div class="toast-notice__icon">!</div>
+            <div class="toast-notice__body" id="usersToastMessage"></div>
+        </div>
+
         <div id="users-table"></div>
     </div>
 @endsection
@@ -43,6 +90,20 @@
         (function() {
             const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                 '{{ csrf_token() }}';
+            const usersToast = document.getElementById('usersToast');
+            const usersToastMessage = document.getElementById('usersToastMessage');
+            let toastTimer = null;
+
+            function showToast(message) {
+                usersToastMessage.textContent = message;
+                usersToast.classList.remove('d-none');
+                requestAnimationFrame(() => usersToast.classList.add('is-visible'));
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => {
+                    usersToast.classList.remove('is-visible');
+                    setTimeout(() => usersToast.classList.add('d-none'), 220);
+                }, 2800);
+            }
 
             const ROUTES = {
                 data: `{{ route('users.data') }}`,
@@ -90,10 +151,10 @@
                         if (r.ok) {
                             table.replaceData();
                         } else {
-                            alert((await r.text()) || 'No fue posible eliminar.');
+                            showToast((await r.text()) || 'No fue posible eliminar.');
                         }
                     })
-                    .catch(() => alert('Error de red'));
+                    .catch(() => showToast('Error de red'));
             };
 
             const columns = [{

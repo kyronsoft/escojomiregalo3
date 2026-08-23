@@ -4,12 +4,29 @@
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/select2.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/owlcarousel.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/range-slider.css') }}">
+    @php
+        $yiqContrast = function(string $hex): string {
+            $hex = ltrim($hex, '#');
+            $r = hexdec(substr($hex, 0, 2));
+            $g = hexdec(substr($hex, 2, 2));
+            $b = hexdec(substr($hex, 4, 2));
+            return (($r * 299 + $g * 587 + $b * 114) / 1000) >= 128 ? '#000000' : '#ffffff';
+        };
+    @endphp
     <style>
+        :root {
+            --kid-boy:          {{ $colorBotonNino }};
+            --kid-girl:         {{ $colorBotonNina }};
+            --kid-neutral:      {{ $colorBotonUnisex }};
+            --kid-boy-text:     {{ $yiqContrast($colorBotonNino) }};
+            --kid-girl-text:    {{ $yiqContrast($colorBotonNina) }};
+            --kid-neutral-text: {{ $yiqContrast($colorBotonUnisex) }};
+        }
+
         /* Borde negro para la tabla del carrito (y todas sus celdas) */
         .order-history .table-bordered {
             border: 1px solid #000 !important;
             border-collapse: collapse !important;
-            /* evita doble borde */
         }
 
         .order-history .table-bordered> :not(caption)>*>* {
@@ -19,15 +36,17 @@
         /* Botón de hijo(a) */
         .child-btn {
             display: inline-block;
-            border: 1px solid transparent;
+            border: 2px solid transparent;
             border-radius: .5rem;
             padding: .35rem .65rem;
             font-weight: 600;
             line-height: 1.1;
-            color: #fff !important;
             text-decoration: none;
             white-space: nowrap;
         }
+        .child-btn-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy)     !important; color: var(--kid-boy-text)     !important; }
+        .child-btn-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl)    !important; color: var(--kid-girl-text)    !important; }
+        .child-btn-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral) !important; color: var(--kid-neutral-text) !important; }
     </style>
 @endpush
 
@@ -96,14 +115,19 @@
                                         @forelse($items as $row)
                                             @php
                                                 // Construir ruta imagen: campaign_toys/{idcampaign}/{imagenppal}
+                                                // Los combos vienen con varias imágenes separadas por "+"
+                                                // (ej: BM-61311.jpg+71D118.jpg) y se muestran una al lado de otra
                                                 $imgRel = trim((string) ($row->imagenppal ?? ''));
                                                 $imgRel = ltrim($imgRel, '/');
-                                                $imgPath =
-                                                    $imgRel !== ''
-                                                        ? (Str::startsWith($imgRel, 'campaign_toys/')
-                                                            ? $imgRel
-                                                            : "campaign_toys/{$row->idcampaing}/{$imgRel}")
-                                                        : '';
+                                                $imgNames = $imgRel !== ''
+                                                    ? array_filter(array_map('trim', explode('+', $imgRel)))
+                                                    : [];
+                                                $imgPaths = array_map(
+                                                    fn($name) => Str::startsWith($name, 'campaign_toys/')
+                                                        ? $name
+                                                        : "campaign_toys/{$row->idcampaing}/{$name}",
+                                                    $imgNames
+                                                );
 
                                                 // Normalizar género (acepta NIÑO/NIÑA/UNISEX y M/F)
                                                 $genRaw = strtoupper(trim((string) ($row->genero ?? '')));
@@ -117,18 +141,11 @@
                                                     default => 'U',
                                                 };
 
-                                                // Clase de botón (si usas las mismas de la otra vista)
+                                                // Clase de botón según género
                                                 $childBtnClass = match ($genKey) {
-                                                    'M' => 'btn-kid-boy', // #BA895D
-                                                    'F' => 'btn-kid-girl', // #1B4C43
-                                                    default => 'btn-kid-neutral', // #000000
-                                                };
-
-                                                // Color HEX (si prefieres inline)
-                                                $childBtnColor = match ($genKey) {
-                                                    'M' => '#BA895D', // Niño
-                                                    'F' => '#1B4C43', // Niña
-                                                    default => '#000000', // Unisex / desconocido
+                                                    'M' => 'child-btn-boy',
+                                                    'F' => 'child-btn-girl',
+                                                    default => 'child-btn-neutral',
                                                 };
 
                                                 $formId = "remove-{$row->id}";
@@ -137,10 +154,14 @@
                                                 {{-- Producto: imagen + referencia + nombre --}}
                                                 <td>
                                                     <div class="d-flex flex-column align-items-center text-center">
-                                                        @if ($imgPath !== '')
-                                                            <img src="{{ Storage::url($imgPath) }}"
-                                                                alt="{{ $row->toy_nombre }}" class="img-fluid mb-2"
-                                                                style="max-width:160px">
+                                                        @if (count($imgPaths) > 0)
+                                                            <div class="d-flex flex-row justify-content-center align-items-center gap-1 mb-2">
+                                                                @foreach ($imgPaths as $imgPath)
+                                                                    <img src="{{ Storage::url($imgPath) }}"
+                                                                        alt="{{ $row->toy_nombre }}" class="img-fluid"
+                                                                        style="max-width:{{ count($imgPaths) > 1 ? '75px' : '160px' }}">
+                                                                @endforeach
+                                                            </div>
                                                         @endif
                                                         <div class="small text-muted">
                                                             Ref: <strong>{{ $row->referencia }}</strong>
@@ -154,8 +175,7 @@
                                                     @php
                                                         $childName = $row->child_nombre ?? ($row->nombre_hijo ?? '—');
                                                     @endphp
-                                                    <span class="child-btn"
-                                                        style="background-color: {{ $childBtnColor }}; border-color: {{ $childBtnColor }};">
+                                                    <span class="child-btn {{ $childBtnClass }}">
                                                         {{ $childName }}
                                                     </span>
                                                 </td>
@@ -201,7 +221,8 @@
                                                 <form id="finishForm" action="{{ route('ecommerce.cart.finish') }}"
                                                     method="POST" class="d-inline">
                                                     @csrf
-                                                    <button type="button" class="btn btn-success" id="btnFinish">
+                                                    <button type="button" class="btn btn-success" id="btnFinish"
+                                                        @disabled($items->isEmpty())>
                                                         Finalizar
                                                     </button>
                                                 </form>

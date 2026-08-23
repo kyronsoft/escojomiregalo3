@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendWelcomeCredentialsMail;
 use App\Models\User;
 use App\Models\Empresa;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
 
@@ -83,13 +86,14 @@ class UsersController extends Controller
         $requireNit = !empty(array_intersect($roles, ['RRHH-Cliente', 'Ejecutiva-Empresas']));
 
         $data = $request->validate([
-            'name'      => ['required', 'string', 'max:120'],
-            'documento' => ['required', 'string', 'max:25', 'unique:users,documento'],
-            'email'     => ['nullable', 'email', 'max:150', 'unique:users,email'],
-            'password'  => ['required', 'string', 'min:8'],
-            'roles'     => ['required', 'array', 'min:1'],
-            'roles.*'   => ['string', Rule::in(['Admin', 'Ejecutiva-Empresas', 'RRHH-Cliente', 'Colaborador'])],
-            'nit'       => [
+            'name'               => ['required', 'string', 'max:120'],
+            'documento'          => ['required', 'string', 'max:25', 'unique:users,documento'],
+            'email'              => ['nullable', 'email', 'max:150', 'unique:users,email'],
+            'password'           => ['required', 'string', 'min:8'],
+            'roles'              => ['required', 'array', 'min:1'],
+            'roles.*'            => ['string', Rule::in(['Admin', 'Ejecutiva-Empresas', 'RRHH-Cliente', 'Colaborador'])],
+            'send_credentials'   => ['nullable', 'boolean'],
+            'nit'                => [
                 Rule::requiredIf($requireNit),
                 'nullable',
                 'string',
@@ -110,6 +114,29 @@ class UsersController extends Controller
         ]);
 
         $user->syncRoles($roles);
+
+        if (!empty($data['send_credentials']) && !$email) {
+            Log::warning('Notificación de credenciales omitida al crear usuario: email vacío', [
+                'documento' => $data['documento'],
+            ]);
+        }
+
+        if (!empty($data['send_credentials']) && $email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            try {
+                dispatch(new SendWelcomeCredentialsMail(
+                    to: $email,
+                    name: $data['name'],
+                    rawPassword: $data['password'],
+                    loginUrl: route('login'),
+                ))->onQueue('emails');
+            } catch (\Throwable $e) {
+                Log::error('No se pudo encolar correo de credenciales al crear usuario', [
+                    'documento' => $data['documento'],
+                    'email'     => $email,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
+        }
 
         return redirect()->route('users.index')->with('success', 'Usuario creado');
     }
@@ -168,6 +195,13 @@ class UsersController extends Controller
 
         $user->save();
         $user->syncRoles($data['roles']);
+
+        DB::table('colaboradores')
+            ->where('documento', $user->documento)
+            ->update([
+                'email'      => $user->email,
+                'updated_at' => now(),
+            ]);
 
         return redirect()->route('users.index')->with('success', 'Usuario actualizado');
     }

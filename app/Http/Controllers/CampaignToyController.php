@@ -354,9 +354,15 @@ class CampaignToyController extends Controller
         ]);
 
         if ($okCount > 0) {
-            $firstOk = collect($results)->firstWhere('ok', true);
-            if (!empty($firstOk['local_rel'])) {
-                $toy->imagenppal = $firstOk['local_rel'];
+            // imagenppal guarda solo nombre(s) de archivo, no ruta: "a.jpg" o combo "a.jpg+b.jpg".
+            $fileNames = collect($results)
+                ->filter(fn ($r) => !empty($r['ok']) && !empty($r['local_rel']))
+                ->map(fn ($r) => basename($r['local_rel']))
+                ->values()
+                ->all();
+
+            if (!empty($fileNames)) {
+                $toy->imagenppal = implode('+', $fileNames);
                 $toy->save();
             }
         }

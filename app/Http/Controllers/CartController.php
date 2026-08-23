@@ -39,6 +39,7 @@ class CartController extends Controller
                 'seleccionados.referencia',
                 'campaign_toys.nombre as toy_nombre',
                 'campaign_toys.imagenppal',
+                'campaign_toys.genero',
                 'colaborador_hijos.nombre_hijo as child_nombre',
             ])
             ->join('colaborador_hijos', 'colaborador_hijos.id', '=', 'seleccionados.idhijo')
@@ -61,19 +62,31 @@ class CartController extends Controller
             ->orderByDesc('created_at')
             ->value('idcampaign');
 
-        // 4) Banner de campaña (si aplica)
+        // 4) Banner de campaña y colores de empresa
         $campaignBannerUrl = null;
+        $colorBotonNino    = '#BA895D';
+        $colorBotonNina    = '#1B4C43';
+        $colorBotonUnisex  = '#000000';
+
         if ($campaignId) {
             $campaign = \App\Models\Campaign::find($campaignId);
             if ($campaign && filled($campaign->banner) && $campaign->banner !== 'ND') {
-                // Usa disk 'public'
                 $campaignBannerUrl = url(Storage::disk('public')->url($campaign->banner));
+            }
+            if ($campaign?->nit) {
+                $empresa = \App\Models\Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$campaign->nit)])->first();
+                $colorBotonNino   = $empresa?->color_boton_nino   ?: $colorBotonNino;
+                $colorBotonNina   = $empresa?->color_boton_nina   ?: $colorBotonNina;
+                $colorBotonUnisex = $empresa?->color_boton_unisex ?: $colorBotonUnisex;
             }
         }
 
         return view('ecommerce.cart', [
             'items'             => $items,
             'campaignBannerUrl' => $campaignBannerUrl,
+            'colorBotonNino'    => $colorBotonNino,
+            'colorBotonNina'    => $colorBotonNina,
+            'colorBotonUnisex'  => $colorBotonUnisex,
         ]);
     }
 
@@ -239,8 +252,21 @@ class CartController extends Controller
             ]);
         }
 
-        // ===== Insertar selección =====
-        DB::transaction(function () use ($userDoc, $campaignId, $hijo, $toy) {
+        // ===== Reservar stock e insertar selección (atómico) =====
+        // Se descuenta de "unidades" y se suma a "seleccionadas" en el momento de
+        // agregar al carrito (no al finalizar), para que el stock disponible sea
+        // real y no se desfase entre usuarios concurrentes que seleccionan pero
+        // nunca finalizan.
+        $sinStock = false;
+
+        DB::transaction(function () use ($userDoc, $campaignId, $hijo, $toy, &$sinStock) {
+            $lockedToy = CampaignToy::where('id', $toy->id)->lockForUpdate()->first();
+
+            if (!$lockedToy || (int) $lockedToy->unidades <= 0) {
+                $sinStock = true;
+                return;
+            }
+
             Seleccionado::updateOrCreate(
                 [
                     'documento'  => $userDoc,
@@ -252,7 +278,18 @@ class CartController extends Controller
                     'selected'   => 'Y',
                 ]
             );
+
+            $lockedToy->decrement('unidades');
+            $lockedToy->increment('seleccionadas');
         });
+
+        if ($sinStock) {
+            return back()->with('active_child_id', $hijo->id)->with('swal', [
+                'icon'  => 'error',
+                'title' => 'Sin stock',
+                'text'  => "La referencia {$toy->referencia} ya no tiene unidades disponibles.",
+            ]);
+        }
 
         return back()->with('active_child_id', $hijo->id)->with('swal', [
             'icon'  => 'success',
@@ -295,16 +332,35 @@ class CartController extends Controller
             $campId = (int) ($hijo->getAttribute('idcampaign') ?? 0); // por si tu modelo trae este alias
         }
 
-        // Elimina con comparaciones tolerantes para referencia
-        $deleted = Seleccionado::where('documento', $hijo->identificacion)
-            ->where('idhijo', $hijo->id)
-            ->when($campId > 0, fn($q) => $q->where('idcampaing', $campId))
-            ->where(function ($q) use ($ref) {
-                $q->where('referencia', $ref)
-                    ->orWhereRaw('TRIM(referencia) = ?', [$ref])
-                    ->orWhereRaw('REPLACE(referencia," ","") = REPLACE(?, " ", "")', [$ref]);
-            })
-            ->delete();
+        // Elimina con comparaciones tolerantes para referencia y libera el stock
+        // reservado (unidades +1 / seleccionadas -1) por cada selección borrada.
+        $deleted = 0;
+
+        DB::transaction(function () use ($hijo, $campId, $ref, &$deleted) {
+            $matches = Seleccionado::where('documento', $hijo->identificacion)
+                ->where('idhijo', $hijo->id)
+                ->when($campId > 0, fn($q) => $q->where('idcampaing', $campId))
+                ->where(function ($q) use ($ref) {
+                    $q->where('referencia', $ref)
+                        ->orWhereRaw('TRIM(referencia) = ?', [$ref])
+                        ->orWhereRaw('REPLACE(referencia," ","") = REPLACE(?, " ", "")', [$ref]);
+                })
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($matches as $sel) {
+                $sel->delete();
+                $deleted++;
+
+                DB::table('campaign_toys')
+                    ->where('idcampaign', $sel->idcampaing)
+                    ->where('referencia', $sel->referencia)
+                    ->update([
+                        'unidades'      => DB::raw('unidades + 1'),
+                        'seleccionadas' => DB::raw('GREATEST(seleccionadas - 1, 0)'),
+                    ]);
+            }
+        });
 
         return back()->with('swal', [
             'icon'  => $deleted ? 'success' : 'info',
@@ -322,8 +378,9 @@ class CartController extends Controller
         $userEmail = $user?->email;
         $userName  = $user?->name ?? 'Usuario';
 
-        // Documento del colaborador
-        $documento = Colaborador::where('email', $userEmail)->value('documento');
+        // Documento del colaborador (igual que index(): primero el del usuario autenticado;
+        // si no está seteado, se cae al cruce por email por compatibilidad)
+        $documento = $user?->documento ?: Colaborador::where('email', $userEmail)->value('documento');
         if (!$documento) {
             return redirect()->route('product')->with('swal', [
                 'icon'  => 'error',
@@ -399,64 +456,10 @@ class CartController extends Controller
                 ]);
         }
 
-        // === Validación de stock por referencia (bloquea si no hay unidades disponibles) ===
-        // 1) Tomamos las unidades por referencia en la campaña
-        $unitsByRef = DB::table('campaign_toys')
-            ->where('idcampaign', $campaignId)
-            ->select('referencia', 'unidades')
-            ->pluck('unidades', 'referencia'); // ['REF1' => 10, 'REF2' => 0, ...]
-
-        // 2) Cantidad de seleccionados por referencia en la campaña
-        $takenByRef = DB::table('seleccionados')
-            ->where('idcampaing', $campaignId)
-            ->where('selected', 'Y')
-            ->select('referencia', DB::raw('COUNT(*) as cnt'))
-            ->groupBy('referencia')
-            ->pluck('cnt', 'referencia'); // ['REF1' => 9, 'REF2' => 12, ...]
-
-        // 3) Referencias agotadas (sin stock disponible)
-        //    - Sin unidades configuradas o <= 0
-        //    - O ya alcanzaron/superaron el máximo permitido
-        $exhausted = collect();
-        foreach ($unitsByRef as $ref => $u) {
-            $u = (int) $u;
-            $taken = (int) ($takenByRef[$ref] ?? 0);
-            if ($u <= 0 || $taken >= $u) {
-                $exhausted->push($ref);
-            }
-        }
-
-        // 4) ¿El colaborador seleccionó alguna referencia agotada?
-        $userRefs = DB::table('seleccionados')
-            ->where('documento', $documento)
-            ->where('idcampaing', $campaignId)
-            ->where('selected', 'Y')
-            ->pluck('referencia')
-            ->unique();
-
-        $blockedRefs = $userRefs->intersect($exhausted)->values();
-
-        if ($blockedRefs->isNotEmpty()) {
-            // Opcional: ubicar primer hijo con referencia bloqueada para activar su pestaña
-            $firstBlockedChild = DB::table('seleccionados')
-                ->where('documento', $documento)
-                ->where('idcampaing', $campaignId)
-                ->where('selected', 'Y')
-                ->whereIn('referencia', $blockedRefs)
-                ->orderBy('idhijo')
-                ->value('idhijo');
-
-            return redirect()
-                ->route('product')
-                ->with('active_child_id', $firstBlockedChild)
-                ->with('swal', [
-                    'icon'  => 'error',
-                    'title' => 'Sin stock',
-                    'html'  => 'Las siguientes referencias ya no tienen unidades disponibles en la campaña:<br><b>' .
-                        e($blockedRefs->implode(', ')) .
-                        '</b><br><br>Por favor, selecciona otra referencia.',
-                ]);
-        }
+        // Nota: la validación de stock ya no se hace aquí. El stock se reserva
+        // de forma atómica en addcart() (descuenta "unidades" / suma "seleccionadas"
+        // al agregar al carrito), así que si el usuario llegó hasta aquí con sus
+        // selecciones es porque el stock ya estaba disponible y reservado para él.
 
         // Traer selección (para el correo)
         $items = Seleccionado::query()

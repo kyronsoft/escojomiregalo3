@@ -9,6 +9,7 @@ use App\Models\ColaboradorHijo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -16,6 +17,7 @@ use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Validators\Failure;
+use App\Jobs\SendWelcomeCredentialsMail;
 use Spatie\Permission\Models\Role;
 
 class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRows, WithValidation, SkipsOnFailure
@@ -23,8 +25,8 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     protected Campaign $campaign;
     protected string $nit;
     protected int $campaignId;
+    protected bool $sendNotification;
 
-    /** Cambia aquí si tu tabla real es 'ccampaing_colaboradores' */
     private const PIVOT_TABLE = 'campaing_colaboradores';
 
     protected array $stats = [
@@ -32,21 +34,19 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
         'users'         => ['creados' => 0, 'actualizados' => 0],
         'hijos'         => ['upserts' => 0, 'omitidos_sin_nombre' => 0],
         'pivot'         => ['upserts' => 0],
-        'emails'        => ['bienvenida_enviados' => 0, 'errores' => 0],
+        'emails'        => ['enviados' => 0, 'omitidos' => 0, 'errores' => 0],
         'errores'       => [],
     ];
 
-    /** Evita invitar dos veces al mismo correo en la misma corrida */
     protected array $sentInvites = [];
-
-    /** Consolidación de email por documento (múltiples filas del mismo colaborador) */
     protected array $emailByDocumento = [];
 
-    public function __construct(Campaign $campaign)
+    public function __construct(Campaign $campaign, bool $sendNotification = false)
     {
-        $this->campaign   = $campaign->loadMissing('empresa');
-        $this->nit        = (string) $campaign->nit;
-        $this->campaignId = (int) $campaign->id;
+        $this->campaign          = $campaign->loadMissing('empresa');
+        $this->nit               = (string) $campaign->nit;
+        $this->campaignId        = (int) $campaign->id;
+        $this->sendNotification  = $sendNotification;
     }
 
     /** VALIDACIÓN por fila (Laravel Excel) */
@@ -68,7 +68,16 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                 },
             ],
             'nombre'    => ['required', 'string', 'max:150'],
-            'email'     => ['required', 'email:rfc,dns', 'max:150'],
+            'email'     => [
+                'nullable',
+                'max:150',
+                function (string $attribute, $value, \Closure $fail) {
+                    $email = trim((string) $value);
+                    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $fail('El correo electrónico no es válido.');
+                    }
+                },
+            ],
             'direccion' => ['nullable', 'string', 'max:150'],
             'telefono'  => ['nullable', 'string', 'max:40'],
             'ciudad'    => ['nullable', 'string', 'max:100'],
@@ -148,19 +157,8 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
             $ciudad    = trim((string)($row['ciudad']    ?? ''));
             $sucursal  = trim((string)($row['sucursal']  ?? 'ND'));
 
-            if ($email === '') {
-                DB::table('importerrors')->insert([
-                    'row'        => $excelRow,
-                    'attribute'  => 'email',
-                    'errors'     => 'El email es obligatorio.',
-                    'values'     => Str::limit(json_encode($row, JSON_UNESCAPED_UNICODE), 255, ''),
-                    'created_at' => now(),
-                ]);
-                continue;
-            }
-
             // --- Consolidación de email por DOCUMENTO ---
-            if (isset($this->emailByDocumento[$documento])) {
+            if ($email !== '' && isset($this->emailByDocumento[$documento])) {
                 // Si aparece un email distinto para el mismo documento, lo registramos y seguimos usando el primero
                 if (strcasecmp($this->emailByDocumento[$documento], $email) !== 0) {
                     DB::table('importerrors')->insert([
@@ -176,7 +174,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     ]);
                 }
                 $email = $this->emailByDocumento[$documento];
-            } else {
+            } elseif ($email !== '') {
                 $this->emailByDocumento[$documento] = $email;
             }
 
@@ -187,7 +185,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     ['documento' => $documento],
                     [
                         'nombre'    => $nombre,
-                        'email'     => $email, // consolidado
+                        'email'     => $email !== '' ? $email : null, // consolidado
                         'direccion' => $direccion ?: null,
                         'telefono'  => $telefono ?: null,
                         'ciudad'    => $ciudad ?: null,
@@ -208,34 +206,38 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     [
                         'sucursal'       => $sucursal !== '' ? $sucursal : 'ND',
                         'email_notified' => 0,
+                        'notify_enabled' => $this->sendNotification ? 1 : 0,
                         'updated_at'     => now(),
                         'created_at'     => now(),
                     ]
                 );
                 $this->stats['pivot']['upserts']++;
 
-                // === 3) Usuario único por colaborador (login por email) ===
-                $emailKey = mb_strtolower($email);
-                $user = User::where('email', $email)->first();
+                // === 3) Usuario único por colaborador (login por documento) ===
+                $hasValidEmail = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL);
+                $user = User::where('documento', $documento)->first();
+                if (!$user && $hasValidEmail) {
+                    $user = User::where('email', $email)->first();
+                }
 
                 if (!$user) {
-                    // Nuevo usuario para este email
+                    // Nuevo usuario para este documento. El correo es opcional.
                     $user = User::create([
                         'name'              => $nombre,
-                        'email'             => $email,
+                        'email'             => $hasValidEmail ? $email : null,
                         'password'          => Hash::make($documento), // opcional: forzar cambio en primer login
                         'documento'         => $documento,
-                        'email_verified_at' => now(),
+                        'email_verified_at' => $hasValidEmail ? now() : null,
                         'remember_token'    => Str::random(20),
                     ]);
                     $this->stats['users']['creados']++;
                 } else {
-                    // El email ya existe en users
                     if ((string)$user->documento === (string)$documento) {
                         // Es el MISMO colaborador → actualiza nombre (no resetea password)
                         $user->forceFill([
                             'name'      => $nombre,
                             'documento' => $documento,
+                            'email'     => $hasValidEmail ? $email : $user->email,
                         ])->save();
                         $this->stats['users']['actualizados']++;
                     } else {
@@ -263,7 +265,56 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     }
                 }
 
-                // === 5) Hijos (opcional) ===
+                // === 5) Enviar correo de credenciales si está habilitado ===
+                if ($this->sendNotification && $user && (string)$user->documento === (string)$documento) {
+                    if (!$hasValidEmail) {
+                        Log::warning('Notificación omitida en importación de colaboradores: email vacío o inválido', [
+                            'documento' => $documento,
+                            'email'     => $email,
+                            'campaign'  => $this->campaignId,
+                            'row'       => $excelRow,
+                        ]);
+                        $this->stats['emails']['omitidos']++;
+                    } else {
+                        $emailKey = mb_strtolower($email);
+                        if (!isset($this->sentInvites[$emailKey])) {
+                            try {
+                                dispatch(new SendWelcomeCredentialsMail(
+                                    to: $email,
+                                    name: $nombre,
+                                    rawPassword: $documento,
+                                    loginUrl: route('login'),
+                                    campaignId: $this->campaignId,
+                                    subjectLine: (string)($this->campaign->subject ?? 'Bienvenido'),
+                                ))->onQueue('emails');
+
+                                $this->sentInvites[$emailKey] = true;
+                                $this->stats['emails']['enviados']++;
+
+                                DB::table(self::PIVOT_TABLE)
+                                    ->where('idcampaign', $this->campaignId)
+                                    ->where('documento', $documento)
+                                    ->where('nit', $this->nit)
+                                    ->update(['email_notified' => 1, 'updated_at' => now()]);
+                            } catch (\Throwable $mailEx) {
+                                DB::table('importerrors')->insert([
+                                    'row'        => $excelRow,
+                                    'attribute'  => 'erroremail',
+                                    'errors'     => Str::limit($mailEx->getMessage(), 255, ''),
+                                    'values'     => json_encode(['documento' => $documento, 'email' => $email], JSON_UNESCAPED_UNICODE),
+                                    'created_at' => now(),
+                                ]);
+                                $this->stats['emails']['errores']++;
+                            }
+                        } else {
+                            $this->stats['emails']['omitidos']++;
+                        }
+                    }
+                } elseif (!$this->sendNotification) {
+                    $this->stats['emails']['omitidos']++;
+                }
+
+                // === 6) Hijos (opcional) ===
                 $children = $this->extractChildrenFromRow($row);
                 foreach ($children as $child) {
                     $identificacion = (string)($child['identificacion'] ?: $documento);

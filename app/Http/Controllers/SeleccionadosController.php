@@ -22,12 +22,13 @@ class SeleccionadosController extends Controller
         $perPage = (int) $request->input('per_page', 25);
         $perPage = max(5, min($perPage, 200));
 
-        // NIT del usuario logueado
-        $userNit = Auth::user()?->nit;
+        $user    = Auth::user();
+        $userNit = $user?->nit;
+        $isAdmin = $user?->hasRole('Admin');
 
-        // Campañas visibles SOLO por NIT del usuario
+        // Campañas visibles: Admin ve todas; los demás solo su NIT.
         $campaigns = Campaign::query()
-            ->when($userNit, fn($q) => $q->where('nit', $userNit))
+            ->when(!$isAdmin && $userNit, fn($q) => $q->where('nit', $userNit))
             ->orderBy('updated_at', 'desc')
             ->get(['id', 'nombre', 'nit']); // incluyo 'nit' para validación
 
@@ -124,6 +125,35 @@ class SeleccionadosController extends Controller
      */
     public function export(Request $request)
     {
+        $campaignId = $request->input('idcampaign', $request->input('idcampaing'));
+
+        if (empty($campaignId)) {
+            abort(422, 'Debes seleccionar una campaña para exportar el avance.');
+        }
+
+        $user    = Auth::user();
+        $isAdmin = $user?->hasRole('Admin');
+
+        // Si viene campaña, se respeta solo si el usuario tiene acceso.
+        // Para no-Admin con campaña ajena manipulada, se ignora el filtro y baseQuery mantiene el scope por NIT.
+        if (!empty($campaignId)) {
+            $belongs = Campaign::query()
+                ->where('id', (int) $campaignId)
+                ->when(!$isAdmin, fn($q) => $q->where('nit', $user?->nit))
+                ->exists();
+
+            if (!$belongs) {
+                if ($isAdmin) {
+                    abort(403, 'La campaña seleccionada no existe o no tiene acceso a ella.');
+                }
+
+                $request->merge([
+                    'idcampaign' => null,
+                    'idcampaing' => null,
+                ]);
+            }
+        }
+
         // Misma base query, sin paginar, y orden coherente
         $q = $this->baseQuery($request)
             ->orderBy(DB::raw('CASE WHEN s.created_at IS NULL THEN 1 ELSE 0 END'))
@@ -220,12 +250,19 @@ class SeleccionadosController extends Controller
         $dateFrom   = $request->input('date_from');
         $dateTo     = $request->input('date_to');
 
+        $user    = Auth::user();
+        $userNit = $user?->nit;
+        $isAdmin = $user?->hasRole('Admin');
+
         $q = DB::table('campaing_colaboradores as cc')
             // Colaborador asignado a la campaña
             ->leftJoin('colaboradores as col', 'col.documento', '=', 'cc.documento')
 
-            // TODOS los hijos del colaborador (aunque no hayan seleccionado)
-            ->leftJoin('colaborador_hijos as h', 'h.identificacion', '=', 'cc.documento')
+            // TODOS los hijos del colaborador en la misma campaña (aunque no hayan seleccionado)
+            ->leftJoin('colaborador_hijos as h', function ($join) {
+                $join->on('h.identificacion', '=', 'cc.documento')
+                    ->on('h.idcampaing', '=', 'cc.idcampaign');
+            })
 
             // Selección por hijo y campaña (si existe)
             ->leftJoin('seleccionados as s', function ($join) {
@@ -263,7 +300,7 @@ class SeleccionadosController extends Controller
                 'ciu.departamento',
                 'cc.sucursal',
                 'col.email',
-                DB::raw('COALESCE(NULLIF(e.nombre,""), c.nombre) as empresa'),
+                DB::raw("COALESCE(NULLIF(e.nombre,''), c.nombre) as empresa"),
 
                 // extra opcional de juguete
                 DB::raw("COALESCE(NULLIF(t.nombre,''), CASE WHEN s.referencia IS NOT NULL THEN CONCAT('Ref ', s.referencia) ELSE '' END) as toy_name"),
@@ -272,6 +309,11 @@ class SeleccionadosController extends Controller
                 // útil para UI
                 DB::raw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END as selected'),
             ]);
+
+        // ===== Scope de seguridad: no-Admin solo ve su NIT =====
+        if (!$isAdmin && $user?->nit) {
+            $q->where('cc.nit', $user->nit);
+        }
 
         // ===== Filtros =====
         if (!empty($campaignId)) {

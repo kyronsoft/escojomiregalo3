@@ -24,14 +24,33 @@
             border-radius: .5rem;
             background: #f5f5f5;
         }
+
+        .row-sin-unidades {
+            background-color: #fff0f0 !important;
+        }
+
+        .row-sin-unidades .tabulator-cell {
+            color: #b91c1c;
+        }
+
+        .badge-sin-unidades {
+            font-size: .65rem;
+            padding: .15em .45em;
+        }
     </style>
 @endpush
 
 @section('content')
     <div class="container-fluid">
-        <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-3 mt-3 gap-2 flex-wrap">
             <h3 class="mb-0">Juguetes / Combos — {{ $campaign->nombre }} (ID {{ $campaign->id }})</h3>
-            <a href="{{ route('campaigns.index') }}" class="btn btn-outline-secondary btn-sm">Volver a campañas</a>
+            <div class="d-flex gap-2">
+                <a href="{{ route('campaigns.toys.export', $campaign) }}"
+                   class="btn btn-success btn-sm">
+                    Descargar referencias
+                </a>
+                <a href="{{ route('campaigns.index') }}" class="btn btn-outline-secondary btn-sm">Volver a campañas</a>
+            </div>
         </div>
 
         <div id="toys-table"></div>
@@ -45,22 +64,20 @@
     <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
     <script>
         (function() {
-            const dataUrl = @json(route('campaigns.toys.data', $campaign));
+            const dataUrl    = @json(route('campaigns.toys.data', $campaign));
             const placeholder = @json(asset('assets/images/placeholder.png'));
-            const IS_EXEC = @json(auth()->user()->hasRole('Ejecutiva-Empresas')); // 👈 Oculta acciones a este rol
-            const CSRF = @json(csrf_token());
+            const IS_EXEC    = @json(auth()->user()->hasRole('Ejecutiva-Empresas'));
+            const CSRF       = @json(csrf_token());
 
-            // Plantilla de URLs para editar/eliminar
-            const editUrlTemplate =
-                `{{ route('campaigns.toys.edit', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
-            const destroyUrlTemplate =
-                `{{ route('campaigns.toys.destroy', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
+            const editUrlTemplate    = `{{ route('campaigns.toys.edit',    ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
+            const destroyUrlTemplate = `{{ route('campaigns.toys.destroy', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
+            const unidadesUrlTemplate = `{{ route('campaigns.toys.unidades', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
 
             function actionFormatter(cell) {
                 const row = cell.getRow().getData();
-                const id = row.id;
+                const id  = row.id;
 
-                if (IS_EXEC) return ''; // Ejecutiva-Empresas sin acciones
+                if (IS_EXEC) return '';
 
                 const editUrl = editUrlTemplate.replace('__ID__', id);
 
@@ -76,17 +93,68 @@
                     </div>`;
             }
 
-            const columns = [{
-                    title: "ID",
-                    field: "id",
-                    width: 80
-                },
-                {
-                    title: "Ref.",
-                    field: "referencia",
-                    width: 140,
-                    headerFilter: "input"
-                },
+            function unidadesFormatter(cell) {
+                const val = cell.getValue();
+                const n   = parseInt(val ?? 0, 10);
+
+                if (n <= 0) {
+                    return `<span class="fw-semibold text-danger">${n}</span>
+                            <span class="badge bg-danger badge-sin-unidades ms-1">Sin unidades</span>`;
+                }
+                return `<span>${n}</span>`;
+            }
+
+            const unidadesColDef = {
+                title: "Unid.",
+                field: "unidades",
+                width: 140,
+                hozAlign: "right",
+                formatter: unidadesFormatter,
+            };
+
+            // Editor inline solo para Admin
+            if (!IS_EXEC) {
+                unidadesColDef.editor = 'number';
+                unidadesColDef.editorParams = { min: 0, step: 1 };
+                unidadesColDef.cellEdited = function(cell) {
+                    const row     = cell.getRow().getData();
+                    const id      = row.id;
+                    const nuevas  = parseInt(cell.getValue(), 10);
+                    const url     = unidadesUrlTemplate.replace('__ID__', id);
+
+                    fetch(url, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': CSRF,
+                            'Accept': 'application/json',
+                        },
+                        body: JSON.stringify({ unidades: nuevas }),
+                    })
+                    .then(async r => {
+                        const payload = await r.json().catch(() => ({}));
+                        if (r.ok && payload.ok) {
+                            // Refresca el formatter para que el badge aparezca/desaparezca
+                            cell.getRow().reformat();
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error al guardar',
+                                text: payload.message || 'No se pudo actualizar las unidades.',
+                            });
+                            cell.restoreOldValue();
+                        }
+                    })
+                    .catch(() => {
+                        Swal.fire({ icon: 'error', title: 'Error de red', text: 'No fue posible contactar el servidor.' });
+                        cell.restoreOldValue();
+                    });
+                };
+            }
+
+            const columns = [
+                { title: "ID",     field: "id",        width: 80 },
+                { title: "Ref.",   field: "referencia", width: 140, headerFilter: "input" },
                 {
                     title: "Nombre",
                     field: "nombre",
@@ -104,8 +172,8 @@
                     hozAlign: "center",
                     headerSort: false,
                     formatter: function(cell) {
-                        const row = cell.getRow().getData();
-                        const urls = Array.isArray(row.image_urls) ? row.image_urls : [];
+                        const row        = cell.getRow().getData();
+                        const urls       = Array.isArray(row.image_urls) ? row.image_urls : [];
                         const partsCount = Number(row.image_parts_count || 0);
 
                         if (partsCount === 2) {
@@ -122,8 +190,7 @@
 
                         if (partsCount >= 3) {
                             const first = urls[0] || placeholder;
-                            const badge =
-                                `<span class="badge bg-secondary ms-1 align-middle">+${partsCount - 1}</span>`;
+                            const badge = `<span class="badge bg-secondary ms-1 align-middle">+${partsCount - 1}</span>`;
                             return `
                                 <div class="d-inline-flex align-items-center">
                                     <img src="${first}" class="toy-thumb" alt="thumb"
@@ -140,18 +207,8 @@
                             </div>`;
                     }
                 },
-                {
-                    title: "Género",
-                    field: "genero",
-                    width: 110,
-                    headerFilter: "input"
-                },
-                {
-                    title: "Unid.",
-                    field: "unidades",
-                    width: 90,
-                    hozAlign: "right"
-                },
+                { title: "Género", field: "genero",        width: 110, headerFilter: "input" },
+                unidadesColDef,
                 {
                     title: "Precio",
                     field: "precio_unitario",
@@ -166,9 +223,16 @@
                     headerFilter: "input",
                     formatter: c => c.getValue() || '0'
                 },
+                {
+                    title: "Seleccionados",
+                    field: "seleccionadas",
+                    width: 130,
+                    hozAlign: "right",
+                    bottomCalc: "sum",
+                    formatter: c => c.getValue() || '0'
+                },
             ];
 
-            // 👉 Columna Acciones si NO es Ejecutiva-Empresas
             if (!IS_EXEC) {
                 columns.push({
                     title: "Acciones",
@@ -177,20 +241,17 @@
                     headerSort: false,
                     width: 180,
                     formatter: actionFormatter,
-                    responsive: 0 // última en colapsarse
+                    responsive: 0
                 });
             }
 
             const table = new Tabulator("#toys-table", {
                 layout: "fitColumns",
-                columnDefaults: {
-                    minWidth: 100,
-                    headerSort: true
-                },
+                columnDefaults: { minWidth: 100, headerSort: true },
 
                 responsiveLayout: "collapse",
                 responsiveLayoutCollapseStartOpen: false,
-                responsiveLayoutCollapseUseFormatters: true, // 👈 mantiene botones en vista colapsada
+                responsiveLayoutCollapseUseFormatters: true,
 
                 height: "600px",
                 rowHeight: 68,
@@ -207,10 +268,18 @@
                 paginationCounter: "rows",
 
                 columns,
-                initialSort: [{
-                    column: "updated_at",
-                    dir: "desc"
-                }],
+                initialSort: [{ column: "updated_at", dir: "desc" }],
+
+                rowFormatter: function(row) {
+                    const data = row.getData();
+                    const n    = parseInt(data.unidades ?? 0, 10);
+                    const el   = row.getElement();
+                    if (n <= 0) {
+                        el.classList.add('row-sin-unidades');
+                    } else {
+                        el.classList.remove('row-sin-unidades');
+                    }
+                },
             });
 
             window.addEventListener('resize', () => table.redraw(true));
@@ -221,7 +290,7 @@
 
                 Swal.fire({
                     title: 'Eliminar juguete',
-                    html: `¿Seguro que deseas eliminar <b>${nombre || ('ID '+id)}</b>? Esta acción no se puede deshacer.`,
+                    html: `¿Seguro que deseas eliminar <b>${nombre || ('ID ' + id)}</b>? Esta acción no se puede deshacer.`,
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonText: 'Sí, eliminar',
@@ -231,61 +300,31 @@
 
                     $.blockUI({
                         message: '<div class="p-3"><div class="spinner-border" role="status"></div><div class="mt-2">Eliminando...</div></div>',
-                        css: {
-                            border: 'none',
-                            padding: '15px',
-                            background: '#000',
-                            opacity: 0.6,
-                            color: '#fff',
-                            borderRadius: '8px'
-                        },
+                        css: { border: 'none', padding: '15px', background: '#000', opacity: 0.6, color: '#fff', borderRadius: '8px' },
                         baseZ: 2000
                     });
 
                     fetch(destroyUrl, {
-                            method: 'DELETE',
-                            headers: {
-                                'X-CSRF-TOKEN': CSRF,
-                                'Accept': 'application/json'
-                            }
-                        })
-                        .then(async r => {
-                            $.unblockUI();
-                            const payload = await (async () => {
-                                try {
-                                    return await r.json();
-                                } catch {
-                                    return {};
-                                }
-                            })();
-                            if (r.ok && payload.ok) {
-                                // Elimina la fila del Tabulator si existe
-                                const row = table.getRow(id);
-                                if (row) row.delete();
-                                else table.replaceData();
+                        method: 'DELETE',
+                        headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }
+                    })
+                    .then(async r => {
+                        $.unblockUI();
+                        const payload = await r.json().catch(() => ({}));
+                        if (r.ok && payload.ok) {
+                            const row = table.getRow(id);
+                            if (row) row.delete();
+                            else table.replaceData();
 
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Eliminado',
-                                    text: payload.message ||
-                                        'El juguete fue eliminado correctamente.'
-                                });
-                            } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'No se pudo eliminar',
-                                    text: payload.message || 'Inténtalo más tarde.'
-                                });
-                            }
-                        })
-                        .catch(() => {
-                            $.unblockUI();
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error de red',
-                                text: 'No fue posible contactar el servidor.'
-                            });
-                        });
+                            Swal.fire({ icon: 'success', title: 'Eliminado', text: payload.message || 'El juguete fue eliminado correctamente.' });
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'No se pudo eliminar', text: payload.message || 'Inténtalo más tarde.' });
+                        }
+                    })
+                    .catch(() => {
+                        $.unblockUI();
+                        Swal.fire({ icon: 'error', title: 'Error de red', text: 'No fue posible contactar el servidor.' });
+                    });
                 });
             };
         })();

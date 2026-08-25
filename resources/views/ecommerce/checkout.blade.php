@@ -73,20 +73,29 @@
                                         <tbody>
                                             @foreach ($items as $row)
                                                 @php
+                                                    // Los combos vienen con varias imágenes separadas por "+"
+                                                    // (ej: BM-61311.jpg+71D118.jpg) y se muestran una al lado de otra
                                                     $imgRel = trim((string) ($row->imagenppal ?? ''));
                                                     $imgRel = ltrim($imgRel, '/');
-                                                    $imgPath =
-                                                        $imgRel !== ''
-                                                            ? (Str::startsWith($imgRel, 'campaign_toys/')
-                                                                ? $imgRel
-                                                                : "campaign_toys/{$row->idcampaing}/{$imgRel}")
-                                                            : '';
+                                                    $imgNames = $imgRel !== ''
+                                                        ? array_filter(array_map('trim', explode('+', $imgRel)))
+                                                        : [];
+                                                    $imgPaths = array_map(
+                                                        fn($name) => Str::startsWith($name, 'campaign_toys/')
+                                                            ? $name
+                                                            : "campaign_toys/{$row->idcampaing}/{$name}",
+                                                        $imgNames
+                                                    );
                                                 @endphp
                                                 <tr>
                                                     <td class="text-center">
-                                                        @if ($imgPath !== '')
-                                                            <img src="{{ Storage::url($imgPath) }}" alt="{{ $row->toy_nombre }}"
-                                                                class="img-fluid" style="max-width:120px">
+                                                        @if (count($imgPaths) > 0)
+                                                            <div class="d-flex flex-row justify-content-center align-items-center gap-1">
+                                                                @foreach ($imgPaths as $imgPath)
+                                                                    <img src="{{ Storage::url($imgPath) }}" alt="{{ $row->toy_nombre }}"
+                                                                        class="img-fluid" style="max-width:{{ count($imgPaths) > 1 ? '55px' : '120px' }}">
+                                                                @endforeach
+                                                            </div>
                                                         @endif
                                                     </td>
                                                     <td>

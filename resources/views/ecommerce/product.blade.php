@@ -278,7 +278,7 @@
                         @foreach ($resultado as $grupo)
                             @php
                                 $gRaw = $grupo['hijo']['genero'] ?? '';
-                                $g = strtoupper(trim((string) $gRaw));
+                                $g = mb_strtoupper(trim((string) $gRaw), 'UTF-8');
                                 $btnClass = match (true) {
                                     in_array($g, ['NIÑA', 'NINA', 'F']) => 'btn-kid-girl',
                                     in_array($g, ['NIÑO', 'NINO', 'M']) => 'btn-kid-boy',

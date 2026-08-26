@@ -475,7 +475,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     {
         if ($value === null) return 'UNISEX';
 
-        $g = strtoupper(trim((string)$value));
+        $g = mb_strtoupper(trim((string)$value), 'UTF-8');
 
         // Variantes comunes para niña
         $nina = ['F', 'FEMENINO', 'FEMENINA', 'NIÑA', 'NINA', 'GIRL', 'MUJER', 'FEMALE'];

@@ -130,7 +130,7 @@
                                                 );
 
                                                 // Normalizar género (acepta NIÑO/NIÑA/UNISEX y M/F)
-                                                $genRaw = strtoupper(trim((string) ($row->genero ?? '')));
+                                                $genRaw = mb_strtoupper(trim((string) ($row->genero ?? '')), 'UTF-8');
                                                 $genKey = match (true) {
                                                     in_array($genRaw, ['NIÑA', 'NINA', 'F', 'GIRL', 'FEMALE'], true)
                                                         => 'F',

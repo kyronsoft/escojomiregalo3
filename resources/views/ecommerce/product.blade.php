@@ -14,6 +14,13 @@
                 $b = hexdec(substr($hex, 4, 2));
                 return (($r * 299 + $g * 587 + $b * 114) / 1000) >= 128 ? '#000000' : '#ffffff';
             };
+            // Borde con contraste garantizado contra el fondo blanco de la tarjeta:
+            // si el color configurado es claro (se confundiría con el fondo), se fuerza
+            // un borde oscuro y opaco; si ya es oscuro, el propio relleno contrasta
+            // contra el blanco y basta un borde sutil.
+            $borderContrast = function(string $hex) use ($yiqContrast): string {
+                return $yiqContrast($hex) === '#000000' ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.15)';
+            };
         @endphp
         :root {
             --primary: {{ $primaryColor }};
@@ -25,6 +32,9 @@
             --kid-boy-text:     {{ $yiqContrast($colorBotonNino) }};
             --kid-girl-text:    {{ $yiqContrast($colorBotonNina) }};
             --kid-neutral-text: {{ $yiqContrast($colorBotonUnisex) }};
+            --kid-boy-border:     {{ $borderContrast($colorBotonNino) }};
+            --kid-girl-border:    {{ $borderContrast($colorBotonNina) }};
+            --kid-neutral-border: {{ $borderContrast($colorBotonUnisex) }};
         }
 
         /* Fondo con 50% de opacidad detrás del contenido */
@@ -81,9 +91,9 @@
         .site-content { position: relative; }
 
         /* Colores botones por género — configurables desde empresa */
-        .btn-kid-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl)    !important; color: var(--kid-girl-text)    !important; }
-        .btn-kid-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy)     !important; color: var(--kid-boy-text)     !important; }
-        .btn-kid-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral) !important; color: var(--kid-neutral-text) !important; }
+        .btn-kid-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl-border)    !important; color: var(--kid-girl-text)    !important; }
+        .btn-kid-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy-border)     !important; color: var(--kid-boy-text)     !important; }
+        .btn-kid-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral-border) !important; color: var(--kid-neutral-text) !important; }
         .btn-kid-girl:hover, .btn-kid-girl:focus,
         .btn-kid-boy:hover, .btn-kid-boy:focus,
         .btn-kid-neutral:hover, .btn-kid-neutral:focus { filter: brightness(.92); }
@@ -278,7 +288,7 @@
                         @foreach ($resultado as $grupo)
                             @php
                                 $gRaw = $grupo['hijo']['genero'] ?? '';
-                                $g = strtoupper(trim((string) $gRaw));
+                                $g = mb_strtoupper(trim((string) $gRaw), 'UTF-8');
                                 $btnClass = match (true) {
                                     in_array($g, ['NIÑA', 'NINA', 'F']) => 'btn-kid-girl',
                                     in_array($g, ['NIÑO', 'NINO', 'M']) => 'btn-kid-boy',
@@ -317,10 +327,14 @@
                                         foreach ($parts as $p) {
                                             if ($p === '') continue;
                                             $p = ltrim($p, '/');
-                                            $path = \Illuminate\Support\Str::startsWith($p, 'campaign_toys/')
-                                                ? $p
-                                                : "campaign_toys/{$idCampaign}/{$p}";
-                                            $imgPaths[] = $path;
+                                            if (preg_match('#^https?://#i', $p)) {
+                                                $imgPaths[] = $p;
+                                            } else {
+                                                $path = \Illuminate\Support\Str::startsWith($p, 'campaign_toys/')
+                                                    ? $p
+                                                    : "campaign_toys/{$idCampaign}/{$p}";
+                                                $imgPaths[] = $path;
+                                            }
                                         }
                                     }
                                     $isCombo = count($imgPaths) > 1;
@@ -339,17 +353,25 @@
                                                     @if ($isCombo)
                                                         <div class="combo-wrap d-flex justify-content-center flex-wrap gap-2">
                                                             @foreach ($imgPaths as $p)
-                                                                @if (Storage::disk('public')->exists($p))
-                                                                    <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}" class="img-fluid">
-                                                                @endif
+                                                                @php
+                                                                    $url = preg_match('#^https?://#i', $p)
+                                                                        ? $p
+                                                                        : (Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : asset('assets/images/placeholder.png'));
+                                                                @endphp
+                                                                <img src="{{ $url }}" alt="{{ $toy['nombre'] }}" class="img-fluid" onerror="this.onerror=null; this.src='{{ asset('assets/images/placeholder.png') }}';">
                                                             @endforeach
                                                         </div>
                                                     @else
-                                                        @php $p = $imgPaths[0]; @endphp
-                                                        @if (Storage::disk('public')->exists($p))
-                                                            <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}" class="img-fluid">
-                                                        @endif
+                                                        @php
+                                                            $p = $imgPaths[0];
+                                                            $url = preg_match('#^https?://#i', $p)
+                                                                ? $p
+                                                                : (Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : asset('assets/images/placeholder.png'));
+                                                        @endphp
+                                                        <img src="{{ $url }}" alt="{{ $toy['nombre'] }}" class="img-fluid" onerror="this.onerror=null; this.src='{{ asset('assets/images/placeholder.png') }}';">
                                                     @endif
+                                                @else
+                                                    <img src="{{ asset('assets/images/placeholder.png') }}" alt="Placeholder" class="img-fluid">
                                                 @endif
 
                                                 <div class="product-hover">
@@ -390,17 +412,25 @@
                                                                             @if ($isCombo)
                                                                                 <div class="modal-combo">
                                                                                     @foreach ($imgPaths as $p)
-                                                                                        @if (Storage::disk('public')->exists($p))
-                                                                                            <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}" class="img-fluid">
-                                                                                        @endif
+                                                                                        @php
+                                                                                            $url = preg_match('#^https?://#i', $p)
+                                                                                                ? $p
+                                                                                                : (Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : asset('assets/images/placeholder.png'));
+                                                                                        @endphp
+                                                                                        <img src="{{ $url }}" alt="{{ $toy['nombre'] }}" class="img-fluid" onerror="this.onerror=null; this.src='{{ asset('assets/images/placeholder.png') }}';">
                                                                                     @endforeach
                                                                                 </div>
                                                                             @else
-                                                                                @php $p = $imgPaths[0]; @endphp
-                                                                                @if (Storage::disk('public')->exists($p))
-                                                                                    <img src="{{ Storage::disk('public')->url($p) }}" alt="{{ $toy['nombre'] }}" class="img-fluid">
-                                                                                @endif
+                                                                                @php
+                                                                                    $p = $imgPaths[0];
+                                                                                    $url = preg_match('#^https?://#i', $p)
+                                                                                        ? $p
+                                                                                        : (Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : asset('assets/images/placeholder.png'));
+                                                                                @endphp
+                                                                                <img src="{{ $url }}" alt="{{ $toy['nombre'] }}" class="img-fluid" onerror="this.onerror=null; this.src='{{ asset('assets/images/placeholder.png') }}';">
                                                                             @endif
+                                                                        @else
+                                                                            <img src="{{ asset('assets/images/placeholder.png') }}" alt="Placeholder" class="img-fluid">
                                                                         @endif
                                                                     </div>
                                                                 </div>

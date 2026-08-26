@@ -14,6 +14,13 @@
                 $b = hexdec(substr($hex, 4, 2));
                 return (($r * 299 + $g * 587 + $b * 114) / 1000) >= 128 ? '#000000' : '#ffffff';
             };
+            // Borde con contraste garantizado contra el fondo blanco de la tarjeta:
+            // si el color configurado es claro (se confundiría con el fondo), se fuerza
+            // un borde oscuro y opaco; si ya es oscuro, el propio relleno contrasta
+            // contra el blanco y basta un borde sutil.
+            $borderContrast = function(string $hex) use ($yiqContrast): string {
+                return $yiqContrast($hex) === '#000000' ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.15)';
+            };
         @endphp
         :root {
             --primary: {{ $primaryColor }};
@@ -25,6 +32,9 @@
             --kid-boy-text:     {{ $yiqContrast($colorBotonNino) }};
             --kid-girl-text:    {{ $yiqContrast($colorBotonNina) }};
             --kid-neutral-text: {{ $yiqContrast($colorBotonUnisex) }};
+            --kid-boy-border:     {{ $borderContrast($colorBotonNino) }};
+            --kid-girl-border:    {{ $borderContrast($colorBotonNina) }};
+            --kid-neutral-border: {{ $borderContrast($colorBotonUnisex) }};
         }
 
         /* Fondo con 50% de opacidad detrás del contenido */
@@ -81,9 +91,9 @@
         .site-content { position: relative; }
 
         /* Colores botones por género — configurables desde empresa */
-        .btn-kid-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl)    !important; color: var(--kid-girl-text)    !important; }
-        .btn-kid-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy)     !important; color: var(--kid-boy-text)     !important; }
-        .btn-kid-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral) !important; color: var(--kid-neutral-text) !important; }
+        .btn-kid-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl-border)    !important; color: var(--kid-girl-text)    !important; }
+        .btn-kid-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy-border)     !important; color: var(--kid-boy-text)     !important; }
+        .btn-kid-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral-border) !important; color: var(--kid-neutral-text) !important; }
         .btn-kid-girl:hover, .btn-kid-girl:focus,
         .btn-kid-boy:hover, .btn-kid-boy:focus,
         .btn-kid-neutral:hover, .btn-kid-neutral:focus { filter: brightness(.92); }

@@ -175,6 +175,7 @@ class SeleccionadosController extends Controller
             }
             return [
                 $r->referencia,     // Referencia (puede venir null si no ha seleccionado)
+                $r->toy_name,       // Nombre Referencia (nombre del juguete/combo seleccionado)
                 $fecha,             // Fecha Selección
                 $r->documento,      // Documento
                 $r->colaborador,    // Colaborador
@@ -195,6 +196,7 @@ class SeleccionadosController extends Controller
 
         $headings = [
             'Referencia',
+            'Nombre Referencia',
             'Fecha Selección',
             'Documento',
             'Colaborador',

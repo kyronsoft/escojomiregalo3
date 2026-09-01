@@ -5,22 +5,29 @@
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/owlcarousel.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/range-slider.css') }}">
     @php
-        $yiqContrast = function(string $hex): string {
-            $hex = ltrim($hex, '#');
-            $r = hexdec(substr($hex, 0, 2));
-            $g = hexdec(substr($hex, 2, 2));
-            $b = hexdec(substr($hex, 4, 2));
-            return (($r * 299 + $g * 587 + $b * 114) / 1000) >= 128 ? '#000000' : '#ffffff';
-        };
+        // Normaliza los colores configurados por la empresa y cae a los
+        // defaults históricos si el valor es inválido; garantiza contraste
+        // legible del texto sobre cualquier color, incluidos blanco y negro.
+        $cKidBoy     = normalizeHexColor($colorBotonNino,   '#BA895D');
+        $cKidGirl    = normalizeHexColor($colorBotonNina,   '#1B4C43');
+        $cKidNeutral = normalizeHexColor($colorBotonUnisex, '#000000');
+
+        // Borde oscuro y opaco cuando el relleno es claro (para que no se funda
+        // con el fondo blanco); borde sutil cuando el relleno ya contrasta.
+        $borderContrast = fn(string $hex): string =>
+            contrastColor($hex) === '#000000' ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.15)';
     @endphp
     <style>
         :root {
-            --kid-boy:          {{ $colorBotonNino }};
-            --kid-girl:         {{ $colorBotonNina }};
-            --kid-neutral:      {{ $colorBotonUnisex }};
-            --kid-boy-text:     {{ $yiqContrast($colorBotonNino) }};
-            --kid-girl-text:    {{ $yiqContrast($colorBotonNina) }};
-            --kid-neutral-text: {{ $yiqContrast($colorBotonUnisex) }};
+            --kid-boy:          {{ $cKidBoy }};
+            --kid-girl:         {{ $cKidGirl }};
+            --kid-neutral:      {{ $cKidNeutral }};
+            --kid-boy-text:     {{ contrastColor($cKidBoy) }};
+            --kid-girl-text:    {{ contrastColor($cKidGirl) }};
+            --kid-neutral-text: {{ contrastColor($cKidNeutral) }};
+            --kid-boy-border:     {{ $borderContrast($cKidBoy) }};
+            --kid-girl-border:    {{ $borderContrast($cKidGirl) }};
+            --kid-neutral-border: {{ $borderContrast($cKidNeutral) }};
         }
 
         /* Borde negro para la tabla del carrito (y todas sus celdas) */
@@ -44,9 +51,9 @@
             text-decoration: none;
             white-space: nowrap;
         }
-        .child-btn-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy)     !important; color: var(--kid-boy-text)     !important; }
-        .child-btn-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl)    !important; color: var(--kid-girl-text)    !important; }
-        .child-btn-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral) !important; color: var(--kid-neutral-text) !important; }
+        .child-btn-boy     { background: var(--kid-boy)     !important; border-color: var(--kid-boy-border)     !important; color: var(--kid-boy-text)     !important; }
+        .child-btn-girl    { background: var(--kid-girl)    !important; border-color: var(--kid-girl-border)    !important; color: var(--kid-girl-text)    !important; }
+        .child-btn-neutral { background: var(--kid-neutral) !important; border-color: var(--kid-neutral-border) !important; color: var(--kid-neutral-text) !important; }
     </style>
 @endpush
 

@@ -97,6 +97,13 @@
         .btn-kid-girl:hover, .btn-kid-girl:focus,
         .btn-kid-boy:hover, .btn-kid-boy:focus,
         .btn-kid-neutral:hover, .btn-kid-neutral:focus { filter: brightness(.92); }
+        /* El nombre del hijo va en <span class="label">, y assets/css/style.css
+           define .label { color:#fff } (cargado después de este bloque). Esa
+           regla apunta directo al span y gana sobre el color heredado del
+           botón, dejando texto blanco sobre botones claros. Forzamos que el
+           texto herede el color de contraste ya calculado en .btn-kid-*. */
+        .child-btn .label,
+        .child-btn .check { color: inherit !important; }
 
         .child-btn { position: relative; border-width: 2px; transition: transform .12s ease, box-shadow .18s ease, filter .18s ease; white-space: normal; overflow: visible; line-height: 1.2; padding: .65rem .8rem; }
         .child-btn:active { transform: translateY(1px) scale(.985); }

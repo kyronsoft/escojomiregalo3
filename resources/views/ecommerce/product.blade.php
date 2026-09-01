@@ -6,35 +6,35 @@
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/css/range-slider.css') }}">
     <style>
         @php
-            // Contraste YIQ: devuelve #fff o #000 según luminancia del fondo
-            $yiqContrast = function(string $hex): string {
-                $hex = ltrim($hex, '#');
-                $r = hexdec(substr($hex, 0, 2));
-                $g = hexdec(substr($hex, 2, 2));
-                $b = hexdec(substr($hex, 4, 2));
-                return (($r * 299 + $g * 587 + $b * 114) / 1000) >= 128 ? '#000000' : '#ffffff';
-            };
+            // Normaliza los colores configurados por la empresa (acepta #rgb,
+            // #rrggbb, may/min y espacios) y cae a los defaults históricos si el
+            // valor es inválido. Así garantizamos CSS válido y un cálculo de
+            // contraste fiable para cualquier color, incluidos blanco y negro.
+            $cSecondary   = normalizeHexColor($secondaryColor,   '#f2f2f2');
+            $cKidBoy      = normalizeHexColor($colorBotonNino,   '#BA895D');
+            $cKidGirl     = normalizeHexColor($colorBotonNina,   '#1B4C43');
+            $cKidNeutral  = normalizeHexColor($colorBotonUnisex, '#000000');
+
             // Borde con contraste garantizado contra el fondo blanco de la tarjeta:
             // si el color configurado es claro (se confundiría con el fondo), se fuerza
             // un borde oscuro y opaco; si ya es oscuro, el propio relleno contrasta
             // contra el blanco y basta un borde sutil.
-            $borderContrast = function(string $hex) use ($yiqContrast): string {
-                return $yiqContrast($hex) === '#000000' ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.15)';
-            };
+            $borderContrast = fn(string $hex): string =>
+                contrastColor($hex) === '#000000' ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.15)';
         @endphp
         :root {
-            --primary: {{ $primaryColor }};
-            --secondary: {{ $secondaryColor }};
-            --kid-boy:          {{ $colorBotonNino }};
-            --kid-girl:         {{ $colorBotonNina }};
-            --kid-neutral:      {{ $colorBotonUnisex }};
-            --secondary-text:   {{ $yiqContrast($secondaryColor) }};
-            --kid-boy-text:     {{ $yiqContrast($colorBotonNino) }};
-            --kid-girl-text:    {{ $yiqContrast($colorBotonNina) }};
-            --kid-neutral-text: {{ $yiqContrast($colorBotonUnisex) }};
-            --kid-boy-border:     {{ $borderContrast($colorBotonNino) }};
-            --kid-girl-border:    {{ $borderContrast($colorBotonNina) }};
-            --kid-neutral-border: {{ $borderContrast($colorBotonUnisex) }};
+            --primary: {{ normalizeHexColor($primaryColor, '#ffffff') }};
+            --secondary: {{ $cSecondary }};
+            --kid-boy:          {{ $cKidBoy }};
+            --kid-girl:         {{ $cKidGirl }};
+            --kid-neutral:      {{ $cKidNeutral }};
+            --secondary-text:   {{ contrastColor($cSecondary) }};
+            --kid-boy-text:     {{ contrastColor($cKidBoy) }};
+            --kid-girl-text:    {{ contrastColor($cKidGirl) }};
+            --kid-neutral-text: {{ contrastColor($cKidNeutral) }};
+            --kid-boy-border:     {{ $borderContrast($cKidBoy) }};
+            --kid-girl-border:    {{ $borderContrast($cKidGirl) }};
+            --kid-neutral-border: {{ $borderContrast($cKidNeutral) }};
         }
 
         /* Fondo con 50% de opacidad detrás del contenido */
@@ -145,7 +145,7 @@
             }
         }
 
-        .badge-gender { background:#FFCD01 !important; color:#fff !important; }
+        .badge-gender { background:#FFCD01 !important; color:{{ contrastColor('#FFCD01') }} !important; }
 
         /* ==== Tarjetas de juguetes ==== */
         .toy-card .card { border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.04); }

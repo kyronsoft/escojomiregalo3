@@ -65,15 +65,18 @@ class ProductController extends Controller
             ?? $this->publicUrlLoose($empresa ? "images/{$empresa->nit}/logo.png" : null)
             ?? asset('assets/images/placeholder.png');
 
-        // Colores & mensajes
-        $primaryColor   = $empresa?->color_primario   ?: '#ffffff';
-        $secondaryColor = $empresa?->color_secundario ?: '#f2f2f2';
+        // Colores & mensajes. normalizeHexColor() tolera valores mal
+        // guardados (vacíos, con espacios, #rgb de 3 dígitos) y cae al
+        // default si el color no es un hex válido; así la vista nunca recibe
+        // un color que rompa el CSS o el cálculo de contraste del texto.
+        $primaryColor   = normalizeHexColor($empresa?->color_primario,   '#ffffff');
+        $secondaryColor = normalizeHexColor($empresa?->color_secundario, '#f2f2f2');
         $welcomeMsg     = (string) ($empresa->welcome_msg ?? '');
 
         // Colores de botones por género (con defaults históricos)
-        $colorBotonNino   = $empresa?->color_boton_nino   ?: '#BA895D';
-        $colorBotonNina   = $empresa?->color_boton_nina   ?: '#1B4C43';
-        $colorBotonUnisex = $empresa?->color_boton_unisex ?: '#000000';
+        $colorBotonNino   = normalizeHexColor($empresa?->color_boton_nino,   '#BA895D');
+        $colorBotonNina   = normalizeHexColor($empresa?->color_boton_nina,   '#1B4C43');
+        $colorBotonUnisex = normalizeHexColor($empresa?->color_boton_unisex, '#000000');
 
         // Colaborador (para modales)
         $colaborador = Colaborador::where('documento', $documento)->first();

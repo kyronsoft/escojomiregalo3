@@ -75,9 +75,11 @@ class CartController extends Controller
             }
             if ($campaign?->nit) {
                 $empresa = \App\Models\Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$campaign->nit)])->first();
-                $colorBotonNino   = $empresa?->color_boton_nino   ?: $colorBotonNino;
-                $colorBotonNina   = $empresa?->color_boton_nina   ?: $colorBotonNina;
-                $colorBotonUnisex = $empresa?->color_boton_unisex ?: $colorBotonUnisex;
+                // normalizeHexColor() tolera valores mal guardados (vacíos,
+                // con espacios, #rgb) y cae al default si no son hex válidos.
+                $colorBotonNino   = normalizeHexColor($empresa?->color_boton_nino,   $colorBotonNino);
+                $colorBotonNina   = normalizeHexColor($empresa?->color_boton_nina,   $colorBotonNina);
+                $colorBotonUnisex = normalizeHexColor($empresa?->color_boton_unisex, $colorBotonUnisex);
             }
         }
 

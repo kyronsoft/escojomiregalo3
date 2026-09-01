@@ -106,6 +106,16 @@ class EmpresaController extends Controller
             'welcome_msg'       => ['nullable', 'string'],
         ]);
 
+        // Normaliza los colores a #rrggbb (o null si quedan vacíos) para no
+        // persistir espacios/valores basura que luego rompen el contraste.
+        foreach (['color_primario', 'color_secundario', 'color_terciario',
+                  'color_boton_nino', 'color_boton_nina', 'color_boton_unisex'] as $ck) {
+            if (array_key_exists($ck, $data)) {
+                $norm = normalizeHexColor($data[$ck] ?? null, '');
+                $data[$ck] = $norm !== '' ? $norm : null;
+            }
+        }
+
         $empresa = new Empresa([
             'nit'               => $data['nit'],
             'nombre'            => $data['nombre']            ?? null,
@@ -208,6 +218,16 @@ class EmpresaController extends Controller
             'welcome_msg'       => ['nullable', 'string'],
             'codigoVendedor'    => ['nullable', 'string', 'max:10'],
         ]);
+
+        // Normaliza los colores a #rrggbb (o null si quedan vacíos) para no
+        // persistir espacios/valores basura que luego rompen el contraste.
+        foreach (['color_primario', 'color_secundario', 'color_terciario',
+                  'color_boton_nino', 'color_boton_nina', 'color_boton_unisex'] as $ck) {
+            if (array_key_exists($ck, $data)) {
+                $norm = normalizeHexColor($data[$ck] ?? null, '');
+                $data[$ck] = $norm !== '' ? $norm : null;
+            }
+        }
 
         // Carpeta por empresa en el disco public (campaigns/{nit})
         $folder = 'campaigns/' . $empresa->nit;

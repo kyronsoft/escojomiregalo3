@@ -18,15 +18,15 @@ class ColaboradorImportController extends Controller
     public function import(Request $request)
     {
         $data = $request->validate([
-            'idcampaign'        => ['required', 'integer', 'exists:campaigns,id'],
-            'file'              => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
-            'send_notification' => ['nullable', 'boolean'],
+            'idcampaign' => ['required', 'integer', 'exists:campaigns,id'],
+            'file'       => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
         ]);
 
-        $campaign         = Campaign::findOrFail($data['idcampaign']);
-        $sendNotification = (bool) ($data['send_notification'] ?? false);
+        $campaign = Campaign::findOrFail($data['idcampaign']);
 
-        $import = new ColaboradoresImport($campaign, $sendNotification);
+        // La importación nunca envía correos. El administrador los envía luego
+        // desde la pantalla de colaboradores de la campaña.
+        $import = new ColaboradoresImport($campaign);
         Excel::import($import, $data['file']);
 
         return back()

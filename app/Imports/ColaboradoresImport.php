@@ -9,7 +9,6 @@ use App\Models\ColaboradorHijo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -17,7 +16,6 @@ use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Validators\Failure;
-use App\Jobs\SendWelcomeCredentialsMail;
 use Spatie\Permission\Models\Role;
 
 class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRows, WithValidation, SkipsOnFailure
@@ -25,7 +23,6 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     protected Campaign $campaign;
     protected string $nit;
     protected int $campaignId;
-    protected bool $sendNotification;
 
     private const PIVOT_TABLE = 'campaing_colaboradores';
 
@@ -34,19 +31,16 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
         'users'         => ['creados' => 0, 'actualizados' => 0],
         'hijos'         => ['upserts' => 0, 'omitidos_sin_nombre' => 0],
         'pivot'         => ['upserts' => 0],
-        'emails'        => ['enviados' => 0, 'omitidos' => 0, 'errores' => 0],
         'errores'       => [],
     ];
 
-    protected array $sentInvites = [];
     protected array $emailByDocumento = [];
 
-    public function __construct(Campaign $campaign, bool $sendNotification = false)
+    public function __construct(Campaign $campaign)
     {
-        $this->campaign          = $campaign->loadMissing('empresa');
-        $this->nit               = (string) $campaign->nit;
-        $this->campaignId        = (int) $campaign->id;
-        $this->sendNotification  = $sendNotification;
+        $this->campaign   = $campaign->loadMissing('empresa');
+        $this->nit        = (string) $campaign->nit;
+        $this->campaignId = (int) $campaign->id;
     }
 
     /**
@@ -361,54 +355,10 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     }
                 }
 
-                // === 5) Enviar correo de credenciales si está habilitado ===
-                if ($this->sendNotification && $user && (string)$user->documento === (string)$documento) {
-                    if (!$hasValidEmail) {
-                        Log::warning('Notificación omitida en importación de colaboradores: email vacío o inválido', [
-                            'documento' => $documento,
-                            'email'     => $email,
-                            'campaign'  => $this->campaignId,
-                            'row'       => $excelRow,
-                        ]);
-                        $this->stats['emails']['omitidos']++;
-                    } else {
-                        $emailKey = mb_strtolower($email);
-                        if (!isset($this->sentInvites[$emailKey])) {
-                            try {
-                                dispatch(new SendWelcomeCredentialsMail(
-                                    to: $email,
-                                    name: $nombre,
-                                    rawPassword: $documento,
-                                    loginUrl: route('login'),
-                                    campaignId: $this->campaignId,
-                                    subjectLine: (string)($this->campaign->subject ?? 'Bienvenido'),
-                                ))->onQueue('emails');
-
-                                $this->sentInvites[$emailKey] = true;
-                                $this->stats['emails']['enviados']++;
-
-                                DB::table(self::PIVOT_TABLE)
-                                    ->where('idcampaign', $this->campaignId)
-                                    ->where('documento', $documento)
-                                    ->where('nit', $this->nit)
-                                    ->update(['email_notified' => 1, 'updated_at' => now()]);
-                            } catch (\Throwable $mailEx) {
-                                DB::table('importerrors')->insert([
-                                    'row'        => $excelRow,
-                                    'attribute'  => 'erroremail',
-                                    'errors'     => Str::limit($mailEx->getMessage(), 255, ''),
-                                    'values'     => json_encode(['documento' => $documento, 'email' => $email], JSON_UNESCAPED_UNICODE),
-                                    'created_at' => now(),
-                                ]);
-                                $this->stats['emails']['errores']++;
-                            }
-                        } else {
-                            $this->stats['emails']['omitidos']++;
-                        }
-                    }
-                } elseif (!$this->sendNotification) {
-                    $this->stats['emails']['omitidos']++;
-                }
+                // === 5) La importación NO envía correos. El envío de credenciales
+                //        se hace despues, manualmente, desde la pantalla de
+                //        colaboradores de la campaña ("Enviar correo a todos" /
+                //        "Reenviar" por colaborador).
 
                 // === 6) Hijos (opcional) ===
                 $children = $this->extractChildrenFromRow($row);

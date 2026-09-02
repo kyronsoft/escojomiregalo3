@@ -9,7 +9,6 @@ use App\Models\ColaboradorHijo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -17,7 +16,6 @@ use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Validators\Failure;
-use App\Jobs\SendWelcomeCredentialsMail;
 use Spatie\Permission\Models\Role;
 
 class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRows, WithValidation, SkipsOnFailure
@@ -25,7 +23,6 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     protected Campaign $campaign;
     protected string $nit;
     protected int $campaignId;
-    protected bool $sendNotification;
 
     private const PIVOT_TABLE = 'campaing_colaboradores';
 
@@ -34,19 +31,61 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
         'users'         => ['creados' => 0, 'actualizados' => 0],
         'hijos'         => ['upserts' => 0, 'omitidos_sin_nombre' => 0],
         'pivot'         => ['upserts' => 0],
-        'emails'        => ['enviados' => 0, 'omitidos' => 0, 'errores' => 0],
         'errores'       => [],
     ];
 
-    protected array $sentInvites = [];
     protected array $emailByDocumento = [];
 
-    public function __construct(Campaign $campaign, bool $sendNotification = false)
+    public function __construct(Campaign $campaign)
     {
-        $this->campaign          = $campaign->loadMissing('empresa');
-        $this->nit               = (string) $campaign->nit;
-        $this->campaignId        = (int) $campaign->id;
-        $this->sendNotification  = $sendNotification;
+        $this->campaign   = $campaign->loadMissing('empresa');
+        $this->nit        = (string) $campaign->nit;
+        $this->campaignId = (int) $campaign->id;
+    }
+
+    /**
+     * Se ejecuta ANTES de la validacion y de collection(). Sirve para:
+     *  1) Aceptar plantillas cuyos encabezados no son exactamente
+     *     documento/nombre/email (ej: "Numero_Documento", "Nombre Funcionario").
+     *  2) Limpiar valores que no son un correo real (N/A, -, "sin correo", 0...)
+     *     para que la fila NO se descarte entera: el colaborador se importa
+     *     sin correo y luego se le puede cargar a mano.
+     */
+    public function prepareForValidation($data, $index)
+    {
+        $data = is_array($data) ? $data : (array) $data;
+
+        $aliases = [
+            'documento' => ['numero_documento', 'numero_de_documento', 'nro_documento', 'no_documento', 'num_documento', 'cedula', 'identificacion', 'documento_identidad'],
+            'nombre'    => ['nombre_funcionario', 'nombre_colaborador', 'nombre_completo', 'nombres', 'funcionario', 'colaborador'],
+            'email'     => ['correo', 'correo_electronico', 'e_mail', 'mail'],
+            'sucursal'  => ['sede', 'regional', 'centro_de_costo', 'centro_costo'],
+            'direccion' => ['direccion_residencia', 'direccion_residencial'],
+            'telefono'  => ['celular', 'movil', 'contacto', 'telefono_contacto'],
+            'ciudad'    => ['municipio'],
+        ];
+
+        foreach ($aliases as $canonical => $keys) {
+            if (array_key_exists($canonical, $data) && trim((string) $data[$canonical]) !== '') {
+                continue;
+            }
+            foreach ($keys as $k) {
+                if (array_key_exists($k, $data) && trim((string) $data[$k]) !== '') {
+                    $data[$canonical] = $data[$k];
+                    break;
+                }
+            }
+        }
+
+        // Correo: si no contiene "@" lo tratamos como vacio (N/A, -, "no tiene"...).
+        // Si contiene "@" pero esta mal escrito, lo dejamos para que la
+        // validacion lo reporte en importerrors y el cliente lo corrija.
+        if (array_key_exists('email', $data)) {
+            $raw = preg_replace('/\s+/', '', trim((string) $data['email']));
+            $data['email'] = ($raw === '' || mb_strpos($raw, '@') === false) ? '' : $raw;
+        }
+
+        return $data;
     }
 
     /** VALIDACIÓN por fila (Laravel Excel) */
@@ -178,39 +217,90 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                 $this->emailByDocumento[$documento] = $email;
             }
 
+            // === 0) Respetar el retiro manual del colaborador de esta campaña ===
+            // Si el admin lo quito desde la pantalla (tombstone en el pivot), la
+            // recarga del Excel NO lo vuelve a vincular ni reescribe sus datos.
+            $tombstoned = DB::table(self::PIVOT_TABLE)
+                ->where('idcampaign', $this->campaignId)
+                ->where('documento', $documento)
+                ->where('nit', $this->nit)
+                ->whereNotNull('deleted_at')
+                ->exists();
+
+            if ($tombstoned) {
+                DB::table('importerrors')->insert([
+                    'row'        => $excelRow,
+                    'attribute'  => 'documento',
+                    'errors'     => 'Colaborador omitido: fue removido manualmente de la campaña.',
+                    'values'     => json_encode([
+                        'documento' => $documento,
+                        'campaign'  => $this->campaignId,
+                    ], JSON_UNESCAPED_UNICODE),
+                    'created_at' => now(),
+                ]);
+                $this->stats['colaboradores']['omitidos']++;
+                continue;
+            }
+
             DB::beginTransaction();
             try {
                 // === 1) Upsert Colaborador (por documento) ===
-                $col = Colaborador::updateOrCreate(
-                    ['documento' => $documento],
-                    [
-                        'nombre'    => $nombre,
-                        'email'     => $email !== '' ? $email : null, // consolidado
-                        'direccion' => $direccion ?: null,
-                        'telefono'  => $telefono ?: null,
-                        'ciudad'    => $ciudad ?: null,
-                        'nit'       => $this->nit,
-                    ]
-                );
-                $col->wasRecentlyCreated
-                    ? $this->stats['colaboradores']['creados']++
-                    : $this->stats['colaboradores']['actualizados']++;
+                // Solo se escriben los campos que vienen con valor en el archivo.
+                // Nunca se pisa con vacio un dato ya existente (p.ej. un correo
+                // corregido a mano en la pantalla de colaboradores de la campaña).
+                $attrs = ['nit' => $this->nit];
+                if ($nombre    !== '') $attrs['nombre']    = $nombre;
+                if ($email     !== '') $attrs['email']     = $email; // consolidado
+                if ($direccion !== '') $attrs['direccion'] = $direccion;
+                if ($telefono  !== '') $attrs['telefono']  = $telefono;
+                if ($ciudad    !== '') $attrs['ciudad']    = $ciudad;
+
+                $col = Colaborador::where('documento', $documento)->first();
+                if ($col) {
+                    $col->fill($attrs)->save();
+                    $this->stats['colaboradores']['actualizados']++;
+                } else {
+                    $col = Colaborador::create(array_merge(['documento' => $documento], $attrs));
+                    $this->stats['colaboradores']['creados']++;
+                }
 
                 // === 2) Vincular a campaña+empresa (pivot) ===
-                DB::table(self::PIVOT_TABLE)->updateOrInsert(
-                    [
-                        'idcampaign' => $this->campaignId,
-                        'documento'  => $documento,
-                        'nit'        => $this->nit,
-                    ],
-                    [
+                $pivotRow = DB::table(self::PIVOT_TABLE)
+                    ->where('idcampaign', $this->campaignId)
+                    ->where('documento', $documento)
+                    ->where('nit', $this->nit)
+                    ->first();
+
+                if ($pivotRow) {
+                    // Ya vinculado: solo se refresca la sucursal.
+                    // NO se tocan notify_enabled ni email_notified: los gestiona el admin.
+                    if ($sucursal !== '' && $sucursal !== $pivotRow->sucursal) {
+                        DB::table(self::PIVOT_TABLE)
+                            ->where('idcampaign', $this->campaignId)
+                            ->where('documento', $documento)
+                            ->where('nit', $this->nit)
+                            ->update([
+                                'sucursal'   => $sucursal,
+                                'updated_at' => now(),
+                            ]);
+                    }
+                } else {
+                    // Un colaborador convocado a la campaña queda habilitado para
+                    // notificacion por defecto (es opt-out: el admin lo puede
+                    // deshabilitar luego con el toggle de la pantalla). El check
+                    // "enviar notificacion" del formulario solo decide si ademas
+                    // se dispara el correo de bienvenida durante la importacion.
+                    DB::table(self::PIVOT_TABLE)->insert([
+                        'idcampaign'     => $this->campaignId,
+                        'documento'      => $documento,
+                        'nit'            => $this->nit,
                         'sucursal'       => $sucursal !== '' ? $sucursal : 'ND',
                         'email_notified' => 0,
-                        'notify_enabled' => $this->sendNotification ? 1 : 0,
-                        'updated_at'     => now(),
+                        'notify_enabled' => 1,
                         'created_at'     => now(),
-                    ]
-                );
+                        'updated_at'     => now(),
+                    ]);
+                }
                 $this->stats['pivot']['upserts']++;
 
                 // === 3) Usuario único por colaborador (login por documento) ===
@@ -265,54 +355,10 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     }
                 }
 
-                // === 5) Enviar correo de credenciales si está habilitado ===
-                if ($this->sendNotification && $user && (string)$user->documento === (string)$documento) {
-                    if (!$hasValidEmail) {
-                        Log::warning('Notificación omitida en importación de colaboradores: email vacío o inválido', [
-                            'documento' => $documento,
-                            'email'     => $email,
-                            'campaign'  => $this->campaignId,
-                            'row'       => $excelRow,
-                        ]);
-                        $this->stats['emails']['omitidos']++;
-                    } else {
-                        $emailKey = mb_strtolower($email);
-                        if (!isset($this->sentInvites[$emailKey])) {
-                            try {
-                                dispatch(new SendWelcomeCredentialsMail(
-                                    to: $email,
-                                    name: $nombre,
-                                    rawPassword: $documento,
-                                    loginUrl: route('login'),
-                                    campaignId: $this->campaignId,
-                                    subjectLine: (string)($this->campaign->subject ?? 'Bienvenido'),
-                                ))->onQueue('emails');
-
-                                $this->sentInvites[$emailKey] = true;
-                                $this->stats['emails']['enviados']++;
-
-                                DB::table(self::PIVOT_TABLE)
-                                    ->where('idcampaign', $this->campaignId)
-                                    ->where('documento', $documento)
-                                    ->where('nit', $this->nit)
-                                    ->update(['email_notified' => 1, 'updated_at' => now()]);
-                            } catch (\Throwable $mailEx) {
-                                DB::table('importerrors')->insert([
-                                    'row'        => $excelRow,
-                                    'attribute'  => 'erroremail',
-                                    'errors'     => Str::limit($mailEx->getMessage(), 255, ''),
-                                    'values'     => json_encode(['documento' => $documento, 'email' => $email], JSON_UNESCAPED_UNICODE),
-                                    'created_at' => now(),
-                                ]);
-                                $this->stats['emails']['errores']++;
-                            }
-                        } else {
-                            $this->stats['emails']['omitidos']++;
-                        }
-                    }
-                } elseif (!$this->sendNotification) {
-                    $this->stats['emails']['omitidos']++;
-                }
+                // === 5) La importación NO envía correos. El envío de credenciales
+                //        se hace despues, manualmente, desde la pantalla de
+                //        colaboradores de la campaña ("Enviar correo a todos" /
+                //        "Reenviar" por colaborador).
 
                 // === 6) Hijos (opcional) ===
                 $children = $this->extractChildrenFromRow($row);

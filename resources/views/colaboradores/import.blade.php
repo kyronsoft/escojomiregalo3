@@ -72,18 +72,11 @@
                             </div>
 
                             <div class="col-12">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="send_notification"
-                                        name="send_notification" value="1"
-                                        {{ old('send_notification') ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="send_notification">
-                                        Enviar notificación de credenciales al importar
-                                    </label>
-                                </div>
-                                <small class="text-muted d-block mt-1">
-                                    El usuario siempre se crea. Si desactivas esta opción, las credenciales
-                                    <strong>no</strong> se envían por correo y la notificación queda deshabilitada
-                                    para ese colaborador hasta que la actives manualmente.
+                                <small class="text-muted d-block">
+                                    La importación <strong>no envía correos</strong>. Crea/actualiza los
+                                    colaboradores y sus usuarios; los correos de credenciales se envían
+                                    después desde la pantalla de colaboradores de la campaña
+                                    ("Enviar correo a todos" o "Reenviar" por colaborador).
                                 </small>
                             </div>
 
@@ -121,11 +114,10 @@
                                     </ul>
                                 </div>
                                 <div class="col-12 col-lg-4">
-                                    <h6>Correos</h6>
+                                    <h6>Hijos</h6>
                                     <ul class="mb-0">
-                                        <li>Enviados: <strong class="text-success">{{ data_get($s, 'emails.enviados', 0) }}</strong></li>
-                                        <li>Omitidos (sin notificación): <strong class="text-secondary">{{ data_get($s, 'emails.omitidos', 0) }}</strong></li>
-                                        <li>Errores: <strong class="text-danger">{{ data_get($s, 'emails.errores', 0) }}</strong></li>
+                                        <li>Procesados: <strong>{{ data_get($s, 'hijos.upserts', 0) }}</strong></li>
+                                        <li>Omitidos (sin nombre): <strong class="text-secondary">{{ data_get($s, 'hijos.omitidos_sin_nombre', 0) }}</strong></li>
                                     </ul>
                                 </div>
                             </div>

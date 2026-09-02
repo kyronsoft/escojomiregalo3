@@ -30,6 +30,7 @@ class CampaignCollaboratorController extends Controller
             ->join($colabTable, 'c.documento', '=', 'cc.documento')
             ->where('cc.idcampaign', $campaign->id)
             ->where('cc.nit', (string) $campaign->nit)
+            ->whereNull('cc.deleted_at')
             ->select([
                 'cc.documento',
                 'c.nombre',
@@ -68,6 +69,7 @@ class CampaignCollaboratorController extends Controller
             ->where('idcampaign', $campaign->id)
             ->where('nit', (string)$campaign->nit)
             ->where('documento', $documento)
+            ->whereNull('deleted_at')
             ->exists();
 
         if (!$pivotExists) {
@@ -167,6 +169,7 @@ class CampaignCollaboratorController extends Controller
             ->where('idcampaign', $campaign->id)
             ->where('nit', (string)$campaign->nit)
             ->where('documento', $documento)
+            ->whereNull('deleted_at')
             ->update([
                 'notify_enabled' => $validated['notify_enabled'] ? 1 : 0,
                 'updated_at'     => now(),
@@ -194,6 +197,7 @@ class CampaignCollaboratorController extends Controller
             ->where('cc.idcampaign', $campaign->id)
             ->where('cc.nit', (string) $campaign->nit)
             ->where('cc.notify_enabled', 1)
+            ->whereNull('cc.deleted_at')
             ->select(['cc.documento', 'c.nombre', 'c.email'])
             ->get();
 
@@ -318,6 +322,7 @@ class CampaignCollaboratorController extends Controller
             ->where('cc.idcampaign', $campaign->id)
             ->where('cc.nit', (string)$campaign->nit)
             ->where('cc.documento', $validated['documento'])
+            ->whereNull('cc.deleted_at')
             ->select('cc.documento', 'c.nombre', 'c.email', 'cc.notify_enabled')
             ->first();
 
@@ -412,11 +417,18 @@ class CampaignCollaboratorController extends Controller
 
     public function destroy(\App\Models\Campaign $campaign, string $documento)
     {
-        $affected = \DB::table(self::PIVOT_TABLE)
+        // Borrado logico (tombstone): no se elimina la fila, se marca con deleted_at.
+        // Esto evita que una recarga posterior del Excel de importacion vuelva a
+        // vincular al colaborador que el admin quito manualmente de la campaña.
+        $affected = DB::table(self::PIVOT_TABLE)
             ->where('idcampaign', $campaign->id)
             ->where('nit', (string) $campaign->nit)
             ->where('documento', $documento)
-            ->delete();
+            ->whereNull('deleted_at')
+            ->update([
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]);
 
         if ($affected > 0) {
             return response()->json([
@@ -438,6 +450,7 @@ class CampaignCollaboratorController extends Controller
             ->where('cc.idcampaign', $campaign->id)
             ->where('cc.nit', (string)$campaign->nit)
             ->where('cc.documento', $documento)
+            ->whereNull('cc.deleted_at')
             ->select([
                 'cc.documento',
                 'c.nombre',

@@ -442,7 +442,7 @@
                             if (!r2.ok) { $.unblockUI(); showExpiredAndSuggestReload(); return; }
                             const { data: d2 } = await parseResponseSafe(r2);
                             $.unblockUI();
-                            if (row && d2 && d2.row) row.update(d2.row);
+                            if (row && d2 && d2.updated_row) row.update(d2.updated_row);
                             else if (row) row.update({ ...payload, updated_at: new Date().toISOString() });
                             await reloadTable();
                             Swal.fire({ icon: 'success', title: 'Actualizado', text: (d2 && (d2.message||d2.msg)) || 'Datos guardados correctamente.' });
@@ -453,8 +453,8 @@
                         $.unblockUI();
 
                         if (r.ok) {
-                            if (row && data && data.row) {
-                                row.update(data.row)
+                            if (row && data && data.updated_row) {
+                                row.update(data.updated_row)
                             } else if (row) {
                                 row.update({ ...payload, updated_at: new Date().toISOString() })
                             }

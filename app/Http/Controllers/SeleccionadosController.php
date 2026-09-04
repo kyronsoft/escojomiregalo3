@@ -280,7 +280,10 @@ class SeleccionadosController extends Controller
             })
 
             ->leftJoin('ciudades as ciu', 'ciu.codigo', '=', 'col.ciudad')
-            ->leftJoin('empresas as e', 'e.nit', '=', 'col.nit')
+            // Empresa según la asignación campaña-colaborador (cc.nit), NO col.nit:
+            // colaboradores.nit es un campo global por documento y puede quedar sobrescrito
+            // por la importación más reciente de otra empresa que reutilice el mismo documento.
+            ->leftJoin('empresas as e', 'e.nit', '=', 'cc.nit')
 
             ->select([
                 's.id',

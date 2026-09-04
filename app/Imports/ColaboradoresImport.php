@@ -27,7 +27,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     private const PIVOT_TABLE = 'campaing_colaboradores';
 
     protected array $stats = [
-        'colaboradores' => ['creados' => 0, 'actualizados' => 0, 'omitidos' => 0],
+        'colaboradores' => ['creados' => 0, 'actualizados' => 0, 'omitidos' => 0, 'nit_conflicto' => 0],
         'users'         => ['creados' => 0, 'actualizados' => 0],
         'hijos'         => ['upserts' => 0, 'omitidos_sin_nombre' => 0],
         'pivot'         => ['upserts' => 0],
@@ -248,20 +248,46 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                 // Solo se escriben los campos que vienen con valor en el archivo.
                 // Nunca se pisa con vacio un dato ya existente (p.ej. un correo
                 // corregido a mano en la pantalla de colaboradores de la campaña).
-                $attrs = ['nit' => $this->nit];
+                //
+                // 'documento' es PK global (una fila por persona, no por persona+empresa).
+                // Si el documento ya existe con el nit de OTRA empresa, no lo pisamos:
+                // el vínculo empresa-colaborador correcto para esta importación vive en
+                // campaing_colaboradores.nit (paso 2), no en colaboradores.nit.
+                $col = Colaborador::where('documento', $documento)->first();
+                $nitExistente = $col?->nit;
+                $nitConflicto = $col
+                    && (string) $nitExistente !== ''
+                    && (string) $nitExistente !== $this->nit;
+
+                $attrs = [];
+                if (!$nitConflicto) $attrs['nit'] = $this->nit;
                 if ($nombre    !== '') $attrs['nombre']    = $nombre;
                 if ($email     !== '') $attrs['email']     = $email; // consolidado
                 if ($direccion !== '') $attrs['direccion'] = $direccion;
                 if ($telefono  !== '') $attrs['telefono']  = $telefono;
                 if ($ciudad    !== '') $attrs['ciudad']    = $ciudad;
 
-                $col = Colaborador::where('documento', $documento)->first();
                 if ($col) {
                     $col->fill($attrs)->save();
                     $this->stats['colaboradores']['actualizados']++;
                 } else {
                     $col = Colaborador::create(array_merge(['documento' => $documento], $attrs));
                     $this->stats['colaboradores']['creados']++;
+                }
+
+                if ($nitConflicto) {
+                    $this->stats['colaboradores']['nit_conflicto']++;
+                    DB::table('importerrors')->insert([
+                        'row'        => $excelRow,
+                        'attribute'  => 'nit',
+                        'errors'     => 'El documento ya existe con el nit de otra empresa (' . $nitExistente . '). Se conservó el nit original; el vínculo de esta importación quedó registrado en campaing_colaboradores.',
+                        'values'     => json_encode([
+                            'documento'        => $documento,
+                            'nit_existente'    => $nitExistente,
+                            'nit_importacion'  => $this->nit,
+                        ], JSON_UNESCAPED_UNICODE),
+                        'created_at' => now(),
+                    ]);
                 }
 
                 // === 2) Vincular a campaña+empresa (pivot) ===

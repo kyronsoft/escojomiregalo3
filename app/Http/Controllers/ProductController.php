@@ -190,6 +190,11 @@ class ProductController extends Controller
     ))";
 
     // ===== Subconsulta: agregación de seleccionados (por campaña + ref normalizada) =====
+    // Solo informativo (se expone como 'seleccion' en la vista). NO se usa para
+    // calcular el stock disponible: campaign_toys.unidades ya viene descontado en
+    // tiempo real por CartController (reserva al agregar al carrito, libera al
+    // quitar), así que restar aquí total_sel descontaría la reserva dos veces y
+    // ocultaba la referencia cuando aún quedaban unidades por elegir.
     $selAgg = DB::table('seleccionados')
         ->select([
             'idcampaing',
@@ -216,7 +221,8 @@ class ProductController extends Controller
             'campaign_toys.genero        as genero_toy',
             DB::raw('CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) as unidades'),
             DB::raw('COALESCE(sa.total_sel, 0) as total_sel'),
-            DB::raw('(CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) - COALESCE(sa.total_sel, 0)) as stock_disponible'),
+            // Stock disponible = unidades vivas (ya netas de reservas del carrito).
+            DB::raw('CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) as stock_disponible'),
             DB::raw("
                 CASE
                   WHEN campaign_toys.genero IS NULL OR TRIM(campaign_toys.genero) = '' THEN 'U'
@@ -232,8 +238,9 @@ class ProductController extends Controller
               ->whereRaw("sa.ref_norm = $normToySql");
         })
         ->when($campaignId, fn($q) => $q->where('campaign_toys.idcampaign', $campaignId))
-        // Mostrar solo juguetes con stock global de campaña (unidades > total_sel campaña)
-        ->whereRaw('CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) > COALESCE(sa.total_sel, 0)');
+        // Mostrar solo juguetes con unidades disponibles. unidades ya está neteado
+        // de las reservas del carrito por CartController, así que basta con > 0.
+        ->whereRaw('CAST(COALESCE(campaign_toys.unidades,0) AS UNSIGNED) > 0');
 
     // ===== JOIN hijos + juguetes (edad/género + stock) =====
     $rows = DB::query()

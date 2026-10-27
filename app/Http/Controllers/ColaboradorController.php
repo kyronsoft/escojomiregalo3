@@ -68,6 +68,10 @@ class ColaboradorController extends Controller
 
         // Normalizaciones
         $data['enviado']       = (bool)($request->input('enviado', 0));
+        // Sin correo no hay notificación que haya podido enviarse
+        if (blank($data['email'] ?? null)) {
+            $data['enviado'] = false;
+        }
         $data['politicadatos'] = $request->input('politicadatos', 'N');
         $data['updatedatos']   = $request->input('updatedatos', 'N');
         $data['welcome']       = $request->input('welcome', 'N');
@@ -110,6 +114,10 @@ class ColaboradorController extends Controller
         ]);
 
         $data['enviado']       = (bool)($request->input('enviado', 0));
+        // Sin correo no hay notificación que haya podido enviarse
+        if (blank($data['email'] ?? null)) {
+            $data['enviado'] = false;
+        }
         $data['politicadatos'] = $request->input('politicadatos', 'N');
         $data['updatedatos']   = $request->input('updatedatos', 'N');
         $data['welcome']       = $request->input('welcome', 'N');

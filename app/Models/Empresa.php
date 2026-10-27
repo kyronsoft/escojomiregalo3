@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Database\Eloquent\Model;
 
 class Empresa extends Model
@@ -45,5 +46,28 @@ class Empresa extends Model
     public function users()
     {
         return $this->hasMany(\App\Models\User::class, 'nit', 'nit');
+    }
+
+    /**
+     * URL del logo de la empresa, o null si no existe. Prueba primero la ruta
+     * guardada en `logo` y, si no existe, las carpetas donde se han guardado
+     * los logos (empresas/{nit} y campaigns/{nit}).
+     */
+    public function logoUrl(): ?string
+    {
+        $candidates = [$this->logo];
+        foreach (['empresas', 'campaigns'] as $dir) {
+            foreach (['png', 'jpg', 'jpeg'] as $ext) {
+                $candidates[] = "{$dir}/{$this->nit}/logo.{$ext}";
+            }
+        }
+
+        foreach (array_filter($candidates) as $candidate) {
+            if ($url = PublicStorageUrl::ifExists($candidate)) {
+                return $url;
+            }
+        }
+
+        return null;
     }
 }

@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class Campaign extends Model
 {
@@ -59,20 +59,6 @@ class Campaign extends Model
      */
     public function bannerUrl(): ?string
     {
-        $path = trim((string) $this->banner);
-        if ($path === '' || $path === 'ND') {
-            return null;
-        }
-
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
-        }
-
-        $path = ltrim(str_replace('\\', '/', $path), '/');
-        $path = preg_replace('#^(storage/app/public/|app/public/|public/|storage/)#i', '', $path);
-
-        return Storage::disk('public')->exists($path)
-            ? url(Storage::disk('public')->url($path))
-            : null;
+        return PublicStorageUrl::ifExists($this->banner);
     }
 }

@@ -581,11 +581,8 @@ class CartController extends Controller
         // Limpia flag de campaña usada para finish
         $request->session()->forget('_finish_campaign_id');
 
-        // Cerrar sesión y redirigir a checkout
-        Auth::logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
+        // No cerramos sesión aquí: checkout() necesita al usuario autenticado
+        // para armar el resumen y es quien cierra la sesión al final.
         return redirect()
             ->route('ecommerce.checkout')
             ->with('status', 'Tu selección ha sido registrada y tus datos han sido actualizados.');

@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Campaign;
+use App\Support\CampaignTokens;
 use Illuminate\Support\Str;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -109,26 +110,6 @@ class UserWelcomeCredentials extends Mailable
     /** Reemplazo tolerante: ignora espacios/case. */
     private function renderTokens(string $html, array $map): string
     {
-        // quita caracteres invisibles que mete algún editor
-        $html = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', $html);
-
-        // reemplazo genérico: captura [ ... ] y normaliza la clave
-        return preg_replace_callback('~\[\s*([^\]]+?)\s*\]~u', function ($m) use ($map) {
-            $key = $m[1];
-
-            // normaliza: mayúsculas, convierte NBSP a espacio y colapsa múltiple
-            $key = strtr($key, ["\xC2\xA0" => ' ']); // NBSP → espacio
-            $key = preg_replace('/\s+/u', ' ', trim($key));
-            $key = mb_strtoupper($key, 'UTF-8');
-
-            // alias seguros (por si alguien escribe NOMBRE_CAMPAÑA)
-            $aliases = [
-                'NOMBRE_CAMPAÑA' => 'NOMBRE CAMPAÑA',
-                'NOMBRE CAMPANA' => 'NOMBRE CAMPAÑA', // sin tilde
-            ];
-            if (isset($aliases[$key])) $key = $aliases[$key];
-
-            return $map[$key] ?? $m[0]; // si no existe, deja el token tal cual
-        }, $html);
+        return CampaignTokens::replace($html, $map);
     }
 }

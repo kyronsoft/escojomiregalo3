@@ -21,6 +21,7 @@ class Campaign extends Model
         'customlogin',
         'mailtext',
         'subject',
+        'mensaje_seleccion',
         'dashboard',
         'mostrargenero',
     ];

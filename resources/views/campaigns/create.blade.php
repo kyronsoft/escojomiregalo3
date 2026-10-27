@@ -133,6 +133,37 @@
                             </div>
 
                             <div class="col-12">
+                                <label class="form-label" for="mensaje_seleccion">Título de selección de hijos</label>
+                                <input type="text" class="form-control @error('mensaje_seleccion') is-invalid @enderror"
+                                    id="mensaje_seleccion" name="mensaje_seleccion" maxlength="255"
+                                    value="{{ old('mensaje_seleccion') }}"
+                                    placeholder="{{ \App\Support\CampaignTokens::SELECCION_DEFAULT }}">
+                                <div class="form-text">
+                                    Texto que se muestra sobre los botones de hijos. Si se deja vacío se usa el texto por defecto.
+                                    Marcadores:
+                                    @foreach (\App\Support\CampaignTokens::SELECCION_TOKENS as $tk)
+                                        <button type="button" class="btn btn-sm btn-outline-secondary me-1 js-insert-seleccion-token"
+                                            data-token="{{ $tk }}">{{ $tk }}</button>
+                                    @endforeach
+                                </div>
+                                @error('mensaje_seleccion')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <script>
+                                document.querySelectorAll('.js-insert-seleccion-token').forEach(function (btn) {
+                                    btn.addEventListener('click', function () {
+                                        var input = document.getElementById('mensaje_seleccion');
+                                        var pos = input.selectionStart ?? input.value.length;
+                                        var fin = input.selectionEnd ?? pos;
+                                        input.value = input.value.slice(0, pos) + btn.getAttribute('data-token') + input.value.slice(fin);
+                                        input.focus();
+                                    });
+                                });
+                            </script>
+
+                            <div class="col-12">
                                 <label class="form-label" for="mailtext">Contenido de correo</label>
                                 <input id="mailtext" type="hidden" name="mailtext"
                                     value="{{ old('mailtext', $campaign->mailtext ?? '') }}">

@@ -6,6 +6,7 @@ use App\Models\Empresa;
 use App\Models\Campaign;
 use App\Models\Parametro;
 use App\Models\Colaborador;
+use App\Support\CampaignTokens;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -90,7 +91,13 @@ class ProductController extends Controller
         // Datos juguetes (filtrados por agotamiento de referencia a nivel campaña)
         $resultado = $this->juguetesPorColaboradorJoin($documento, $campaignId);
 
+        // Título sobre los botones de hijos (plantilla de la campaña con marcadores)
+        $nombreColaborador = $colaborador?->nombre
+            ?? (Auth::user()->name ?? Auth::user()->email ?? 'Colaborador');
+        $tituloSeleccion = CampaignTokens::tituloSeleccion($campaign, (string) $nombreColaborador, (string) ($empresa?->nombre ?? ''));
+
         return view('ecommerce.product', [
+            'tituloSeleccion'   => $tituloSeleccion,
             'resultado'         => $resultado,
             'showPolitica'      => $showPolitica,
             'politicaHtml'      => $politicaHtml,

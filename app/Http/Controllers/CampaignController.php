@@ -65,6 +65,7 @@ class CampaignController extends Controller
             'doc_yeminus' => ['nullable', 'integer', 'min:0'],
             'customlogin' => ['nullable', 'string'],
             'subject'     => ['required', 'string', 'max:150'],
+            'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
             'dashboard'   => ['required', 'boolean'], // 👈 ahora requerido porque siempre llega (0/1)
         ]);
 
@@ -72,6 +73,7 @@ class CampaignController extends Controller
         $data['demo']        = $request->input('demo', 'off');   // 'on' | 'off'
         $data['dashboard']   = $request->boolean('dashboard');   // true/false a partir de '0'/'1'
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
+        $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
 
         // Fechas
         $ini = Carbon::createFromFormat('Y-m-d', $data['fechaini'])->startOfDay();
@@ -124,6 +126,7 @@ class CampaignController extends Controller
             'doc_yeminus'   => ['nullable', 'integer', 'min:0'],
             'customlogin'   => ['nullable', 'string'],
             'subject'       => ['required', 'string', 'max:150'],
+            'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
             'dashboard'     => ['required', 'boolean'],
             'mostrargenero' => ['required', 'boolean'], // 👈 nuevo campo
         ]);
@@ -133,6 +136,7 @@ class CampaignController extends Controller
         $data['dashboard']     = $request->boolean('dashboard');
         $data['mostrargenero'] = $request->boolean('mostrargenero'); // 👈 guardar flag
         $data['doc_yeminus']   = (int) $request->input('doc_yeminus', 0);
+        $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
 
         // Fechas
         $ini = Carbon::createFromFormat('Y-m-d', $data['fechaini'])->startOfDay();

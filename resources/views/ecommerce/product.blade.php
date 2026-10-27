@@ -274,18 +274,9 @@
         @endif
 
         <div class="container product-wrapper">
-            {{-- Nombre del colaborador como saludo/identificador --}}
-            @php
-                $colabName =
-                    $colaboradorNombre ??
-                    null ??
-                    ($colaborador->nombre ??
-                        null ??
-                        (optional(auth()->user())->name ??
-                            (optional(auth()->user())->nombre ?? (optional(auth()->user())->email ?? 'Colaborador'))));
-            @endphp
+            {{-- Título de selección: plantilla configurable por campaña (marcadores [COLABORADOR], etc.) --}}
             <div id="hintSelect" class="alert alert-info mt-3 text-white" style="background:black;">
-                <strong>Hola, <i>{{ $colabName }}</i> seleccione su hijo(a)</strong>
+                <strong>{!! $tituloSeleccion !!}</strong>
             </div>
 
             {{-- Contenedor enmarcado de botones de hijos --}}

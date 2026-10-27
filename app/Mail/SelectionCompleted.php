@@ -80,6 +80,7 @@ class SelectionCompleted extends Mailable
       $img = $this->itemImageUrl($it);
       $toy = $this->esc((string)($it['toy_nombre'] ?? 'Juguete'));
       $ref = $this->esc((string)($it['referencia']   ?? ''));
+      $hijo = $this->esc((string)($it['child_nombre'] ?? ''));
       $rows .= <<<HTML
 <tr>
   <td class="text-center" style="vertical-align:middle; background:#ffffff;">
@@ -87,6 +88,7 @@ class SelectionCompleted extends Mailable
   </td>
   <td style="background:#ffffff;">
     <h5 style="margin:0 0 6px; color:#222; font-weight:600;">{$toy}</h5>
+    <p class="muted" style="margin:0;">Para: <strong>{$hijo}</strong></p>
     <p class="muted" style="margin:0;">Ref: <strong>{$ref}</strong></p>
   </td>
   <td class="text-center" style="vertical-align:middle; background:#ffffff;">

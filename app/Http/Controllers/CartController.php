@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use App\Jobs\SendSelectionCompletedMail;
 
 class CartController extends Controller
@@ -70,9 +69,7 @@ class CartController extends Controller
 
         if ($campaignId) {
             $campaign = \App\Models\Campaign::find($campaignId);
-            if ($campaign && filled($campaign->banner) && $campaign->banner !== 'ND') {
-                $campaignBannerUrl = url(Storage::disk('public')->url($campaign->banner));
-            }
+            $campaignBannerUrl = $campaign?->bannerUrl();
             if ($campaign?->nit) {
                 $empresa = \App\Models\Empresa::whereRaw('TRIM(nit) = ?', [trim((string)$campaign->nit)])->first();
                 // normalizeHexColor() tolera valores mal guardados (vacíos,
@@ -534,7 +531,7 @@ class CartController extends Controller
     public function finishReview(Request $request)
     {
         $user        = $request->user();
-        $colaborador = Colaborador::where('email', $user->email)->firstOrFail();
+        $colaborador = Colaborador::where('documento', $user->documento)->firstOrFail();
 
         // si no vino por finish (sin campaña), igual mostramos el modal por defecto
         $campaignId  = session('_finish_campaign_id');
@@ -568,7 +565,7 @@ class CartController extends Controller
         ]);
 
         $user = $request->user();
-        $colaborador = Colaborador::where('email', $user->email)->firstOrFail();
+        $colaborador = Colaborador::where('documento', $user->documento)->firstOrFail();
 
         // Actualiza solo los campos provistos
         $colaborador->fill($data);
@@ -604,7 +601,7 @@ class CartController extends Controller
         }
 
         // 2) Documento y campaña (misma lógica que usas en otras vistas)
-        $documento = Colaborador::where('email', $user->email)->value('documento');
+        $documento = $user->documento;
 
         $nitSesion  = session('empresa_nit');
         $campaignId = session('campaign_id') ??
@@ -638,10 +635,7 @@ class CartController extends Controller
         // 4) Banner de la campaña
         $campaignBannerUrl = null;
         if ($campaignId) {
-            $campaign = Campaign::find($campaignId);
-            if ($campaign && !empty($campaign->banner) && $campaign->banner !== 'ND') {
-                $campaignBannerUrl = url(Storage::disk('public')->url($campaign->banner));
-            }
+            $campaignBannerUrl = Campaign::find($campaignId)?->bannerUrl();
         }
 
         // 5) **Cerrar sesión después de tener todo listo**

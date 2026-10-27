@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Campaign extends Model
 {
@@ -49,5 +50,29 @@ class Campaign extends Model
         return $this->belongsToMany(Colaborador::class, 'campaing_colaboradores', 'idcampaign', 'documento', 'id', 'documento')
             ->withPivot(['nit', 'sucursal', 'email_notified'])
             ->withTimestamps();
+    }
+
+    /**
+     * URL pública del banner, o null si no está configurado o el archivo
+     * no existe en el disco público. Las vistas (producto, carrito, checkout)
+     * y el correo usan este método para no referenciar imágenes inexistentes.
+     */
+    public function bannerUrl(): ?string
+    {
+        $path = trim((string) $this->banner);
+        if ($path === '' || $path === 'ND') {
+            return null;
+        }
+
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        $path = preg_replace('#^(storage/app/public/|app/public/|public/|storage/)#i', '', $path);
+
+        return Storage::disk('public')->exists($path)
+            ? url(Storage::disk('public')->url($path))
+            : null;
     }
 }

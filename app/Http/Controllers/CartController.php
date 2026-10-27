@@ -509,6 +509,7 @@ class CartController extends Controller
         DB::table('users')->where('id', $user->id)->update([
             'password'       => Hash::make(Str::random(64)),
             'remember_token' => null,
+            'finalizado_at'  => now(),
             'updated_at'     => now(),
         ]);
 
@@ -575,6 +576,7 @@ class CartController extends Controller
         DB::table('users')->where('id', $user->id)->update([
             'password'       => Hash::make(Str::random(64)),
             'remember_token' => null,
+            'finalizado_at'  => now(),
             'updated_at'     => now(),
         ]);
 

@@ -130,6 +130,11 @@ class CustomLoginController extends Controller
             return back()->withErrors(['documento' => 'No existe un usuario con ese documento.'])->withInput();
         }
 
+        // Colaborador que ya finalizó su selección: no puede volver a ingresar
+        if ($user->finalizado_at) {
+            return back()->withErrors(['documento' => 'Tu selección ya fue finalizada. Si necesitas hacer cambios, comunícate con Gestión Humana.'])->withInput();
+        }
+
         if (!$user->hasRole('colaborador')) {
             $user->assignRole('colaborador');
         }

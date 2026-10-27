@@ -330,47 +330,54 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                 $this->stats['pivot']['upserts']++;
 
                 // === 3) Usuario único por colaborador (login por documento) ===
+                // El usuario se identifica por documento. Si el correo del archivo ya
+                // pertenece a otro usuario (p.ej. un correo genérico compartido por
+                // varios colaboradores, único en users.email), la cuenta se crea igual
+                // SIN correo y se registra el conflicto; así el colaborador puede
+                // ingresar por documento. El usuario existente nunca se modifica.
                 $hasValidEmail = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL);
                 $user = User::where('documento', $documento)->first();
-                if (!$user && $hasValidEmail) {
-                    $user = User::where('email', $email)->first();
-                }
 
-                if (!$user) {
-                    // Nuevo usuario para este documento. El correo es opcional.
-                    $user = User::create([
-                        'name'              => $nombre,
-                        'email'             => $hasValidEmail ? $email : null,
-                        'password'          => Hash::make($documento), // opcional: forzar cambio en primer login
-                        'documento'         => $documento,
-                        'email_verified_at' => $hasValidEmail ? now() : null,
-                        'remember_token'    => Str::random(20),
-                    ]);
-                    $this->stats['users']['creados']++;
+                if ($user) {
+                    // Es el MISMO colaborador → actualiza nombre (no resetea password)
+                    // El correo del archivo solo se asigna si no lo usa otro usuario (users.email es único)
+                    $emailLibre = $hasValidEmail && !User::where('email', $email)->where('id', '!=', $user->id)->exists();
+                    $user->forceFill([
+                        'name'      => $nombre,
+                        'documento' => $documento,
+                        'email'     => $emailLibre ? $email : $user->email,
+                        // Completa el nit de usuarios antiguos que lo tienen vacío o en 0
+                        'nit'       => in_array((string) $user->nit, ['', '0'], true) ? $this->nit : $user->nit,
+                    ])->save();
+                    $this->stats['users']['actualizados']++;
                 } else {
-                    if ((string)$user->documento === (string)$documento) {
-                        // Es el MISMO colaborador → actualiza nombre (no resetea password)
-                        $user->forceFill([
-                            'name'      => $nombre,
-                            'documento' => $documento,
-                            'email'     => $hasValidEmail ? $email : $user->email,
-                        ])->save();
-                        $this->stats['users']['actualizados']++;
-                    } else {
-                        // Email ya pertenece a otro documento → registramos conflicto y NO tocamos user
+                    $emailEnUso = $hasValidEmail && User::where('email', $email)->exists();
+                    $emailParaUsuario = ($hasValidEmail && !$emailEnUso) ? $email : null;
+
+                    if ($emailEnUso) {
                         DB::table('importerrors')->insert([
                             'row'        => $excelRow,
                             'attribute'  => 'email',
-                            'errors'     => 'El email ya está asociado a otro usuario (documento diferente).',
+                            'errors'     => 'El email ya está asociado a otro usuario (documento diferente). La cuenta se creó sin correo.',
                             'values'     => json_encode([
-                                'email'         => $email,
+                                'email'          => $email,
                                 'doc_en_archivo' => $documento,
-                                'doc_en_user'   => $user->documento,
                             ], JSON_UNESCAPED_UNICODE),
                             'created_at' => now(),
                         ]);
-                        // Continuar sin modificar el usuario; sí conservamos colaborador/pivot/hijos.
                     }
+
+                    // Nuevo usuario para este documento. El correo es opcional.
+                    $user = User::create([
+                        'name'              => $nombre,
+                        'email'             => $emailParaUsuario,
+                        'password'          => Hash::make($documento), // opcional: forzar cambio en primer login
+                        'documento'         => $documento,
+                        'nit'               => $this->nit,
+                        'email_verified_at' => $emailParaUsuario ? now() : null,
+                        'remember_token'    => Str::random(20),
+                    ]);
+                    $this->stats['users']['creados']++;
                 }
 
                 // === 4) Rol con Spatie (guard web) ===

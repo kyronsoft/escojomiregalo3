@@ -9,7 +9,6 @@ use App\Models\Colaborador;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
@@ -61,9 +60,7 @@ class ProductController extends Controller
 
         // Banner y logo
         $campaignBannerUrl = $campaign?->bannerUrl();
-        $empresaLogoUrl = $this->publicUrlLoose($empresa?->logo)
-            ?? $this->publicUrlLoose($empresa ? "images/{$empresa->nit}/logo.png" : null)
-            ?? asset('assets/images/placeholder.png');
+        $empresaLogoUrl = $empresa?->logoUrl() ?? asset('assets/images/placeholder.png');
 
         // Colores & mensajes. normalizeHexColor() tolera valores mal
         // guardados (vacíos, con espacios, #rgb de 3 dígitos) y cae al
@@ -112,26 +109,6 @@ class ProductController extends Controller
         ]);
     }
 
-    private function publicUrlLoose(?string $path): ?string
-    {
-        if (!$path) return null;
-        if (preg_match('#^https?://#i', $path)) return $path;
-
-        $p = str_replace('\\', '/', $path);
-        $p = ltrim($p, '/');
-
-        $p = preg_replace('#^storage/app/public/#', '', $p);
-        $p = preg_replace('#^app/public/#', '', $p);
-        $p = preg_replace('#^public/#', '', $p);
-
-        if (preg_match('#^images/(\d+)/(.+)$#', $p, $m)) {
-            $p = "campaigns/{$m[1]}/{$m[2]}";
-        }
-
-        if (preg_match('#^storage/#i', $p)) return '/' . $p;
-
-        return Storage::disk('public')->url($p);
-    }
 
     private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId = null)
 {

@@ -10,7 +10,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 
 class SendSelectionCompletedMail implements ShouldQueue
 {
@@ -58,11 +57,8 @@ class SendSelectionCompletedMail implements ShouldQueue
         $campaignId = collect($items)->pluck('idcampaing')->filter()->first();
         $campaign   = $campaignId ? Campaign::find((int)$campaignId) : null;
 
-        // Resolver banner absoluto (si existe y no es 'ND')
-        $bannerUrl = null;
-        if ($campaign && !empty($campaign->banner) && $campaign->banner !== 'ND') {
-            $bannerUrl = url(Storage::disk('public')->url($campaign->banner));
-        }
+        // Banner absoluto (null si no está configurado o el archivo no existe)
+        $bannerUrl = $campaign?->bannerUrl();
 
         try {
             Mail::to($userEmail)->send(

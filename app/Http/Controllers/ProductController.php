@@ -60,7 +60,7 @@ class ProductController extends Controller
         }
 
         // Banner y logo
-        $campaignBannerUrl = $this->publicUrlIfExists($campaign?->banner);
+        $campaignBannerUrl = $campaign?->bannerUrl();
         $empresaLogoUrl = $this->publicUrlLoose($empresa?->logo)
             ?? $this->publicUrlLoose($empresa ? "images/{$empresa->nit}/logo.png" : null)
             ?? asset('assets/images/placeholder.png');
@@ -131,20 +131,6 @@ class ProductController extends Controller
         if (preg_match('#^storage/#i', $p)) return '/' . $p;
 
         return Storage::disk('public')->url($p);
-    }
-
-    private function publicUrlIfExists(?string $path): ?string
-    {
-        if (!$path) return null;
-        if (preg_match('#^https?://#i', $path)) return $path;
-
-        $p = str_replace('\\', '/', $path);
-        $p = ltrim($p, '/');
-        $p = preg_replace('#^(storage/app/public/|app/public/|public/)#', '', $p);
-
-        if (preg_match('#^storage/#i', $p)) return '/' . ltrim($p, '/');
-
-        return Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : null;
     }
 
     private function juguetesPorColaboradorJoin(string $documento, ?int $campaignId = null)

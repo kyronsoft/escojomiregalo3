@@ -99,7 +99,7 @@ class DashboardController extends Controller
 
         // ===== Carga calculada + cache (2 minutos por defecto)
         $data = Cache::remember($cacheKey, now()->addMinutes(2), function () use (
-            $applyRoleFilterCampaignScoped
+            $applyRoleFilterCampaignScoped, $ahora
         ) {
             // ---------- TOP 10 JUGUETES ----------
             // Agregado directo, evitando joins que multipliquen filas.

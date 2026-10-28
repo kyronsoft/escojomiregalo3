@@ -76,8 +76,8 @@ class CampaignController extends Controller
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
 
         // Fechas
-        $ini = Carbon::createFromFormat('Y-m-d', $data['fechaini'])->startOfDay();
-        $fin = Carbon::createFromFormat('Y-m-d', $data['fechafin'])->endOfDay();
+        $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00');
+        $fin = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechafin'].' 23:59:00');
         $data['fechaini'] = $ini;
         $data['fechafin'] = $fin;
 
@@ -139,8 +139,8 @@ class CampaignController extends Controller
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
 
         // Fechas
-        $ini = Carbon::createFromFormat('Y-m-d', $data['fechaini'])->startOfDay();
-        $fin = Carbon::createFromFormat('Y-m-d', $data['fechafin'])->endOfDay();
+        $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00');
+        $fin = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechafin'].' 23:59:00');
         $data['fechaini'] = $ini;
         $data['fechafin'] = $fin;
 

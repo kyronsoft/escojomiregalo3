@@ -26,7 +26,7 @@ class MailTemplate
         $empresa   = e((string)($campaign->empresa ?? ''));         // ajusta según tu esquema
         $nomCamp   = e((string)($campaign->nombre  ?? ''));
         $colabNom  = e((string)($colaborador->nombre ?? ''));
-        $fechaFin  = $campaign->fechafin ? $campaign->fechafin->format('d/m/Y') : '';
+        $fechaFin  = $campaign->fechafinLocal()?->format('d/m/Y') ?? '';
 
         // Reemplazos
         $map = [

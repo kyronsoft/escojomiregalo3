@@ -50,7 +50,7 @@ class CampaignTokens
             ? (string) $campaign->mensaje_seleccion
             : self::SELECCION_DEFAULT;
 
-        $fin = $campaign->fechafin ? $campaign->fechafin->format('d/m/Y') : '';
+        $fin = $campaign->fechafinLocal()?->format('d/m/Y') ?? '';
 
         return self::replace(e($plantilla), [
             'COLABORADOR'    => '<i>' . e($colaborador) . '</i>',

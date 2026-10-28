@@ -36,10 +36,10 @@ class CustomLoginController extends Controller
         }
 
         // 3) Campaña activa para el NIT (requerida para el flujo)
-        $today = Carbon::today();
+        $ahora = now();
         $campaign = Campaign::where('nit', $nit)
-            ->whereDate('fechaini', '<=', $today)
-            ->whereDate('fechafin', '>=', $today)
+            ->where('fechaini', '<=', $ahora)
+            ->where('fechafin', '>=', $ahora)
             ->orderByDesc('fechaini')
             ->first();
 
@@ -101,10 +101,10 @@ class CustomLoginController extends Controller
         if (!$empresa) return back()->withErrors(['documento' => 'Empresa no encontrada'])->withInput();
 
         // 3) Campaña activa (o la más reciente)
-        $today = Carbon::today();
+        $ahora = now();
         $campaign = Campaign::where('nit', $nit)
-            ->whereDate('fechaini', '<=', $today)
-            ->whereDate('fechafin', '>=', $today)
+            ->where('fechaini', '<=', $ahora)
+            ->where('fechafin', '>=', $ahora)
             ->orderByDesc('fechaini')
             ->first()
             ?? Campaign::where('nit', $nit)->orderByDesc('fechaini')->first();

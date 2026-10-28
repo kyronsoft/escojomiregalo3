@@ -21,8 +21,8 @@ class DashboardController extends Controller
         $roleBusiness  = $user->hasRole('RRHH-Cliente');
         $roleColab     = $user->hasRole('Colaborador');
 
-        // ===== Fecha (timezone app)
-        $today = Carbon::today(config('app.timezone', 'UTC'))->toDateString();
+        // ===== Momento actual: las fechas de campaña se comparan como instantes (UTC en BD)
+        $ahora = now();
 
         // ===== NIT(s) del usuario
         $userNits = collect(
@@ -32,7 +32,7 @@ class DashboardController extends Controller
         )->filter()->values();
 
         // ===== Helpers de filtro por rol (siempre con campañas alias 'c')
-        $applyRoleFilterCampaignScoped = function ($q) use ($user, $roleAdmin, $roleEjecutiva, $roleBusiness, $roleColab, $today, $userNits) {
+        $applyRoleFilterCampaignScoped = function ($q) use ($user, $roleAdmin, $roleEjecutiva, $roleBusiness, $roleColab, $ahora, $userNits) {
             if ($roleAdmin) {
                 return $q;
             }
@@ -51,8 +51,8 @@ class DashboardController extends Controller
                 }
 
                 if ($roleBusiness) {
-                    $q->whereDate('c.fechaini', '<=', $today)
-                      ->whereDate('c.fechafin', '>=', $today);
+                    $q->where('c.fechaini', '<=', $ahora)
+                      ->where('c.fechafin', '>=', $ahora);
                 }
 
                 return $q;
@@ -133,8 +133,8 @@ class DashboardController extends Controller
             // Evita el multiple-join y COUNT DISTINCT costoso en grandes volúmenes.
             $baseCamps = DB::table('campaigns as c')
                 ->where('c.dashboard', 1)
-                ->whereDate('c.fechaini', '<=', $today)
-                ->whereDate('c.fechafin', '>=', $today);
+                ->where('c.fechaini', '<=', $ahora)
+                ->where('c.fechafin', '>=', $ahora);
 
             $applyRoleFilterCampaignScoped($baseCamps);
 

@@ -76,7 +76,7 @@ class UserWelcomeCredentials extends Mailable
                 : asset('assets/images/logo/logo.png'));
 
         $campName = $this->campaign->nombre ?? 'Campaña';
-        $campEnd  = optional($this->campaign->fechafin)->format('Y-m-d') ?? '';
+        $campEnd  = $this->campaign->fechafinLocal()?->format('Y-m-d') ?? '';
 
         $subject = $this->subjectLine
             ?? ($this->campaign->subject ?? 'Tus credenciales de acceso');

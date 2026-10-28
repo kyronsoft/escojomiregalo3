@@ -128,7 +128,7 @@
                     width: 170,
                     formatter: v => {
                         const d = new Date(v.getValue());
-                        return isNaN(d) ? (v.getValue() || '') : d.toLocaleString();
+                        return isNaN(d) ? (v.getValue() || '') : d.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
                     }
                 },
                 {
@@ -137,7 +137,7 @@
                     width: 170,
                     formatter: v => {
                         const d = new Date(v.getValue());
-                        return isNaN(d) ? (v.getValue() || '') : d.toLocaleString();
+                        return isNaN(d) ? (v.getValue() || '') : d.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
                     }
                 },
                 {

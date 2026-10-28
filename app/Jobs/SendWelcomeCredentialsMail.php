@@ -98,9 +98,7 @@ class SendWelcomeCredentialsMail implements ShouldQueue
     $mailtextRaw = (string)($campaign->mailtext ?? '');
     $fechafinStr = '';
     if ($campaign && $campaign->fechafin) {
-      $fechafinStr = $campaign->fechafin instanceof \Carbon\Carbon
-        ? $campaign->fechafin->format('d-M-Y')
-        : (new \Carbon\Carbon($campaign->fechafin))->format('d-M-Y');
+      $fechafinStr = $campaign->fechafinLocal()->format('d-M-Y');
     }
 
     $esc = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');

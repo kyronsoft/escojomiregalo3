@@ -44,8 +44,8 @@ class CampaignApiController extends Controller
         $countForMore = (clone $query)->skip($offset + $perPage)->take(1)->exists();
 
         $results = $items->map(function ($c) {
-            $iniTxt = $c->fechaini ? (is_string($c->fechaini) ? substr($c->fechaini, 0, 10) : $c->fechaini->format('Y-m-d')) : '';
-            $finTxt = $c->fechafin ? (is_string($c->fechafin) ? substr($c->fechafin, 0, 10) : $c->fechafin->format('Y-m-d')) : '';
+            $iniTxt = $c->fechainiLocal()?->format('Y-m-d') ?? '';
+            $finTxt = $c->fechafinLocal()?->format('Y-m-d') ?? '';
             $label  = "{$c->nombre} (ID {$c->id})";
             if ($c->nit) $label .= " — {$c->nit}";
             if ($iniTxt || $finTxt) $label .= " — {$iniTxt}" . ($finTxt ? " → {$finTxt}" : "");

@@ -75,9 +75,9 @@ class CampaignController extends Controller
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
 
-        // Fechas
-        $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00');
-        $fin = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechafin'].' 23:59:00');
+        // Fechas: se ingresan en GMT-5 (inicio 08:00:00, fin 23:59:00) y se guardan en UTC
+        $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00', Campaign::ZONA_LOCAL)->utc();
+        $fin = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechafin'].' 23:59:00', Campaign::ZONA_LOCAL)->utc();
         $data['fechaini'] = $ini;
         $data['fechafin'] = $fin;
 
@@ -138,9 +138,9 @@ class CampaignController extends Controller
         $data['doc_yeminus']   = (int) $request->input('doc_yeminus', 0);
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
 
-        // Fechas
-        $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00');
-        $fin = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechafin'].' 23:59:00');
+        // Fechas: se ingresan en GMT-5 (inicio 08:00:00, fin 23:59:00) y se guardan en UTC
+        $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00', Campaign::ZONA_LOCAL)->utc();
+        $fin = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechafin'].' 23:59:00', Campaign::ZONA_LOCAL)->utc();
         $data['fechaini'] = $ini;
         $data['fechafin'] = $fin;
 

@@ -109,9 +109,9 @@
 
                             {{-- Fechas REALES ocultas (YYYY-MM-DD) --}}
                             <input type="hidden" id="fechaini" name="fechaini"
-                                   value="{{ old('fechaini', optional($campaign->fechaini)->format('Y-m-d')) }}">
+                                   value="{{ old('fechaini', $campaign->fechainiLocal()?->format('Y-m-d')) }}">
                             <input type="hidden" id="fechafin" name="fechafin"
-                                   value="{{ old('fechafin', optional($campaign->fechafin)->format('Y-m-d')) }}">
+                                   value="{{ old('fechafin', $campaign->fechafinLocal()?->format('Y-m-d')) }}">
 
                             <div class="col-12 col-md-3">
                                 <label class="form-label" for="demo">Demo</label>

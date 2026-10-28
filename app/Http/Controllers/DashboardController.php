@@ -23,6 +23,7 @@ class DashboardController extends Controller
 
         // ===== Momento actual: las fechas de campaña se comparan como instantes (UTC en BD)
         $ahora = now();
+        $hoy   = $ahora->copy()->setTimezone('America/Bogota')->toDateString(); // día en GMT-5 para la caché
 
         // ===== NIT(s) del usuario
         $userNits = collect(
@@ -93,12 +94,12 @@ class DashboardController extends Controller
                 $roleColab ? 'C' : null,
             ])),
             $userNits->implode('|') ?: ($user->empresa_id ?? 'none'),
-            $today
+            $hoy
         );
 
         // ===== Carga calculada + cache (2 minutos por defecto)
         $data = Cache::remember($cacheKey, now()->addMinutes(2), function () use (
-            $applyRoleFilterCampaignScoped, $today
+            $applyRoleFilterCampaignScoped
         ) {
             // ---------- TOP 10 JUGUETES ----------
             // Agregado directo, evitando joins que multipliquen filas.

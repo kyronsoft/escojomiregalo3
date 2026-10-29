@@ -65,6 +65,22 @@ class CampaignToysImport implements
         return '';
     }
 
+    /**
+     * Primer valor no vacío de una columna "unidades" o "unidades_*"
+     * (p. ej. "Unidades Entrega oficina" llega como unidades_entrega_oficina).
+     */
+    private function firstStringUnidadesHeader(array $arr): string
+    {
+        foreach ($arr as $k => $v) {
+            $key = (string) $k;
+            if ($key !== 'unidades' && !str_starts_with($key, 'unidades_')) continue;
+            if ($v === null) continue;
+            $s = is_string($v) ? trim($v) : trim((string) $v);
+            if ($s !== '') return $s;
+        }
+        return '';
+    }
+
     /** Convierte a int seguro; si falla, devuelve null */
     private function toIntOrNull($v): ?int
     {
@@ -280,7 +296,8 @@ class CampaignToysImport implements
 
             $desdeV      = $this->firstString($R, ['desde', 'edad_desde', 'edad_min', 'inicio']);
             $hastaV      = $this->firstString($R, ['hasta', 'edad_hasta', 'edad_max', 'fin']);
-            $unidadesV   = $this->firstString($R, ['unidades', 'cantidad', 'stock', 'existencias']);
+            $unidadesV   = $this->firstString($R, ['unidades', 'cantidad', 'stock', 'existencias'])
+                ?: $this->firstStringUnidadesHeader($R);
             $porcentajeV = $this->firstString($R, ['porcentaje', 'porc', 'porcentaje_descuento']);
 
             $desde = $this->toIntOrNull($desdeV) ?? 0;

@@ -202,6 +202,8 @@ class CampaignToyImportController extends Controller
             throw new \RuntimeException('No se encontraron encabezados válidos. Asegúrese de incluir al menos "codigo" y "nombre".');
         }
 
+        $this->assertUnidadesHeader($headers);
+
         $firstEmptyRow = $this->findFirstEmptyDataRow($ws, $cols);
         if ($firstEmptyRow !== null) {
             throw new \RuntimeException("Se detectó al menos una fila vacía en el bloque de datos (fila {$firstEmptyRow}). Elimine TODAS las filas vacías antes de importar.");
@@ -271,6 +273,23 @@ class CampaignToyImportController extends Controller
     /**
      * Normaliza encabezados: minúsculas, sin tildes, espacios→guiones bajos, solo [a-z0-9_]
      */
+    /**
+     * Exige una columna de unidades ("unidades" o "unidades_*", p. ej. "Unidades Entrega oficina").
+     * Sin ella el importador guardaría 0 en todas las referencias sin avisar.
+     *
+     * @throws \RuntimeException
+     */
+    private function assertUnidadesHeader(array $headers): void
+    {
+        foreach ($headers as $h) {
+            if ($h === 'unidades' || str_starts_with($h, 'unidades_')) {
+                return;
+            }
+        }
+
+        throw new \RuntimeException('No se encontró la columna de unidades. El encabezado debe empezar por "Unidades" (por ejemplo "Unidades" o "Unidades Entrega oficina").');
+    }
+
     private function normHeader(string $v): string
     {
         $v = trim(mb_strtolower($v));

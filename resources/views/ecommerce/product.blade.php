@@ -169,7 +169,7 @@
         }
         .product-img img.is-zoomed,
         .modal-product-media img.is-zoomed {
-            transform: scale(2);
+            transform: scale(4);
         }
 
         /* --- MODAL: control de tamaños (desktop y móvil) --- */
@@ -647,7 +647,6 @@
             if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
 
             const ZONES = '.product-img, .modal-product-media';
-            const ZOOM_SCALE = 2;
             let activeImg = null;
             let baseRect = null;
 

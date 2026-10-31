@@ -156,9 +156,21 @@
 
         /* ==== Tarjetas de juguetes ==== */
         .toy-card .card { border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
-        .product-img { height:220px; display:flex; align-items:center; justify-content:center; position:relative; padding:12px; }
+        .product-img { height:220px; display:flex; align-items:center; justify-content:center; position:relative; padding:12px; overflow:hidden; }
         .product-img img { max-height:100%; width:auto; height:auto; object-fit:contain; display:block; }
         .product-img .combo-wrap img { max-width:120px; max-height:100%; }
+
+        /* --- Zoom por cursor (hover): la imagen se escala dentro de su contenedor --- */
+        .product-img img,
+        .modal-product-media img {
+            transition: transform .15s ease-out;
+            transform-origin: 50% 50%;
+            cursor: zoom-in;
+        }
+        .product-img img.is-zoomed,
+        .modal-product-media img.is-zoomed {
+            transform: scale(2);
+        }
 
         /* --- MODAL: control de tamaños (desktop y móvil) --- */
         .modal-content { overflow: hidden; }
@@ -173,6 +185,7 @@
             justify-content:center;
             width:100%;
             padding: 6px;
+            overflow:hidden;
         }
 
         .modal-product-media img{
@@ -626,5 +639,61 @@
                 Swal.fire(@json(session('swal')));
             @endif
         });
+    </script>
+
+    {{-- Zoom por cursor en imágenes de tarjetas y modal de descripción (solo con mouse) --}}
+    <script>
+        (function() {
+            if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+
+            const ZONES = '.product-img, .modal-product-media';
+            const ZOOM_SCALE = 2;
+            let activeImg = null;
+            let baseRect = null;
+
+            function resetZoom() {
+                if (activeImg) activeImg.classList.remove('is-zoomed');
+                if (activeImg) activeImg.style.transformOrigin = '';
+                activeImg = null;
+                baseRect = null;
+            }
+
+            function imgUnderPointer(zone, e) {
+                return Array.from(zone.querySelectorAll('img')).find(img => {
+                    const r = img.getBoundingClientRect();
+                    return e.clientX >= r.left && e.clientX <= r.right &&
+                           e.clientY >= r.top  && e.clientY <= r.bottom;
+                }) || null;
+            }
+
+            function movePan(e) {
+                // Origen en % del cuadro sin escalar: la imagen sigue al cursor
+                const x = ((e.clientX - baseRect.left) / baseRect.width) * 100;
+                const y = ((e.clientY - baseRect.top) / baseRect.height) * 100;
+                activeImg.style.transformOrigin = `${x}% ${y}%`;
+            }
+
+            document.addEventListener('mousemove', function(e) {
+                const zone = e.target.closest ? e.target.closest(ZONES) : null;
+                const img  = zone ? imgUnderPointer(zone, e) : null;
+
+                if (!img) {
+                    resetZoom();
+                    return;
+                }
+
+                if (img !== activeImg) {
+                    resetZoom();
+                    activeImg = img;
+                    // Medida base sin zoom: se toma al entrar a la imagen
+                    baseRect = img.getBoundingClientRect();
+                    img.classList.add('is-zoomed');
+                }
+                movePan(e);
+            }, { passive: true });
+
+            // Al hacer scroll o salir de la ventana, se vuelve a la vista normal
+            window.addEventListener('scroll', resetZoom, { capture: true, passive: true });
+        })();
     </script>
 @endpush

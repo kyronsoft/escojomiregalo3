@@ -208,6 +208,8 @@
                     }
                 },
                 { title: "Género", field: "genero",        width: 110, headerFilter: "input" },
+                { title: "Edad desde", field: "desde", width: 110, hozAlign: "center" },
+                { title: "Edad hasta", field: "hasta", width: 110, hozAlign: "center" },
                 unidadesColDef,
                 {
                     title: "Precio",

@@ -40,6 +40,8 @@ class CampaignToysController extends Controller
             'nombre',
             'imagenppal',
             'genero',
+            'desde',
+            'hasta',
             'unidades',
             'precio_unitario',
             'porcentaje',
@@ -63,6 +65,8 @@ class CampaignToysController extends Controller
                 'image_urls'         => $urls,            // ← hasta 2 URLs para combos de 2
                 'image_parts_count'  => $partsCnt,        // ← total de partes en combo
                 'genero'             => $t->genero,
+                'desde'              => $t->desde,
+                'hasta'              => $t->hasta,
                 'unidades'           => $t->unidades,
                 'precio_unitario'    => $t->precio_unitario,
                 'porcentaje'         => $t->porcentaje,

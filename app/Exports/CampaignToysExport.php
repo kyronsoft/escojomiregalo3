@@ -52,6 +52,8 @@ class CampaignToysExport implements FromQuery, WithHeadings, WithMapping, WithDr
             'Referencia',
             'Nombre',
             'Género',
+            'Edad desde',
+            'Edad hasta',
             'Unidades',
             'Precio',
             'Porcentaje',
@@ -68,6 +70,8 @@ class CampaignToysExport implements FromQuery, WithHeadings, WithMapping, WithDr
             $toy->referencia,
             $toy->nombre,
             $toy->genero,
+            $toy->desde,
+            $toy->hasta,
             (int) ($toy->unidades ?? 0),
             $toy->precio_unitario,
             $toy->porcentaje,
@@ -91,7 +95,7 @@ class CampaignToysExport implements FromQuery, WithHeadings, WithMapping, WithDr
                 $drawing->setDescription((string) $toy->nombre);
                 $drawing->setPath($path);
                 $drawing->setHeight(60);
-                $drawing->setCoordinates('I' . $row);
+                $drawing->setCoordinates('K' . $row);
                 $drawing->setOffsetX(8);
                 $drawing->setOffsetY(6);
                 $drawings[] = $drawing;
@@ -122,8 +126,8 @@ class CampaignToysExport implements FromQuery, WithHeadings, WithMapping, WithDr
     public function columnWidths(): array
     {
         return [
-            'I' => 16,
-            'J' => 42,
+            'K' => 16,
+            'L' => 42,
         ];
     }
 

@@ -6,6 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
@@ -136,6 +137,12 @@ class SendWelcomeCredentialsMail implements ShouldQueue
         subjectLine: $this->subjectLine,
         htmlBody: $html
       ));
+  }
+
+  /** Limita el envío a Resend mediante el limiter 'resend' (ver RouteServiceProvider) */
+  public function middleware(): array
+  {
+    return [(new RateLimited('resend'))->releaseAfter(1)];
   }
 
   public function failed(\Throwable $e): void

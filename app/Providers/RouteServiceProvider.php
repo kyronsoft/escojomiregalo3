@@ -59,5 +59,10 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
         });
+
+        // Resend permite 10 req/s; dejamos margen para no recibir 429
+        RateLimiter::for('resend', function () {
+            return Limit::perSecond(8);
+        });
     }
 }

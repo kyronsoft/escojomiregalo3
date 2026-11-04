@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Models\CampaignToy;
+use App\Support\CampaignTokens;
 use App\Models\Colaborador;
 use Illuminate\Support\Str;
 use App\Models\Seleccionado;
@@ -633,9 +634,12 @@ class CartController extends Controller
 
         // 4) Banner de la campaña
         $campaignBannerUrl = null;
-        if ($campaignId) {
-            $campaignBannerUrl = Campaign::find($campaignId)?->bannerUrl();
+        $campaign = $campaignId ? Campaign::with('empresa')->find($campaignId) : null;
+        if ($campaign) {
+            $campaignBannerUrl = $campaign->bannerUrl();
         }
+        // Texto configurable de la campaña (o el texto por defecto si no hay campaña)
+        $textoConfirmacion = CampaignTokens::textoConfirmacion($campaign);
 
         // 5) **Cerrar sesión después de tener todo listo**
         Auth::logout();
@@ -643,7 +647,7 @@ class CartController extends Controller
         $request->session()->regenerateToken();
 
         // 6) Renderizar el checkout (accesible sin session, porque ya pasamos los datos)
-        return view('ecommerce.checkout', compact('items', 'campaignBannerUrl'))
+        return view('ecommerce.checkout', compact('items', 'campaignBannerUrl', 'textoConfirmacion'))
             ->with('status', session('status')); // conserva el flash si lo deseas
     }
 }

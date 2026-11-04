@@ -205,6 +205,36 @@
                                 });
                             </script>
 
+                            <div class="col-12">
+                                <label class="form-label" for="mensaje_confirmacion">Texto de selección finalizada</label>
+                                <textarea class="form-control @error('mensaje_confirmacion') is-invalid @enderror"
+                                    id="mensaje_confirmacion" name="mensaje_confirmacion" rows="4" maxlength="1000"
+                                    placeholder="{{ \App\Support\CampaignTokens::CONFIRMACION_DEFAULT }}">{{ old('mensaje_confirmacion', $campaign->mensaje_confirmacion ?? '') }}</textarea>
+                                <div class="form-text">
+                                    Texto que se muestra en la vista "¡Listo! Tu selección ha finalizado". Si se deja vacío se usa el texto por defecto.
+                                    Marcadores:
+                                    @foreach (\App\Support\CampaignTokens::CONFIRMACION_TOKENS as $tk)
+                                        <button type="button" class="btn btn-sm btn-outline-secondary me-1 js-insert-confirmacion-token"
+                                            data-token="{{ $tk }}">{{ $tk }}</button>
+                                    @endforeach
+                                </div>
+                                @error('mensaje_confirmacion')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <script>
+                                document.querySelectorAll('.js-insert-confirmacion-token').forEach(function (btn) {
+                                    btn.addEventListener('click', function () {
+                                        var input = document.getElementById('mensaje_confirmacion');
+                                        var pos = input.selectionStart ?? input.value.length;
+                                        var fin = input.selectionEnd ?? pos;
+                                        input.value = input.value.slice(0, pos) + btn.getAttribute('data-token') + input.value.slice(fin);
+                                        input.focus();
+                                    });
+                                });
+                            </script>
+
                             {{-- MAILTEXT con Trix --}}
                             <div class="col-12">
                                 <label class="form-label" for="mailtext">Contenido de correo</label>

@@ -71,4 +71,48 @@ class CampaignTokensTest extends TestCase
             CampaignTokens::tituloSeleccion($campaign, 'Ana')
         );
     }
+
+    public function test_confirmation_without_campaign_uses_default_text(): void
+    {
+        $this->assertSame(
+            e(CampaignTokens::CONFIRMACION_DEFAULT),
+            CampaignTokens::textoConfirmacion(null)
+        );
+    }
+
+    public function test_blank_confirmation_uses_default_text(): void
+    {
+        $campaign = new Campaign(['mensaje_confirmacion' => '  ']);
+
+        $this->assertSame(
+            e(CampaignTokens::CONFIRMACION_DEFAULT),
+            CampaignTokens::textoConfirmacion($campaign)
+        );
+    }
+
+    public function test_confirmation_replaces_tokens_and_keeps_line_breaks(): void
+    {
+        $campaign = new Campaign([
+            'nombre'              => 'Navidad 2026',
+            'mensaje_confirmacion' => "Gracias por participar en [NOMBRE CAMPAÑA].\nMás info con [EMPRESA] hasta el [FECHAFIN].",
+            'fechafin'            => '2026-10-31 23:59:59',
+        ]);
+        $campaign->setRelation('empresa', new \App\Models\Empresa(['nombre' => 'Bayer']));
+
+        $this->assertSame(
+            "Gracias por participar en Navidad 2026.<br>\nMás info con Bayer hasta el 31/10/2026.",
+            CampaignTokens::textoConfirmacion($campaign)
+        );
+    }
+
+    public function test_confirmation_escapes_user_text(): void
+    {
+        $campaign = new Campaign(['mensaje_confirmacion' => '<b>[EMPRESA]</b>']);
+        $campaign->setRelation('empresa', new \App\Models\Empresa(['nombre' => 'A&B']));
+
+        $this->assertSame(
+            '&lt;b&gt;A&amp;B&lt;/b&gt;',
+            CampaignTokens::textoConfirmacion($campaign)
+        );
+    }
 }

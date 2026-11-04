@@ -50,8 +50,7 @@
 
                         <h3 class="mb-2">¡Listo! Tu selección ha finalizado</h3>
                         <p class="text-muted mb-4">
-                           Hemos registrado los juguetes que has elegido. En breve recibirás un correo electrónico con la confirmación de las referencias seleccionadas.
-                            Si no lo recibes, por favor permanece atento a las notificaciones del área de Gestión Humana de tu empresa, para coordinar la entrega de tus juguetes.
+                            {!! $textoConfirmacion ?? \App\Support\CampaignTokens::textoConfirmacion(null) !!}
                         </p>
 
                         @if (session('status'))

@@ -26,6 +26,7 @@ class Campaign extends Model
         'mailtext',
         'subject',
         'mensaje_seleccion',
+        'mensaje_confirmacion',
         'dashboard',
         'mostrargenero',
     ];

@@ -66,6 +66,7 @@ class CampaignController extends Controller
             'customlogin' => ['nullable', 'string'],
             'subject'     => ['required', 'string', 'max:150'],
             'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
+            'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
             'dashboard'   => ['required', 'boolean'], // 👈 ahora requerido porque siempre llega (0/1)
         ]);
 
@@ -74,6 +75,7 @@ class CampaignController extends Controller
         $data['dashboard']   = $request->boolean('dashboard');   // true/false a partir de '0'/'1'
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
+        $data['mensaje_confirmacion'] = trim((string) $request->input('mensaje_confirmacion')) ?: null;
 
         // Fechas: se ingresan en GMT-5 (inicio 08:00:00, fin 23:59:00) y se guardan en UTC
         $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00', Campaign::ZONA_LOCAL)->utc();
@@ -127,6 +129,7 @@ class CampaignController extends Controller
             'customlogin'   => ['nullable', 'string'],
             'subject'       => ['required', 'string', 'max:150'],
             'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
+            'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
             'dashboard'     => ['required', 'boolean'],
             'mostrargenero' => ['required', 'boolean'], // 👈 nuevo campo
         ]);
@@ -137,6 +140,7 @@ class CampaignController extends Controller
         $data['mostrargenero'] = $request->boolean('mostrargenero'); // 👈 guardar flag
         $data['doc_yeminus']   = (int) $request->input('doc_yeminus', 0);
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
+        $data['mensaje_confirmacion'] = trim((string) $request->input('mensaje_confirmacion')) ?: null;
 
         // Fechas: se ingresan en GMT-5 (inicio 08:00:00, fin 23:59:00) y se guardan en UTC
         $ini = Carbon::createFromFormat('Y-m-d H:i:s', $data['fechaini'].' 08:00:00', Campaign::ZONA_LOCAL)->utc();

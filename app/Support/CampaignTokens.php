@@ -12,6 +12,12 @@ class CampaignTokens
     /** Marcadores que se pueden usar en el título de la vista de selección. */
     public const SELECCION_TOKENS = ['[COLABORADOR]', '[EMPRESA]', '[NOMBRE CAMPAÑA]', '[FECHAFIN]'];
 
+    /** Texto por defecto de la vista "Tu selección ha finalizado". */
+    public const CONFIRMACION_DEFAULT = 'Hemos registrado los juguetes que has elegido. En breve recibirás un correo electrónico con la confirmación de las referencias seleccionadas. Si no lo recibes, por favor permanece atento a las notificaciones del área de Gestión Humana de tu empresa, para coordinar la entrega de tus juguetes.';
+
+    /** Marcadores disponibles en el texto de confirmación (no dependen del colaborador, que ya cerró sesión). */
+    public const CONFIRMACION_TOKENS = ['[EMPRESA]', '[NOMBRE CAMPAÑA]', '[FECHAFIN]'];
+
     /**
      * Reemplazo tolerante de marcadores [TOKEN]: ignora espacios, NBSP,
      * mayúsculas y caracteres invisibles. Los marcadores sin valor se dejan tal cual.
@@ -37,6 +43,27 @@ class CampaignTokens
 
             return $map[$key] ?? $m[0];
         }, $html);
+    }
+
+    /**
+     * Texto de la vista "Tu selección ha finalizado", en HTML seguro.
+     * Los saltos de línea se conservan y los marcadores se reemplazan
+     * con datos de la campaña y de la empresa.
+     */
+    public static function textoConfirmacion(?Campaign $campaign): string
+    {
+        $plantilla = trim((string) $campaign?->mensaje_confirmacion) !== ''
+            ? (string) $campaign->mensaje_confirmacion
+            : self::CONFIRMACION_DEFAULT;
+
+        $empresa = (string) ($campaign?->empresa?->nombre ?? '');
+        $fin = $campaign?->fechafinLocal()?->format('d/m/Y') ?? '';
+
+        return nl2br(self::replace(e($plantilla), [
+            'EMPRESA'        => e($empresa),
+            'NOMBRE CAMPAÑA' => e((string) ($campaign?->nombre ?? '')),
+            'FECHAFIN'       => e($fin),
+        ]), false);
     }
 
     /**

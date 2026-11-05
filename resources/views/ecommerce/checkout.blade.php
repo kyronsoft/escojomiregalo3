@@ -9,29 +9,7 @@
     <div class="container-fluid px-0">
         {{-- Banner campaña (full-bleed) --}}
         @if (!empty($campaignBannerUrl))
-            <style>
-                .campaign-banner-bleed {
-                    width: 100vw;
-                    margin-left: calc(50% - 50vw);
-                    margin-right: calc(50% - 50vw);
-                }
-
-                .campaign-banner-bleed img {
-                    display: block;
-                    width: 100%;
-                    height: 25vh;
-                    object-fit: cover;
-                }
-
-                @media (min-width: 992px) {
-                    .campaign-banner-bleed img {
-                        height: 33.333vh;
-                    }
-                }
-            </style>
-            <div class="campaign-banner-bleed">
-                <img src="{{ $campaignBannerUrl }}" alt="Banner campaña" loading="lazy">
-            </div>
+            @include('ecommerce.partials.campaign-banner')
         @else
             <img class="img-fluid w-100" src="{{ asset('storage/images/banner-claro.jpg') }}" alt="Banner">
         @endif

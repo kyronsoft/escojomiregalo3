@@ -115,43 +115,6 @@
         .children-box { border:1px solid #e5e7eb; border-radius:12px; }
         .children-box .col .child-btn { border:2px solid rgba(0,0,0,.15); border-radius:10px; }
 
-        /* ===== Banner full-bleed y responsive ===== */
-        .campaign-banner-bleed{
-            width:100vw;
-            margin-left:calc(50% - 50vw);
-            margin-right:calc(50% - 50vw);
-            position:relative;
-            isolation:isolate;
-        }
-        .campaign-banner-top{
-            background-image: var(--banner-url);
-            background-size: cover;
-            background-repeat: no-repeat;
-            background-position: 30% 50%;
-            height: clamp(160px, 26vw, 360px);
-        }
-        @media (min-width:1200px){
-            .campaign-banner-top{ height: clamp(200px, 22vw, 420px); }
-        }
-        /* Móviles: evitar recorte (contain + aspect-ratio) */
-        @media (max-width:768px){
-            .campaign-banner-top{
-                background-size: contain;
-                background-position: center top;
-                background-color: var(--secondary);
-                aspect-ratio: 1103 / 318;
-                height: auto;
-                min-height: 0;
-            }
-        }
-        @supports not (aspect-ratio: 1) {
-            @media (max-width:768px){
-                .campaign-banner-top{
-                    height: calc(100vw * 0.288575);
-                }
-            }
-        }
-
         .badge-gender { background:#FFCD01 !important; color:{{ contrastColor('#FFCD01') }} !important; }
 
         /* ==== Tarjetas de juguetes ==== */
@@ -281,9 +244,7 @@
 
     <div class="site-content">
         @if (!empty($campaignBannerUrl))
-        <div class="campaign-banner-bleed">
-            <div class="campaign-banner-top" style="--banner-url: url('{{ $campaignBannerUrl }}')"></div>
-        </div>
+        @include('ecommerce.partials.campaign-banner')
         @endif
 
         <div class="container product-wrapper">

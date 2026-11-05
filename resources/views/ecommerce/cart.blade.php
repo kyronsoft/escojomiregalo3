@@ -68,31 +68,7 @@
             <div class="col-sm-12">
                 <div class="card profile-header">
                     @if (!empty($campaignBannerUrl))
-                        <style>
-                            .campaign-banner-bleed {
-                                width: 100vw;
-                                margin-left: calc(50% - 50vw);
-                                margin-right: calc(50% - 50vw);
-                            }
-
-                            .campaign-banner-bleed img {
-                                display: block;
-                                width: 100%;
-                                height: 25vh;
-                                /* mobile: 1/4 altura */
-                                object-fit: cover;
-                            }
-
-                            @media (min-width: 992px) {
-                                .campaign-banner-bleed img {
-                                    height: 33.333vh;
-                                    /* desktop: 1/3 altura */
-                                }
-                            }
-                        </style>
-                        <div class="campaign-banner-bleed">
-                            <img src="{{ $campaignBannerUrl }}" alt="Banner campaña" loading="lazy">
-                        </div>
+                        @include('ecommerce.partials.campaign-banner')
                     @endif
                 </div>
             </div>

@@ -265,6 +265,30 @@
                             </div>
 
                             <div class="col-12">
+                                <label class="form-label" for="boton_login_texto">Botón de login: texto y color</label>
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-8">
+                                        <input type="text" class="form-control @error('boton_login_texto') is-invalid @enderror"
+                                            id="boton_login_texto" name="boton_login_texto" maxlength="30"
+                                            value="{{ old('boton_login_texto', $campaign->boton_login_texto ?? '') }}" placeholder="Ingresar">
+                                        @error('boton_login_texto')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                    <div class="col-md-4 d-flex align-items-center gap-2">
+                                        <input type="color" class="form-control form-control-color @error('boton_login_color') is-invalid @enderror"
+                                            id="boton_login_color" name="boton_login_color" title="Color del botón"
+                                            value="{{ old('boton_login_color', $campaign->boton_login_color ?? '#2563EB') }}">
+                                        <span class="form-text m-0">Color de fondo</span>
+                                        @error('boton_login_color')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="form-text">Se aplica al botón de ingreso de la vista de login personalizada. Si se deja vacío se usa "Ingresar" en azul.</div>
+                            </div>
+
+                            <div class="col-12">
                                 <label class="form-label" for="customlogin">Custom login (HTML opcional)</label>
                                 <textarea class="form-control @error('customlogin') is-invalid @enderror" id="customlogin" name="customlogin"
                                           rows="4">{{ old('customlogin', $campaign->customlogin) }}</textarea>

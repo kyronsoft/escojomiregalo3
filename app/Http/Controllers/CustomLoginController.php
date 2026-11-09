@@ -73,12 +73,21 @@ class CustomLoginController extends Controller
             );
         }
 
+        // 6) Botón de login configurable por campaña (color y texto)
+        $colorBoton = (string) $campaign->boton_login_color;
+        if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $colorBoton)) {
+            $colorBoton = '#2563EB';
+        }
+        $textoBoton = trim((string) $campaign->boton_login_texto) ?: 'Ingresar';
+
         return view('custom-login', [
-            'empresa'    => $empresa,
-            'campaign'   => $campaign,
-            'ingresoUrl' => $ingresoUrl,
-            'bgUrl'      => $bgUrl,
-            'token'      => $token,
+            'empresa'     => $empresa,
+            'campaign'    => $campaign,
+            'ingresoUrl'  => $ingresoUrl,
+            'bgUrl'       => $bgUrl,
+            'token'       => $token,
+            'colorBoton'  => $colorBoton,
+            'textoBoton'  => $textoBoton,
         ]);
     }
 

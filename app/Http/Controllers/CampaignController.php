@@ -64,6 +64,8 @@ class CampaignController extends Controller
             'demo'        => ['nullable', 'in:on,off'],
             'doc_yeminus' => ['nullable', 'integer', 'min:0'],
             'customlogin' => ['nullable', 'string'],
+            'boton_login_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'boton_login_texto' => ['nullable', 'string', 'max:30'],
             'subject'     => ['required', 'string', 'max:150'],
             'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
             'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
@@ -74,6 +76,8 @@ class CampaignController extends Controller
         $data['demo']        = $request->input('demo', 'off');   // 'on' | 'off'
         $data['dashboard']   = $request->boolean('dashboard');   // true/false a partir de '0'/'1'
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
+        $data['boton_login_color'] = $request->filled('boton_login_color') ? strtoupper((string) $request->input('boton_login_color')) : null;
+        $data['boton_login_texto'] = trim((string) $request->input('boton_login_texto')) ?: null;
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
         $data['mensaje_confirmacion'] = trim((string) $request->input('mensaje_confirmacion')) ?: null;
 
@@ -127,6 +131,8 @@ class CampaignController extends Controller
             'demo'          => ['nullable', 'in:on,off'],
             'doc_yeminus'   => ['nullable', 'integer', 'min:0'],
             'customlogin'   => ['nullable', 'string'],
+            'boton_login_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'boton_login_texto' => ['nullable', 'string', 'max:30'],
             'subject'       => ['required', 'string', 'max:150'],
             'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
             'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
@@ -139,6 +145,8 @@ class CampaignController extends Controller
         $data['dashboard']     = $request->boolean('dashboard');
         $data['mostrargenero'] = $request->boolean('mostrargenero'); // 👈 guardar flag
         $data['doc_yeminus']   = (int) $request->input('doc_yeminus', 0);
+        $data['boton_login_color'] = $request->filled('boton_login_color') ? strtoupper((string) $request->input('boton_login_color')) : null;
+        $data['boton_login_texto'] = trim((string) $request->input('boton_login_texto')) ?: null;
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
         $data['mensaje_confirmacion'] = trim((string) $request->input('mensaje_confirmacion')) ?: null;
 

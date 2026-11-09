@@ -23,6 +23,8 @@ class Campaign extends Model
         'demo',
         'doc_yeminus',
         'customlogin',
+        'boton_login_color',
+        'boton_login_texto',
         'mailtext',
         'subject',
         'mensaje_seleccion',

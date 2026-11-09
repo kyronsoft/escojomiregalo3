@@ -136,7 +136,7 @@
                            placeholder="Ingresa tu contraseña">
                 </div>
                 <div class="actions">
-                    <button type="submit" class="btn btn-primary">Ingresar</button>
+                    <button type="submit" class="btn btn-primary" style="background: {{ $colorBoton }};">{{ $textoBoton }}</button>
                     <button type="button" class="btn btn-secondary" id="closeLogin">Cancelar</button>
                 </div>
             </form>

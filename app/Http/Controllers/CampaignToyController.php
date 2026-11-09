@@ -259,14 +259,13 @@ class CampaignToyController extends Controller
     }
 
     /**
-     * Descarga desde SharePoint a /public/campaign_toys/{campaign}/
-     * Si no encuentra por ruta, cae a Graph: search + crawl.
+     * Descarga desde el share configurado (MSGRAPH_SHARE_URL) a /public/campaign_toys/{campaign}/
+     * Busca por Graph: search + crawl dentro de ese share. No usa otros drives/sitios.
      */
     public function fetchImageFromSharePoint(
         Request $request,
         Campaign $campaign,
-        CampaignToy $toy,
-        \App\Services\SharePointDownloader $sp
+        CampaignToy $toy
     ) {
         if ((int) $toy->idcampaign !== (int) $campaign->id) {
             return response()->json(['ok' => false, 'message' => 'Toy no pertenece a la campaña'], 404);
@@ -274,8 +273,7 @@ class CampaignToyController extends Controller
 
         $request->validate(['sp_path' => ['nullable', 'string', 'max:2048']]);
 
-        $ctx = $this->resolveSpContext();  // shareUrl/siteId/driveId
-        $ctx = $this->ensureGraphIds($ctx);
+        $ctx = $this->resolveSpContext();  // shareUrl
 
         // ✅ Si no viene sp_path en el request, usa imagenppal como default (mantiene el mismo valor que ves en Blade)
         $rawPath = trim((string) $request->input('sp_path', $toy->imagenppal ?? ''));
@@ -302,40 +300,7 @@ class CampaignToyController extends Controller
         foreach ($items as $it) {
             $refLabel = $it['label'] ?? null;
 
-            // 1) Servicio por ruta
-            $serviceOK = false;
-            $serviceRes = null;
-
-            if (!empty($it['remote'])) {
-                [$serviceOK, $serviceRes] = $this->tryServiceDownloadOne(
-                    $sp,
-                    ltrim($it['remote'], '/'),
-                    $folderLocal,
-                    $it['localName'],
-                    $refLabel
-                );
-            } elseif (!empty($it['remoteCandidates'])) {
-                foreach ($it['remoteCandidates'] as $i => $cand) {
-                    $localName = $it['localNameCandidates'][$i] ?? basename($cand);
-                    [$serviceOK, $serviceRes] = $this->tryServiceDownloadOne(
-                        $sp,
-                        ltrim($cand, '/'),
-                        $folderLocal,
-                        $localName,
-                        $refLabel
-                    );
-                    if ($serviceOK)
-                        break;
-                }
-            }
-
-            if ($serviceOK) {
-                $results[] = $serviceRes;
-                $okCount++;
-                continue;
-            }
-
-            // 2) Fallback Graph
+            // Única vía de descarga: Graph dentro del share configurado
             [$graphOK, $graphRes] = $this->tryGraphFindAndDownload(
                 $ctx,
                 $it,
@@ -500,68 +465,6 @@ class CampaignToyController extends Controller
         return Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : null;
     }
 
-    private function tryServiceDownloadOne(
-        \App\Services\SharePointDownloader $sp,
-        string $remotePath,
-        string $folderLocal,
-        ?string $localName = null,
-        ?string $refLabel = null
-    ): array {
-        // ⚠️ Si tu servicio necesita siteId/driveId y no existen, saltar a fallback
-        $siteId = config('sharepoint.site_id', env('SP_SITE_ID'));
-        $driveId = config('sharepoint.drive_id', env('SP_DRIVE_ID'));
-        if (empty($siteId) || empty($driveId)) {
-            return [false, ['ok' => false, 'ref' => $refLabel, 'remote' => $remotePath, 'message' => 'Sin siteId/driveId => usar fallback Graph']];
-        }
-
-        $localName = $localName ?: basename($remotePath);
-        $destRel = rtrim($folderLocal, '/') . '/' . $localName;
-        $destAbs = storage_path('app/public/' . $destRel);
-        @mkdir(dirname($destAbs), 0775, true);
-
-        try {
-            if (method_exists($sp, 'downloadToLocal')) {
-                $sp->downloadToLocal($remotePath, $destAbs);
-            } elseif (method_exists($sp, 'download')) {
-                $bytes = $sp->download($remotePath);
-                if (!$bytes)
-                    return [false, ['ok' => false, 'ref' => $refLabel, 'remote' => $remotePath, 'message' => 'Servicio devolvió vacío']];
-                file_put_contents($destAbs, $bytes);
-            } else {
-                return [false, ['ok' => false, 'ref' => $refLabel, 'remote' => $remotePath, 'message' => 'Servicio SP sin método download*']];
-            }
-
-            return [true, [
-                'ok' => true,
-                'ref' => $refLabel,
-                'remote' => $remotePath,
-                'local_rel' => $destRel,
-                'image_url' => Storage::disk('public')->url($destRel),
-                'source' => 'service',
-            ]];
-        } catch (\Throwable $e) {
-            \Log::warning('tryServiceDownloadOne fallo', ['remote' => $remotePath, 'dest' => $destAbs, 'e' => $e->getMessage()]);
-            return [false, ['ok' => false, 'ref' => $refLabel, 'remote' => $remotePath, 'message' => $e->getMessage()]];
-        }
-    }
-
-    private function ensureGraphIds(array $ctx): array
-    {
-        if (!empty($ctx['driveId']) && !empty($ctx['siteId']))
-            return $ctx;
-
-        $token = $this->graphToken();
-        // Esto te da driveId y rootItemId. El siteId no viene directo; podrías no necesitarlo si tu servicio acepta sólo driveId.
-        [$driveId, $rootItemId] = $this->graphGetShareRoot($token, (string) ($ctx['shareUrl'] ?? ''));
-
-        $ctx['driveId'] = $driveId;
-        // opcional: intenta inferir siteId si tu servicio lo pide; si no, omítelo
-        $ctx['siteId'] = $ctx['siteId'] ?? null;
-
-        // Si quieres persistirlos en config/env cache, puedes setearlos aquí (o guardarlos en DB)
-        return $ctx;
-    }
-
     /**
      * Fallback completo usando Microsoft Graph (search + crawl), luego descarga el ítem.
      *
@@ -657,14 +560,12 @@ class CampaignToyController extends Controller
         ]];
     }
 
-    // ---------- Graph/SharePoint utilities (idéntico a tu versión con try/catch) ----------
+    // ---------- Graph/SharePoint utilities ----------
 
     private function resolveSpContext(): array
     {
         return [
             'shareUrl' => config('services.msgraph.share_url', env('MSGRAPH_SHARE_URL')),
-            'siteId' => config('sharepoint.site_id', env('SP_SITE_ID')),
-            'driveId' => config('sharepoint.drive_id', env('SP_DRIVE_ID')),
         ];
     }
 

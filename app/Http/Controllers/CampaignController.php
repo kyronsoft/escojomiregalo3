@@ -66,6 +66,8 @@ class CampaignController extends Controller
             'customlogin' => ['nullable', 'string'],
             'boton_login_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'boton_login_texto' => ['nullable', 'string', 'max:30'],
+            'barra_login_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'barra_login_texto_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'subject'     => ['required', 'string', 'max:150'],
             'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
             'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
@@ -78,6 +80,10 @@ class CampaignController extends Controller
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
         $data['boton_login_color'] = $request->filled('boton_login_color') ? strtoupper((string) $request->input('boton_login_color')) : null;
         $data['boton_login_texto'] = trim((string) $request->input('boton_login_texto')) ?: null;
+        // Barra inferior: solo se guardan colores si el usuario marca "personalizar"; si no, quedan null (estilo por defecto)
+        $personalizarBarra = $request->boolean('barra_login_personalizar');
+        $data['barra_login_color'] = $personalizarBarra && $request->filled('barra_login_color') ? strtoupper((string) $request->input('barra_login_color')) : null;
+        $data['barra_login_texto_color'] = $personalizarBarra && $request->filled('barra_login_texto_color') ? strtoupper((string) $request->input('barra_login_texto_color')) : null;
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
         $data['mensaje_confirmacion'] = trim((string) $request->input('mensaje_confirmacion')) ?: null;
 
@@ -133,6 +139,8 @@ class CampaignController extends Controller
             'customlogin'   => ['nullable', 'string'],
             'boton_login_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'boton_login_texto' => ['nullable', 'string', 'max:30'],
+            'barra_login_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'barra_login_texto_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'subject'       => ['required', 'string', 'max:150'],
             'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
             'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
@@ -147,6 +155,10 @@ class CampaignController extends Controller
         $data['doc_yeminus']   = (int) $request->input('doc_yeminus', 0);
         $data['boton_login_color'] = $request->filled('boton_login_color') ? strtoupper((string) $request->input('boton_login_color')) : null;
         $data['boton_login_texto'] = trim((string) $request->input('boton_login_texto')) ?: null;
+        // Barra inferior: solo se guardan colores si el usuario marca "personalizar"; si no, quedan null (estilo por defecto)
+        $personalizarBarra = $request->boolean('barra_login_personalizar');
+        $data['barra_login_color'] = $personalizarBarra && $request->filled('barra_login_color') ? strtoupper((string) $request->input('barra_login_color')) : null;
+        $data['barra_login_texto_color'] = $personalizarBarra && $request->filled('barra_login_texto_color') ? strtoupper((string) $request->input('barra_login_texto_color')) : null;
         $data['mensaje_seleccion'] = trim((string) $request->input('mensaje_seleccion')) ?: null;
         $data['mensaje_confirmacion'] = trim((string) $request->input('mensaje_confirmacion')) ?: null;
 

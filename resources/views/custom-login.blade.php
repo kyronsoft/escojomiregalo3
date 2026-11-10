@@ -55,7 +55,7 @@
         /* ===== Barra inferior fija ===== */
         .ingreso-bar{
             position:fixed; left:0; right:0; bottom:0;
-            background:rgba(0,0,0,.45); color:var(--bar-fg);
+            background:{{ $barraFondo ?? 'rgba(0,0,0,.45)' }}; color:var(--bar-fg);
             height:calc(var(--bar-height) + env(safe-area-inset-bottom, 0px));
             padding-bottom: env(safe-area-inset-bottom, 0px);
             display:flex; align-items:center; justify-content:center;
@@ -64,7 +64,7 @@
             -webkit-backdrop-filter: blur(4px);
         }
         .ingreso-link{
-            color:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center;
+            color:{{ $barraTexto ?? '#FFFFFF' }}; text-decoration:none; display:flex; align-items:center; justify-content:center;
             height:var(--bar-height); width:100%;
             font-weight:700; letter-spacing:.4px; font-size:clamp(16px, 2.5vw, 20px);
         }

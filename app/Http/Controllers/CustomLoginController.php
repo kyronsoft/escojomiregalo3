@@ -80,6 +80,15 @@ class CustomLoginController extends Controller
         }
         $textoBoton = trim((string) $campaign->boton_login_texto) ?: 'Ingresar';
 
+        // 7) Barra inferior de ingreso: color de fondo y de texto configurables por campaña
+        //    (si no están configurados se mantiene el estilo original).
+        $barraFondo = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $campaign->barra_login_color)
+            ? strtoupper((string) $campaign->barra_login_color)
+            : 'rgba(0,0,0,.45)';
+        $barraTexto = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $campaign->barra_login_texto_color)
+            ? strtoupper((string) $campaign->barra_login_texto_color)
+            : '#FFFFFF';
+
         return view('custom-login', [
             'empresa'     => $empresa,
             'campaign'    => $campaign,
@@ -88,6 +97,8 @@ class CustomLoginController extends Controller
             'token'       => $token,
             'colorBoton'  => $colorBoton,
             'textoBoton'  => $textoBoton,
+            'barraFondo'  => $barraFondo,
+            'barraTexto'  => $barraTexto,
         ]);
     }
 

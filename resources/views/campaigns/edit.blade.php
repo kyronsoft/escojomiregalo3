@@ -289,6 +289,44 @@
                             </div>
 
                             <div class="col-12">
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" id="barra_login_personalizar" name="barra_login_personalizar" value="1"
+                                        @checked(old('barra_login_personalizar', (bool) ($campaign->barra_login_color || $campaign->barra_login_texto_color)))>
+                                    <label class="form-check-label" for="barra_login_personalizar">Barra inferior de ingreso: personalizar color de fondo y de texto</label>
+                                </div>
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-6 d-flex align-items-center gap-2">
+                                        <input type="color" class="form-control form-control-color barra-login-color @error('barra_login_color') is-invalid @enderror"
+                                            id="barra_login_color" name="barra_login_color" title="Color de fondo de la barra"
+                                            value="{{ old('barra_login_color', $campaign->barra_login_color ?? '#000000') }}" disabled>
+                                        <span class="form-text m-0">Color de fondo</span>
+                                        @error('barra_login_color')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                    <div class="col-md-6 d-flex align-items-center gap-2">
+                                        <input type="color" class="form-control form-control-color barra-login-color @error('barra_login_texto_color') is-invalid @enderror"
+                                            id="barra_login_texto_color" name="barra_login_texto_color" title="Color del texto de la barra"
+                                            value="{{ old('barra_login_texto_color', $campaign->barra_login_texto_color ?? '#FFFFFF') }}" disabled>
+                                        <span class="form-text m-0">Color del texto</span>
+                                        @error('barra_login_texto_color')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="form-text">Si no se marca, la barra inferior "Ingresar" usa su estilo por defecto (fondo oscuro translúcido y texto blanco).</div>
+                            </div>
+                            <script>
+                                (function () {
+                                    const chk = document.getElementById('barra_login_personalizar');
+                                    if (!chk) return;
+                                    const sync = () => document.querySelectorAll('.barra-login-color').forEach(el => el.disabled = !chk.checked);
+                                    chk.addEventListener('change', sync);
+                                    sync();
+                                })();
+                            </script>
+
+                            <div class="col-12">
                                 <label class="form-label" for="customlogin">Custom login (HTML opcional)</label>
                                 <textarea class="form-control @error('customlogin') is-invalid @enderror" id="customlogin" name="customlogin"
                                           rows="4">{{ old('customlogin', $campaign->customlogin) }}</textarea>

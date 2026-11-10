@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\CampaignToy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
@@ -124,6 +125,45 @@ class CampaignToysController extends Controller
         return response()->json([
             'ok'       => true,
             'unidades' => $toy->unidades,
+        ]);
+    }
+
+    /** Actualiza las edades (desde / hasta) de un toy via AJAX */
+    public function updateEdades(Request $request, Campaign $campaign, CampaignToy $toy)
+    {
+        if ((int) $toy->idcampaign !== (int) $campaign->id) {
+            abort(404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'desde' => ['required', 'integer', 'min:0', 'max:120'],
+            'hasta' => ['required', 'integer', 'min:0', 'max:120'],
+        ]);
+
+        $validator->after(function ($v) use ($request) {
+            if ((int) $request->input('hasta') < (int) $request->input('desde')) {
+                $v->errors()->add('hasta', 'La edad "hasta" debe ser mayor o igual que "desde".');
+            }
+        });
+
+        if ($validator->fails()) {
+            return response()->json([
+                'ok'      => false,
+                'message' => $validator->errors()->first(),
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        $toy->desde = (string) (int) $validated['desde'];
+        $toy->hasta = (string) (int) $validated['hasta'];
+        $toy->save();
+
+        return response()->json([
+            'ok'    => true,
+            'desde' => (int) $toy->desde,
+            'hasta' => (int) $toy->hasta,
         ]);
     }
 

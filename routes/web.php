@@ -139,6 +139,7 @@ Route::get('/campaigns/{campaign}/toys',             [CampaignToysController::cl
 Route::get('/campaigns/{campaign}/toys/data',        [CampaignToysController::class, 'data'])->name('campaigns.toys.data');
 Route::get('/campaigns/{campaign}/toys/export',      [CampaignToysController::class, 'export'])->name('campaigns.toys.export');
 Route::patch('/campaigns/{campaign}/toys/{toy}/unidades', [CampaignToysController::class, 'updateUnidades'])->name('campaigns.toys.unidades');
+Route::patch('/campaigns/{campaign}/toys/{toy}/edades', [CampaignToysController::class, 'updateEdades'])->name('campaigns.toys.edades');
 
 /**
  * CRUD de campañas

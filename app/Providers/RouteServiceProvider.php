@@ -60,9 +60,11 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
         });
 
-        // Resend permite 10 req/s; dejamos margen para no recibir 429
+        // Resend permite 10 req/s; dejamos margen para no recibir 429.
+        // Laravel 10 no tiene Limit::perSecond() (llegó en Laravel 11) y su
+        // granularidad mínima es el minuto: 480/min equivale a 8/s de promedio.
         RateLimiter::for('resend', function () {
-            return Limit::perSecond(8);
+            return Limit::perMinute(480);
         });
     }
 }

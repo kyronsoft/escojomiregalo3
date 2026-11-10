@@ -288,6 +288,17 @@ class CampaignToyController extends Controller
         $okCount = 0;
         $failCount = 0;
 
+        // Un solo recorrido del share (mismo método que el job de importación)
+        try {
+            $index = $this->shareIndex((string) $ctx['shareUrl']);
+        } catch (\Throwable $e) {
+            \Log::error('No se pudo listar el share de Graph', ['error' => $e->getMessage()]);
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se pudo consultar el share configurado: ' . $e->getMessage(),
+            ], 502);
+        }
+
         \Log::debug('SP fetch request', [
             'campaign' => $campaign->id,
             'toy' => $toy->id,
@@ -300,16 +311,10 @@ class CampaignToyController extends Controller
         foreach ($items as $it) {
             $refLabel = $it['label'] ?? null;
 
-            // Única vía de descarga: Graph dentro del share configurado
-            [$graphOK, $graphRes] = $this->tryGraphFindAndDownload(
-                $ctx,
-                $it,
-                $folderLocal,
-                $refLabel
-            );
+            [$ok, $res] = $this->downloadFromIndex($index, $it, $folderLocal, $refLabel);
 
-            $results[] = $graphRes;
-            $graphOK ? $okCount++ : $failCount++;
+            $results[] = $res;
+            $ok ? $okCount++ : $failCount++;
         }
 
         \Log::debug('SP fetch results', [
@@ -465,103 +470,6 @@ class CampaignToyController extends Controller
         return Storage::disk('public')->exists($p) ? Storage::disk('public')->url($p) : null;
     }
 
-    /**
-     * Fallback completo usando Microsoft Graph (search + crawl), luego descarga el ítem.
-     *
-     * $it puede tener:
-     * - ['remote' => 'Ruta/archivo.ext', 'localName' => '...']  (cuando se especificó explícito)
-     * - ['remoteCandidates' => [...], 'localNameCandidates' => [...]]  (cuando generamos candidatos .jpg/.jpeg/.png)
-     *
-     * @return array{0:bool,1:array}
-     */
-    private function tryGraphFindAndDownload(
-        array $ctx,
-        array $it,
-        string $folderLocal,
-        ?string $refLabel = null
-    ): array {
-        $token = $this->graphToken();
-
-        // Obtén el root del share (driveId y rootItemId del share)
-        [$driveId, $rootItemId] = $this->graphGetShareRoot($token, (string) ($ctx['shareUrl'] ?? ''));
-
-        // Arma candidatos de nombre (para search/crawl)
-        $candNames = [];
-        $candLocals = [];
-
-        if (!empty($it['remote'])) {
-            $candNames[] = $it['remote'];
-            $candLocals[] = $it['localName'] ?? basename($it['remote']);
-        } elseif (!empty($it['remoteCandidates'])) {
-            foreach ($it['remoteCandidates'] as $i => $cand) {
-                $candNames[] = $cand;
-                $candLocals[] = $it['localNameCandidates'][$i] ?? basename($cand);
-            }
-        }
-
-        // 1) Search directo por cada candidato
-        foreach ($candNames as $i => $name) {
-            $hit = $this->graphSearchByName($token, $driveId, $rootItemId, $name);
-            if ($hit && !empty($hit['id'])) {
-                $fileName = $candLocals[$i] ?? ($hit['name'] ?? 'file.bin');
-
-                // Asegura extensión desde el nombre real en Graph
-                $ext = pathinfo((string) ($hit['name'] ?? ''), PATHINFO_EXTENSION);
-                if ($ext && !str_ends_with(strtolower($fileName), '.' . strtolower($ext))) {
-                    $fileName .= '.' . $ext;
-                }
-
-                $destRel = rtrim($folderLocal, '/') . '/' . $fileName;
-                $destAbs = storage_path('app/public/' . $destRel);
-                @mkdir(dirname($destAbs), 0775, true);
-
-                $this->graphDownloadItemToLocal($token, $driveId, (string) $hit['id'], $destAbs);
-
-                return [true, [
-                    'ok' => true,
-                    'ref' => $refLabel,
-                    'query' => $name,
-                    'local_rel' => $destRel,
-                    'image_url' => Storage::disk('public')->url($destRel),
-                    'source' => 'graph-search',
-                ]];
-            }
-        }
-
-        // 2) Crawl si el search no encontró
-        if (!empty($candNames)) {
-            $hit = $this->graphCrawlByName($token, $driveId, $rootItemId, $candNames);
-            if ($hit && !empty($hit['id'])) {
-                // Usa nombre real encontrado para conservar extensión
-                $realName = (string) ($hit['name'] ?? 'file.bin');
-                $destRel = rtrim($folderLocal, '/') . '/' . $realName;
-                $destAbs = storage_path('app/public/' . $destRel);
-                @mkdir(dirname($destAbs), 0775, true);
-
-                $this->graphDownloadItemToLocal($token, $driveId, (string) $hit['id'], $destAbs);
-
-                return [true, [
-                    'ok' => true,
-                    'ref' => $refLabel,
-                    'query' => implode(' | ', $candNames),
-                    'local_rel' => $destRel,
-                    'image_url' => Storage::disk('public')->url($destRel),
-                    'source' => 'graph-crawl',
-                ]];
-            }
-        }
-
-        return [false, [
-            'ok' => false,
-            'ref' => $refLabel,
-            'query' => $candNames,
-            'source' => 'graph',
-            'message' => 'No se encontró el archivo en el share.',
-        ]];
-    }
-
-    // ---------- Graph/SharePoint utilities ----------
-
     private function resolveSpContext(): array
     {
         return [
@@ -609,156 +517,95 @@ class CampaignToyController extends Controller
         return $out;
     }
 
-    private function graphToken(): string
+    /**
+     * Lista el share configurado una sola vez: nombre (minúsculas) => downloadUrl.
+     */
+    private function shareIndex(string $shareUrl): array
     {
-        $tenant = env('MSGRAPH_TENANT_ID');
-        $client = env('MSGRAPH_CLIENT_ID');
-        $secret = env('MSGRAPH_CLIENT_SECRET');
-
-        $resp = \Illuminate\Support\Facades\Http::asForm()->post("https://login.microsoftonline.com/{$tenant}/oauth2/v2.0/token", [
-            'client_id' => $client,
-            'client_secret' => $secret,
-            'grant_type' => 'client_credentials',
-            'scope' => 'https://graph.microsoft.com/.default',
-        ])->throw();
-
-        return (string) $resp->json('access_token');
-    }
-
-    private function graphGetShareRoot(string $token, string $shareUrl): array
-    {
-        $shareId = $this->graphShareId($shareUrl);
-        $url = "https://graph.microsoft.com/v1.0/shares/{$shareId}/driveItem";
-
-        $json = \Illuminate\Support\Facades\Http::withToken($token)->get($url)->throw()->json();
-
-        $driveId = $json['parentReference']['driveId'] ?? null;
-        $itemId = $json['id'] ?? null;
-
-        if (!$driveId || !$itemId) {
-            throw new \RuntimeException('El share no resolvió driveId/itemId.');
-        }
-        return [$driveId, $itemId];
-    }
-
-    private function graphShareId(string $shareUrlOrId): string
-    {
-        $s = trim($shareUrlOrId, " \t\n\r\0\v\"'");
-        if (preg_match('#^[us]![A-Za-z0-9\-_]+$#', $s))
-            return $s;
-        return 'u!' . rtrim(strtr(base64_encode($s), '+/', '-_'), '=');
-    }
-
-    private function graphSearchByName(string $token, string $driveId, string $rootItemId, string $query): ?array
-    {
-        $q = rawurlencode($query);
-        $url = "https://graph.microsoft.com/v1.0/drives/{$driveId}/items/{$rootItemId}/search(q='{$q}')";
-        try {
-            $json = \Illuminate\Support\Facades\Http::withToken($token)->get($url)->throw()->json();
-        } catch (\Throwable $e) {
-            return null;
+        $key = 'campaign_toys:share_index:' . sha1($shareUrl);
+        $cached = \Cache::get($key);
+        if (is_array($cached) && $cached !== []) {
+            return $cached;
         }
 
-        $items = $json['value'] ?? [];
-        if (!$items)
-            return null;
+        $graph = app(\App\Services\MsGraphClient::class);
+        $token = $graph->getToken();
 
-        $targets = $this->buildNameMatchers([$query]);
-
-        foreach ($items as $it) {
-            if (!isset($it['file']))
+        $index = [];
+        foreach ($graph->listAllSharedChildren($shareUrl, $token) as $f) {
+            $name = trim((string) ($f['name'] ?? ''));
+            if ($name === '' || empty($f['downloadUrl'])) {
                 continue;
-            $name = (string) ($it['name'] ?? '');
-            if ($this->nameMatches($name, $targets)) {
-                return ['id' => $it['id'], 'name' => $name];
+            }
+            $index[mb_strtolower($name)] = $f['downloadUrl'];
+        }
+
+        // Solo se cachea un índice válido; una lista vacía no debe quedar guardada.
+        if ($index !== []) {
+            \Cache::put($key, $index, now()->addMinutes(30));
+        }
+
+        return $index;
+    }
+
+    /**
+     * Descarga un ítem usando el índice del share. Prueba los nombres candidatos en orden.
+     *
+     * @return array{0:bool,1:array}
+     */
+    private function downloadFromIndex(array $index, array $it, string $folderLocal, ?string $refLabel): array
+    {
+        if (!empty($it['remote'])) {
+            $pairs = [[$it['remote'], $it['localName'] ?? basename($it['remote'])]];
+        } else {
+            $pairs = [];
+            foreach ($it['remoteCandidates'] ?? [] as $i => $cand) {
+                $pairs[] = [$cand, $it['localNameCandidates'][$i] ?? basename($cand)];
             }
         }
-        return null;
-    }
 
-    private function graphCrawlByName(string $token, string $driveId, string $rootItemId, array $candNames): ?array
-    {
-        $queue = [$rootItemId];
-        $visited = [];
-        $targets = $this->buildNameMatchers($candNames);
-        $maxNodes = 20000;
+        $queried = [];
+        foreach ($pairs as [$remoteName, $localName]) {
+            $lookup = basename(trim($remoteName));
+            $queried[] = $lookup;
 
-        while (!empty($queue) && $maxNodes-- > 0) {
-            $folderId = array_shift($queue);
-            if (isset($visited[$folderId]))
+            $url = $index[mb_strtolower($lookup)] ?? null;
+            if ($url === null) {
                 continue;
-            $visited[$folderId] = true;
+            }
 
-            $next = "https://graph.microsoft.com/v1.0/drives/{$driveId}/items/{$folderId}/children"
-                . '?%24top=200&%24select=id,name,folder,file,parentReference';
+            $destRel = rtrim($folderLocal, '/') . '/' . $localName;
+            $destAbs = storage_path('app/public/' . $destRel);
+            @mkdir(dirname($destAbs), 0775, true);
 
-            while ($next) {
-                $resp = \Illuminate\Support\Facades\Http::withToken($token)->get($next)->throw()->json();
-                $items = $resp['value'] ?? [];
-
-                foreach ($items as $it) {
-                    $name = (string) ($it['name'] ?? '');
-                    if (isset($it['file'])) {
-                        if ($this->nameMatches($name, $targets)) {
-                            return ['id' => $it['id'], 'name' => $name];
-                        }
-                    } elseif (isset($it['folder'])) {
-                        $queue[] = $it['id'];
-                    }
+            try {
+                $resp = \Illuminate\Support\Facades\Http::timeout(60)->sink($destAbs)->get($url);
+                if (!$resp->successful()) {
+                    throw new \RuntimeException('Descarga respondió HTTP ' . $resp->status());
                 }
-
-                $next = $resp['@odata.nextLink'] ?? null;
+            } catch (\Throwable $e) {
+                @unlink($destAbs); // no dejar cuerpos de error como si fueran imágenes
+                \Log::warning('Error descargando imagen del share', ['file' => $lookup, 'error' => $e->getMessage()]);
+                return [false, ['ok' => false, 'ref' => $refLabel, 'query' => $lookup, 'source' => 'share-index', 'message' => $e->getMessage()]];
             }
+
+            return [true, [
+                'ok' => true,
+                'ref' => $refLabel,
+                'query' => $lookup,
+                'local_rel' => $destRel,
+                'image_url' => Storage::disk('public')->url($destRel),
+                'source' => 'share-index',
+            ]];
         }
 
-        return null;
+        return [false, [
+            'ok' => false,
+            'ref' => $refLabel,
+            'query' => implode(' | ', $queried),
+            'source' => 'share-index',
+            'message' => 'No se encontró el archivo en el share configurado.',
+        ]];
     }
 
-    private function buildNameMatchers(array $names): array
-    {
-        $targets = [];
-        foreach ($names as $n) {
-            $n = trim($n);
-            if ($n === '')
-                continue;
-
-            $base = pathinfo($n, PATHINFO_FILENAME);
-            $ext = strtolower((string) pathinfo($n, PATHINFO_EXTENSION));
-            $normFull = $this->normName($n);
-            $normBase = $this->normName($base);
-
-            $targets[] = [
-                'full' => $normFull,
-                'base' => $normBase,
-                'exts' => $ext ? [$ext] : ['jpg', 'jpeg', 'png'],
-            ];
-        }
-        return $targets;
-    }
-
-    private function normName(string $s): string
-    {
-        return strtolower(preg_replace('/[^A-Za-z0-9]/', '', $s));
-    }
-
-    private function nameMatches(string $real, array $targets): bool
-    {
-        $norm = $this->normName($real);
-        $ext = strtolower((string) pathinfo($real, PATHINFO_EXTENSION));
-
-        foreach ($targets as $t) {
-            if ($norm === $t['full'])
-                return true;
-            if (in_array($ext, $t['exts'], true) && Str::startsWith($norm, $t['base'])) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function graphDownloadItemToLocal(string $token, string $driveId, string $itemId, string $destAbs): void
-    {
-        $url = "https://graph.microsoft.com/v1.0/drives/{$driveId}/items/{$itemId}/content";
-        \Illuminate\Support\Facades\Http::withToken($token)->sink($destAbs)->get($url)->throw();
-    }
 }

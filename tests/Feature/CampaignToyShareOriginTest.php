@@ -117,7 +117,7 @@ class CampaignToyShareOriginTest extends TestCase
         $body = $response->getData(true);
 
         $this->assertTrue($body['ok']);
-        $this->assertSame('graph-search', $body['results'][0]['source']);
+        $this->assertSame('share-index', $body['results'][0]['source']);
         $this->assertFileExists($this->tmpStorage . '/app/public/campaign_toys/42/REF1.jpg');
 
         $this->assertFalse($spy->called, 'La ruta de servicio (otro drive/sitio) no debe usarse.');
@@ -127,13 +127,13 @@ class CampaignToyShareOriginTest extends TestCase
             || str_contains($req->url(), self::OTHER_SITE_ID)
             || str_contains($req->url(), '/sites/'));
 
-        // Todas las consultas a Graph deben resolverse dentro del share configurado.
+        // El listado sale del share configurado y la descarga usa su downloadUrl.
         Http::assertSent(fn ($req) => str_contains($req->url(), '/shares/'));
-        Http::assertSent(fn ($req) => str_contains($req->url(), '/drives/' . self::SHARE_DRIVE_ID . '/'));
+        Http::assertSent(fn ($req) => $req->url() === 'https://download.test/file-ref1');
     }
 
     /**
-     * Simula Microsoft Graph: el share resuelve a SHARE_DRIVE_ID y contiene REF1.jpg.
+     * Simula Microsoft Graph: el share es una carpeta que contiene REF1.jpg.
      * Cualquier otra URL devuelve 404 para que el test falle si se usa otro origen.
      */
     private function fakeGraph(): void
@@ -148,21 +148,24 @@ class CampaignToyShareOriginTest extends TestCase
             if (str_contains($url, '/shares/') && str_ends_with($url, '/driveItem')) {
                 return Http::response([
                     'id'              => self::SHARE_ROOT_ITEM_ID,
+                    'name'            => 'Galeria',
+                    'folder'          => ['childCount' => 1],
                     'parentReference' => ['driveId' => self::SHARE_DRIVE_ID],
                 ], 200);
             }
 
-            if (str_contains($url, '/drives/' . self::SHARE_DRIVE_ID . '/items/' . self::SHARE_ROOT_ITEM_ID . '/search')) {
+            if (str_contains($url, '/shares/') && str_ends_with($url, '/driveItem/children')) {
                 return Http::response([
                     'value' => [[
-                        'id'   => 'file-ref1',
-                        'name' => 'REF1.jpg',
-                        'file' => ['mimeType' => 'image/jpeg'],
+                        'id'                          => 'file-ref1',
+                        'name'                        => 'REF1.jpg',
+                        'file'                        => ['mimeType' => 'image/jpeg'],
+                        '@microsoft.graph.downloadUrl' => 'https://download.test/file-ref1',
                     ]],
                 ], 200);
             }
 
-            if (str_contains($url, '/drives/' . self::SHARE_DRIVE_ID . '/items/file-ref1/content')) {
+            if ($url === 'https://download.test/file-ref1') {
                 return Http::response('fake-image-bytes', 200);
             }
 

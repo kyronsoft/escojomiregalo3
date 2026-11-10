@@ -25,6 +25,8 @@ class Campaign extends Model
         'customlogin',
         'boton_login_color',
         'boton_login_texto',
+        'barra_login_color',
+        'barra_login_texto_color',
         'mailtext',
         'subject',
         'mensaje_seleccion',

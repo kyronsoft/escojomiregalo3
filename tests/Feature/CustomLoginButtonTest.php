@@ -35,4 +35,20 @@ class CustomLoginButtonTest extends TestCase
 
         $this->assertStringContainsString('style="background: #2563EB;">Ingresar</button>', $html);
     }
+
+    public function test_bottom_bar_uses_configured_background_and_text_color(): void
+    {
+        $html = $this->render(['barraFondo' => '#112233', 'barraTexto' => '#FFD700']);
+
+        $this->assertStringContainsString('background:#112233; color:var(--bar-fg);', $html);
+        $this->assertStringContainsString('color:#FFD700; text-decoration:none;', $html);
+    }
+
+    public function test_bottom_bar_keeps_original_style_when_not_configured(): void
+    {
+        $html = $this->render([]);
+
+        $this->assertStringContainsString('background:rgba(0,0,0,.45); color:var(--bar-fg);', $html);
+        $this->assertStringContainsString('color:#FFFFFF; text-decoration:none;', $html);
+    }
 }

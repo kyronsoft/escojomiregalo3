@@ -142,7 +142,7 @@ class SendWelcomeCredentialsMail implements ShouldQueue
   /** Limita el envío a Resend mediante el limiter 'resend' (ver RouteServiceProvider) */
   public function middleware(): array
   {
-    return [(new RateLimited('resend'))->releaseAfter(1)];
+    return [new RateLimited('resend')];
   }
 
   public function failed(\Throwable $e): void

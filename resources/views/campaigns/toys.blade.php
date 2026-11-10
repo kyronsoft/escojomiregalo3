@@ -72,6 +72,10 @@
             const editUrlTemplate    = `{{ route('campaigns.toys.edit',    ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
             const destroyUrlTemplate = `{{ route('campaigns.toys.destroy', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
             const unidadesUrlTemplate = `{{ route('campaigns.toys.unidades', ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
+            const edadesUrlTemplate   = `{{ route('campaigns.toys.edades',   ['campaign' => $campaign->id, 'toy' => '__ID__']) }}`;
+
+            // IDs de juguetes con edades modificadas y aún no guardadas
+            const edadesDirty = new Set();
 
             function actionFormatter(cell) {
                 const row = cell.getRow().getData();
@@ -152,6 +156,32 @@
                 };
             }
 
+            // Columnas "Edad desde" / "Edad hasta": editables inline solo para Admin.
+            // El cambio NO se guarda solo: se persiste con el botón "Guardar" de la fila.
+            function edadColumn(title, field) {
+                const def = { title, field, width: 110, hozAlign: "center" };
+                if (!IS_EXEC) {
+                    def.editor = 'number';
+                    def.editorParams = { min: 0, max: 120, step: 1 };
+                    def.cellEdited = function(cell) {
+                        edadesDirty.add(cell.getRow().getData().id);
+                        cell.getRow().reformat();
+                    };
+                }
+                return def;
+            }
+
+            function guardarEdadesFormatter(cell) {
+                const id    = cell.getRow().getData().id;
+                const dirty = edadesDirty.has(id);
+
+                return `<button class="btn btn-sm ${dirty ? 'btn-success' : 'btn-outline-secondary'}"
+                            ${dirty ? '' : 'disabled'}
+                            onclick="saveEdades(${id}, this)">
+                            Guardar
+                        </button>`;
+            }
+
             const columns = [
                 { title: "ID",     field: "id",        width: 80 },
                 { title: "Ref.",   field: "referencia", width: 140, headerFilter: "input" },
@@ -208,8 +238,8 @@
                     }
                 },
                 { title: "Género", field: "genero",        width: 110, headerFilter: "input" },
-                { title: "Edad desde", field: "desde", width: 110, hozAlign: "center" },
-                { title: "Edad hasta", field: "hasta", width: 110, hozAlign: "center" },
+                edadColumn("Edad desde", "desde"),
+                edadColumn("Edad hasta", "hasta"),
                 unidadesColDef,
                 {
                     title: "Precio",
@@ -244,6 +274,16 @@
                     width: 180,
                     formatter: actionFormatter,
                     responsive: 0
+                });
+
+                // Botón de guardado por registro, al final de la fila
+                columns.push({
+                    title: "Guardar",
+                    field: "_guardar_edades",
+                    hozAlign: "center",
+                    headerSort: false,
+                    width: 120,
+                    formatter: guardarEdadesFormatter,
                 });
             }
 
@@ -285,6 +325,57 @@
             });
 
             window.addEventListener('resize', () => table.redraw(true));
+
+            // ======= Acción GUARDAR EDADES (por registro) =======
+            window.saveEdades = function(id, btn) {
+                const row = table.getRow(id);
+                if (!row) return;
+
+                const data  = row.getData();
+                const desde = parseInt(data.desde, 10);
+                const hasta = parseInt(data.hasta, 10);
+
+                if (Number.isNaN(desde) || Number.isNaN(hasta)) {
+                    Swal.fire({ icon: 'warning', title: 'Edades incompletas', text: 'Ingresa una edad "desde" y una edad "hasta" válidas.' });
+                    return;
+                }
+                if (desde < 0 || hasta < 0 || desde > 120 || hasta > 120) {
+                    Swal.fire({ icon: 'warning', title: 'Edad fuera de rango', text: 'Las edades deben estar entre 0 y 120.' });
+                    return;
+                }
+                if (hasta < desde) {
+                    Swal.fire({ icon: 'warning', title: 'Edades inconsistentes', text: 'La edad "hasta" debe ser mayor o igual que "desde".' });
+                    return;
+                }
+
+                if (btn) btn.disabled = true;
+
+                fetch(edadesUrlTemplate.replace('__ID__', id), {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ desde, hasta }),
+                })
+                .then(async r => {
+                    const payload = await r.json().catch(() => ({}));
+                    if (r.ok && payload.ok) {
+                        edadesDirty.delete(id);
+                        row.update({ desde: payload.desde, hasta: payload.hasta });
+                        row.reformat();
+                        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Edades guardadas', showConfirmButton: false, timer: 1500 });
+                    } else {
+                        if (btn) btn.disabled = false;
+                        Swal.fire({ icon: 'error', title: 'Error al guardar', text: payload.message || 'No se pudieron actualizar las edades.' });
+                    }
+                })
+                .catch(() => {
+                    if (btn) btn.disabled = false;
+                    Swal.fire({ icon: 'error', title: 'Error de red', text: 'No fue posible contactar el servidor.' });
+                });
+            };
 
             // ======= Acción ELIMINAR =======
             window.deleteToy = function(id, nombre) {

@@ -151,11 +151,24 @@ class SendWelcomeCredentialsMail implements ShouldQueue
       backgroundUrl: $bgUrlAbs
     );
 
-    \Illuminate\Support\Facades\Mail::to($this->to)
-      ->send(new \App\Mail\RawHtmlMail(
-        subjectLine: $this->subjectLine,
-        htmlBody: $html
-      ));
+    try {
+      \Illuminate\Support\Facades\Mail::to($this->to)
+        ->send(new \App\Mail\RawHtmlMail(
+          subjectLine: $this->subjectLine,
+          htmlBody: $html
+        ));
+    } catch (\Throwable $e) {
+      // Dirección rechazada por Resend: reintentar no sirve, se falla de inmediato
+      if (str_contains($e->getMessage(), 'Invalid `to` field')) {
+        Log::warning('Correo con destinatario inválido (sin reintento)', [
+          'to'         => $this->to,
+          'campaignId' => $this->campaignId,
+        ]);
+        $this->fail($e);
+        return;
+      }
+      throw $e;
+    }
   }
 
   /** Resend permite 10 req/s: se deja margen con 8/s */

@@ -211,7 +211,20 @@ class CampaignCollaboratorController extends Controller
             $backgroundImage = asset('assets/images/moreproducts/background-navidad.jpg');
         }
 
+        // El bucle puede recorrer cientos de filas: no cortar por max_execution_time
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        // Una sola consulta en vez de una por colaborador
+        $existingUsers = DB::table('users')
+            ->whereIn('documento', $rows->pluck('documento')->map(fn($d) => (string) $d)->all())
+            ->pluck('documento')
+            ->map(fn($d) => (string) $d)
+            ->flip();
+
         $sentEmails = [];
+        $notifiedDocs = [];
+        $duplicates = [];
         $ok = 0;
         $fail = 0;
         $skipped = 0;
@@ -241,14 +254,14 @@ class CampaignCollaboratorController extends Controller
 
             $emailKey = mb_strtolower($email);
             if (isset($sentEmails[$emailKey])) {
+                // Email compartido con otro colaborador: no se repite el correo, pero se informa
+                $duplicates[] = $documento;
                 continue;
             }
 
             try {
                 // El cambio de password (bcrypt) lo hace el job en la cola
-                $exists = DB::table('users')->where('documento', $documento)->exists();
-
-                if (!$exists) {
+                if (!isset($existingUsers[$documento])) {
                     Log::warning('Usuario no encontrado para actualización de password', [
                         'documento' => $documento,
                         'email'     => $email,
@@ -269,16 +282,8 @@ class CampaignCollaboratorController extends Controller
                 ))->onQueue('emails');
 
                 $sentEmails[$emailKey] = true;
+                $notifiedDocs[] = $documento;
                 $ok++;
-
-                DB::table(self::PIVOT_TABLE)
-                    ->where('idcampaign', $campaign->id)
-                    ->where('documento', $documento)
-                    ->where('nit', (string) $campaign->nit)
-                    ->update([
-                        'email_notified' => 1,
-                        'updated_at'     => now(),
-                    ]);
             } catch (\Throwable $e) {
                 DB::table('importerrors')->insert([
                     'row'        => 0,
@@ -297,12 +302,31 @@ class CampaignCollaboratorController extends Controller
             }
         }
 
+        // Una sola actualización para marcar a todos los encolados
+        foreach (array_chunk($notifiedDocs, 500) as $chunk) {
+            DB::table(self::PIVOT_TABLE)
+                ->where('idcampaign', $campaign->id)
+                ->where('nit', (string) $campaign->nit)
+                ->whereIn('documento', $chunk)
+                ->update([
+                    'email_notified' => 1,
+                    'updated_at'     => now(),
+                ]);
+        }
+
+        $message = "Envío iniciado: {$ok} encolado(s)";
+        if ($skipped)           { $message .= ", {$skipped} con email inválido"; }
+        if ($fail)              { $message .= ", {$fail} con error"; }
+        if (count($duplicates)) { $message .= ', ' . count($duplicates) . ' con email repetido (no se reenvía; use Reenviar)'; }
+        $message .= '.';
+
         return response()->json([
-            'message' => 'Envío iniciado.',
-            'total'   => $rows->count(),
-            'sent'    => $ok,
-            'failed'  => $fail,
-            'skipped' => $skipped,
+            'message'    => $message,
+            'total'      => $rows->count(),
+            'sent'       => $ok,
+            'failed'     => $fail,
+            'skipped'    => $skipped,
+            'duplicates' => $duplicates,
         ], 200);
     }
 

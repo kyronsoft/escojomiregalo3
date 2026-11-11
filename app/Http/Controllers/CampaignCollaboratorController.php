@@ -221,7 +221,7 @@ class CampaignCollaboratorController extends Controller
             $nombre    = (string) $r->nombre;
             $documento = (string) $r->documento;
 
-            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if (!self::isDeliverableEmail($email)) {
                 Log::warning('Notificación masiva omitida: colaborador sin email válido', [
                     'documento' => $documento,
                     'email'     => $email,
@@ -306,6 +306,19 @@ class CampaignCollaboratorController extends Controller
         ], 200);
     }
 
+    /**
+     * Valida formato aceptado por Resend: además de FILTER_VALIDATE_EMAIL
+     * exige TLD de al menos 2 letras (ej. rechaza "usuario@dominio.com.c").
+     */
+    private static function isDeliverableEmail(string $email): bool
+    {
+        $email = trim($email);
+
+        return $email !== ''
+            && filter_var($email, FILTER_VALIDATE_EMAIL) !== false
+            && preg_match('/\.[A-Za-z]{2,}$/', $email) === 1;
+    }
+
     public function emailOne(Campaign $campaign, Request $request)
     {
         $validated = $request->validate([
@@ -333,7 +346,7 @@ class CampaignCollaboratorController extends Controller
             ], 422);
         }
 
-        if (empty($row->email) || !filter_var($row->email, FILTER_VALIDATE_EMAIL)) {
+        if (!self::isDeliverableEmail((string) $row->email)) {
             Log::warning('Notificación individual omitida: colaborador sin email válido', [
                 'documento' => $row->documento,
                 'email'     => $row->email,

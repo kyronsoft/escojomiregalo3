@@ -6,7 +6,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\Middleware\RateLimited;
+use App\Jobs\Middleware\ThrottlePerSecond;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
@@ -27,9 +29,17 @@ class SendWelcomeCredentialsMail implements ShouldQueue
   /** Imagen de fondo opcional (URL absoluta o relativa) */
   public ?string $backgroundImage = null;
 
-  public int $tries = 5;
+  // Los re-lanzamientos por throttle no deben agotar intentos: se limita por tiempo
+  // y por excepciones reales (maxExceptions).
+  public int $tries = 0;
+  public int $maxExceptions = 5;
   public int $timeout = 120;
   public array $backoff = [5, 15, 30, 60];
+
+  public function retryUntil(): \DateTimeInterface
+  {
+    return now()->addHours(2);
+  }
 
   public function __construct(
     string $to,
@@ -51,6 +61,15 @@ class SendWelcomeCredentialsMail implements ShouldQueue
 
   public function handle(): void
   {
+    // El hash bcrypt se hace aquí (en el worker) y no en la petición HTTP,
+    // donde 400+ hashes superaban el max_execution_time de 30 s.
+    DB::table('users')
+      ->where('documento', $this->rawPassword)
+      ->update([
+        'password'   => Hash::make($this->rawPassword),
+        'updated_at' => now(),
+      ]);
+
     $campaign = $this->campaignId
       ? \App\Models\Campaign::with('empresa')->find($this->campaignId)
       : null;
@@ -139,10 +158,10 @@ class SendWelcomeCredentialsMail implements ShouldQueue
       ));
   }
 
-  /** Limita el envío a Resend mediante el limiter 'resend' (ver RouteServiceProvider) */
+  /** Resend permite 10 req/s: se deja margen con 8/s */
   public function middleware(): array
   {
-    return [new RateLimited('resend')];
+    return [new ThrottlePerSecond('resend', 8)];
   }
 
   public function failed(\Throwable $e): void

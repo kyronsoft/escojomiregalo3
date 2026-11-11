@@ -245,14 +245,10 @@ class CampaignCollaboratorController extends Controller
             }
 
             try {
-                $affected = DB::table('users')
-                    ->where('documento', $documento)
-                    ->update([
-                        'password'   => Hash::make($documento),
-                        'updated_at' => now(),
-                    ]);
+                // El cambio de password (bcrypt) lo hace el job en la cola
+                $exists = DB::table('users')->where('documento', $documento)->exists();
 
-                if ($affected === 0) {
+                if (!$exists) {
                     Log::warning('Usuario no encontrado para actualización de password', [
                         'documento' => $documento,
                         'email'     => $email,
@@ -361,14 +357,10 @@ class CampaignCollaboratorController extends Controller
         }
 
         try {
-            $affected = DB::table('users')
-                ->where('documento', $documento)
-                ->update([
-                    'password'   => Hash::make($documento),
-                    'updated_at' => now(),
-                ]);
+            // El cambio de password (bcrypt) lo hace el job en la cola
+            $exists = DB::table('users')->where('documento', $documento)->exists();
 
-            if ($affected === 0) {
+            if (!$exists) {
                 Log::warning('Usuario no encontrado para actualización de password (envío individual)', [
                     'documento' => $documento,
                     'email'     => $email,

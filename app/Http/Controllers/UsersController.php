@@ -121,7 +121,7 @@ class UsersController extends Controller
             ]);
         }
 
-        if (!empty($data['send_credentials']) && $email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!empty($data['send_credentials']) && $email && filter_var($email, FILTER_VALIDATE_EMAIL) && preg_match('/\.[A-Za-z]{2,}$/', $email) === 1) {
             try {
                 dispatch(new SendWelcomeCredentialsMail(
                     to: $email,

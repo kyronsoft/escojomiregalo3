@@ -28,7 +28,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
 
     protected array $stats = [
         'colaboradores' => ['creados' => 0, 'actualizados' => 0, 'omitidos' => 0, 'nit_conflicto' => 0],
-        'users'         => ['creados' => 0, 'actualizados' => 0],
+        'users'         => ['creados' => 0, 'actualizados' => 0, 'reabiertos' => 0],
         'hijos'         => ['upserts' => 0, 'omitidos_sin_nombre' => 0],
         'pivot'         => ['upserts' => 0],
         'errores'       => [],
@@ -395,6 +395,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
 
                 // === 6) Hijos (opcional) ===
                 $children = $this->extractChildrenFromRow($row);
+                $hijoNuevo = false;
                 foreach ($children as $child) {
                     $identificacion = (string)($child['identificacion'] ?: $documento);
 
@@ -404,7 +405,7 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     }
 
                     // en el updateOrCreate de hijos
-                    ColaboradorHijo::updateOrCreate(
+                    $hijo = ColaboradorHijo::updateOrCreate(
                         [
                             'identificacion' => $identificacion,
                             'nombre_hijo'    => (string)$child['nombre_hijo'],
@@ -416,8 +417,22 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                         ]
                     );
 
+                    if ($hijo->wasRecentlyCreated) {
+                        $hijoNuevo = true;
+                    }
 
                     $this->stats['hijos']['upserts']++;
+                }
+
+                // Si la carga trae un hijo nuevo para un colaborador que ya finalizó,
+                // se reabre su acceso para que pueda elegir juguete para ese hijo.
+                // Los hijos ya seleccionados no se tocan.
+                if ($hijoNuevo && $user && $user->finalizado_at) {
+                    DB::table('users')->where('id', $user->id)->update([
+                        'finalizado_at' => null,
+                        'updated_at'    => now(),
+                    ]);
+                    $this->stats['users']['reabiertos']++;
                 }
 
                 DB::commit();

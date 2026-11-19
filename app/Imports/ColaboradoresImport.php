@@ -26,11 +26,18 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
 
     private const PIVOT_TABLE = 'campaing_colaboradores';
 
+    /** Rótulos de la columna documento que nunca son un documento real. */
+    private const ENCABEZADOS_DOCUMENTO = [
+        'documento', 'numero_documento', 'numero documento', 'número documento', 'numero de documento',
+        'nro_documento', 'no_documento', 'num_documento', 'cedula', 'cédula', 'identificacion',
+        'identificación', 'documento_identidad',
+    ];
+
     protected array $stats = [
         'colaboradores' => ['creados' => 0, 'actualizados' => 0, 'omitidos' => 0, 'nit_conflicto' => 0],
         'users'         => ['creados' => 0, 'actualizados' => 0],
         'hijos'         => ['upserts' => 0, 'omitidos_sin_nombre' => 0],
-        'pivot'         => ['upserts' => 0],
+        'pivot'         => ['upserts' => 0, 'reactivados' => 0],
         'errores'       => [],
     ];
 
@@ -134,9 +141,10 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
     {
         if ($value === null) return '';
 
-        // Si ya es string, solo trim
+        // Si ya es string, quita espacios invisibles (NBSP, BOM, zero-width)
+        // que Excel suele dejar al copiar encabezados, y luego recorta.
         if (is_string($value)) {
-            return trim($value);
+            return trim($this->limpiarInvisibles($value));
         }
 
         // Si es entero, cast directo a string
@@ -152,7 +160,24 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
         }
 
         // Para cualquier otro tipo, convertir y recortar
-        return trim((string) $value);
+        return trim($this->limpiarInvisibles((string) $value));
+    }
+
+    /** Quita NBSP (U+00A0), BOM (U+FEFF) y espacios de ancho cero (U+200B..U+200D). */
+    private function limpiarInvisibles(string $value): string
+    {
+        return preg_replace('/[\x{00A0}\x{FEFF}\x{200B}-\x{200D}]/u', '', $value) ?? $value;
+    }
+
+    /**
+     * Detecta una fila que es en realidad el encabezado de la plantilla repetido
+     * dentro del archivo (p.ej. "documento" con NBSP). Laravel Excel solo usa la
+     * primera fila como encabezado, así que una copia posterior llega como dato.
+     */
+    private function esFilaEncabezado(string $documento): bool
+    {
+        $clave = mb_strtolower($documento, 'UTF-8');
+        return in_array($clave, self::ENCABEZADOS_DOCUMENTO, true);
     }
 
 
@@ -189,6 +214,20 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
             $row = is_array($row) ? $row : $row->toArray();
             $excelRow  = $index + 2; // encabezados ocupan la fila 1
             $documento = $this->normalizeDocumento($row['documento'] ?? null);
+
+            // Encabezado repetido dentro del archivo: no es un colaborador, se omite.
+            if ($this->esFilaEncabezado($documento)) {
+                DB::table('importerrors')->insert([
+                    'row'        => $excelRow,
+                    'attribute'  => 'documento',
+                    'errors'     => 'Fila de encabezado repetida dentro del archivo. Se omitió.',
+                    'values'     => Str::limit(json_encode($row, JSON_UNESCAPED_UNICODE), 255, ''),
+                    'created_at' => now(),
+                ]);
+                $this->stats['colaboradores']['omitidos']++;
+                continue;
+            }
+
             $nombre    = trim((string)($row['nombre']    ?? ''));
             $email     = trim((string)($row['email']     ?? ''));
             $direccion = trim((string)($row['direccion'] ?? ''));
@@ -217,31 +256,9 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                 $this->emailByDocumento[$documento] = $email;
             }
 
-            // === 0) Respetar el retiro manual del colaborador de esta campaña ===
-            // Si el admin lo quito desde la pantalla (tombstone en el pivot), la
-            // recarga del Excel NO lo vuelve a vincular ni reescribe sus datos.
-            $tombstoned = DB::table(self::PIVOT_TABLE)
-                ->where('idcampaign', $this->campaignId)
-                ->where('documento', $documento)
-                ->where('nit', $this->nit)
-                ->whereNotNull('deleted_at')
-                ->exists();
-
-            if ($tombstoned) {
-                DB::table('importerrors')->insert([
-                    'row'        => $excelRow,
-                    'attribute'  => 'documento',
-                    'errors'     => 'Colaborador omitido: fue removido manualmente de la campaña.',
-                    'values'     => json_encode([
-                        'documento' => $documento,
-                        'campaign'  => $this->campaignId,
-                    ], JSON_UNESCAPED_UNICODE),
-                    'created_at' => now(),
-                ]);
-                $this->stats['colaboradores']['omitidos']++;
-                continue;
-            }
-
+            // Si el colaborador fue retirado manualmente de la campaña (tombstone
+            // en el pivot), la recarga lo vuelve a vincular: se limpia deleted_at
+            // en el paso 2 y se reactiva con sus datos del archivo.
             DB::beginTransaction();
             try {
                 // === 1) Upsert Colaborador (por documento) ===
@@ -298,17 +315,23 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                     ->first();
 
                 if ($pivotRow) {
-                    // Ya vinculado: solo se refresca la sucursal.
+                    // Ya vinculado: se refresca la sucursal y, si estaba retirado
+                    // manualmente, se reactiva (deleted_at = NULL).
                     // NO se tocan notify_enabled ni email_notified: los gestiona el admin.
+                    $cambios = [];
                     if ($sucursal !== '' && $sucursal !== $pivotRow->sucursal) {
+                        $cambios['sucursal'] = $sucursal;
+                    }
+                    if ($pivotRow->deleted_at !== null) {
+                        $cambios['deleted_at'] = null;
+                        $this->stats['pivot']['reactivados']++;
+                    }
+                    if ($cambios) {
                         DB::table(self::PIVOT_TABLE)
                             ->where('idcampaign', $this->campaignId)
                             ->where('documento', $documento)
                             ->where('nit', $this->nit)
-                            ->update([
-                                'sucursal'   => $sucursal,
-                                'updated_at' => now(),
-                            ]);
+                            ->update($cambios + ['updated_at' => now()]);
                     }
                 } else {
                     // Un colaborador convocado a la campaña queda habilitado para
@@ -415,7 +438,6 @@ class ColaboradoresImport implements ToCollection, WithHeadingRow, SkipsEmptyRow
                             'rango_edad' => $this->normalizeEdad($child['rango_edad'] ?? null), // <- entero o null
                         ]
                     );
-
 
                     $this->stats['hijos']['upserts']++;
                 }

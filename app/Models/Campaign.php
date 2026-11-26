@@ -33,6 +33,7 @@ class Campaign extends Model
         'mensaje_confirmacion',
         'dashboard',
         'mostrargenero',
+        'multiples_referencias',
     ];
 
     protected $casts = [
@@ -41,6 +42,7 @@ class Campaign extends Model
         'idtipo'     => 'integer',
         'doc_yeminus' => 'integer',
         'dashboard'  => 'boolean',
+        'multiples_referencias' => 'boolean',
         'nit' => 'string'
     ];
 

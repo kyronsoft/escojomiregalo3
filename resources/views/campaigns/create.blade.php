@@ -122,6 +122,21 @@
                                 @enderror
                             </div>
 
+                            <div class="col-12 col-md-3">
+                                <label class="form-label" for="multiples_referencias">Varias referencias por hijo</label>
+                                <div class="form-check form-switch mt-2">
+                                    {{-- Siempre envía 0 si el switch no se marca (1 referencia por hijo) --}}
+                                    <input type="hidden" name="multiples_referencias" value="0">
+                                    <input class="form-check-input" type="checkbox" id="multiples_referencias" name="multiples_referencias"
+                                        value="1" {{ old('multiples_referencias') ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="multiples_referencias">Activar</label>
+                                </div>
+                                <div class="form-text">Si se activa, el colaborador puede elegir más de una referencia por cada hijo.</div>
+                                @error('multiples_referencias')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                            </div>
+
                             <div class="col-12">
                                 <label class="form-label" for="subject">Asunto Correo Invitación</label>
                                 <input type="text" class="form-control @error('subject') is-invalid @enderror"

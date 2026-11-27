@@ -238,18 +238,25 @@ class CartController extends Controller
             ]);
         }
 
-        // ===== Solo 1 selección por hijo en esa campaña =====
-        $yaHay = Seleccionado::where('documento', $userDoc)
-            ->where('idcampaing', $campaignId)
-            ->where('idhijo', $hijo->id)
-            ->exists();
+        // ===== Regla de selección por hijo en esa campaña =====
+        // - Campaña con selección única (por defecto): solo 1 referencia por hijo.
+        // - Campaña con múltiples referencias: el hijo puede tener varias, pero
+        //   no repetir la misma referencia (se valida dentro de la transacción).
+        $permiteMultiples = (bool) Campaign::whereKey($campaignId)->value('multiples_referencias');
 
-        if ($yaHay) {
-            return back()->with('active_child_id', $hijo->id)->with('swal', [
-                'icon'  => 'warning',
-                'title' => 'Solo 1 por hijo(a)',
-                'text'  => "Ya elegiste un juguete para {$hijo->nombre_hijo}.",
-            ]);
+        if (!$permiteMultiples) {
+            $yaHay = Seleccionado::where('documento', $userDoc)
+                ->where('idcampaing', $campaignId)
+                ->where('idhijo', $hijo->id)
+                ->exists();
+
+            if ($yaHay) {
+                return back()->with('active_child_id', $hijo->id)->with('swal', [
+                    'icon'  => 'warning',
+                    'title' => 'Solo 1 por hijo(a)',
+                    'text'  => "Ya elegiste un juguete para {$hijo->nombre_hijo}.",
+                ]);
+            }
         }
 
         // ===== Reservar stock e insertar selección (atómico) =====
@@ -257,9 +264,12 @@ class CartController extends Controller
         // agregar al carrito (no al finalizar), para que el stock disponible sea
         // real y no se desfase entre usuarios concurrentes que seleccionan pero
         // nunca finalizan.
-        $sinStock = false;
+        $sinStock  = false;
+        $duplicada = false;
 
-        DB::transaction(function () use ($userDoc, $campaignId, $hijo, $toy, &$sinStock) {
+        DB::transaction(function () use ($userDoc, $campaignId, $hijo, $toy, &$sinStock, &$duplicada) {
+            // Bloquear el juguete antes de validar: serializa dobles clics y
+            // peticiones concurrentes sobre la misma referencia.
             $lockedToy = CampaignToy::where('id', $toy->id)->lockForUpdate()->first();
 
             if (!$lockedToy || (int) $lockedToy->unidades <= 0) {
@@ -267,17 +277,26 @@ class CartController extends Controller
                 return;
             }
 
-            Seleccionado::updateOrCreate(
-                [
-                    'documento'  => $userDoc,
-                    'idcampaing' => $campaignId,
-                    'idhijo'     => $hijo->id,
-                    'referencia' => $toy->referencia,
-                ],
-                [
-                    'selected'   => 'Y',
-                ]
-            );
+            // Evita reservar dos veces la misma referencia para el mismo hijo
+            // (sin esto, un doble clic descontaría stock dos veces).
+            $existe = Seleccionado::where('documento', $userDoc)
+                ->where('idcampaing', $campaignId)
+                ->where('idhijo', $hijo->id)
+                ->where('referencia', $lockedToy->referencia)
+                ->exists();
+
+            if ($existe) {
+                $duplicada = true;
+                return;
+            }
+
+            Seleccionado::create([
+                'documento'  => $userDoc,
+                'idcampaing' => $campaignId,
+                'idhijo'     => $hijo->id,
+                'referencia' => $lockedToy->referencia,
+                'selected'   => 'Y',
+            ]);
 
             $lockedToy->decrement('unidades');
             $lockedToy->increment('seleccionadas');
@@ -288,6 +307,14 @@ class CartController extends Controller
                 'icon'  => 'error',
                 'title' => 'Sin stock',
                 'text'  => "La referencia {$toy->referencia} ya no tiene unidades disponibles.",
+            ]);
+        }
+
+        if ($duplicada) {
+            return back()->with('active_child_id', $hijo->id)->with('swal', [
+                'icon'  => 'warning',
+                'title' => 'Ya está seleccionado',
+                'text'  => "La referencia {$toy->referencia} ya está en la selección de {$hijo->nombre_hijo}.",
             ]);
         }
 

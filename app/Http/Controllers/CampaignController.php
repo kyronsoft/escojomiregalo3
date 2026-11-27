@@ -72,11 +72,13 @@ class CampaignController extends Controller
             'mensaje_seleccion' => ['nullable', 'string', 'max:255'],
             'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
             'dashboard'   => ['required', 'boolean'], // 👈 ahora requerido porque siempre llega (0/1)
+            'multiples_referencias' => ['nullable', 'boolean'],
         ]);
 
         // Normalizaciones
         $data['demo']        = $request->input('demo', 'off');   // 'on' | 'off'
         $data['dashboard']   = $request->boolean('dashboard');   // true/false a partir de '0'/'1'
+        $data['multiples_referencias'] = $request->boolean('multiples_referencias');
         $data['doc_yeminus'] = (int) $request->input('doc_yeminus', 0);
         $data['boton_login_color'] = $request->filled('boton_login_color') ? strtoupper((string) $request->input('boton_login_color')) : null;
         $data['boton_login_texto'] = trim((string) $request->input('boton_login_texto')) ?: null;
@@ -146,12 +148,14 @@ class CampaignController extends Controller
             'mensaje_confirmacion' => ['nullable', 'string', 'max:1000'],
             'dashboard'     => ['required', 'boolean'],
             'mostrargenero' => ['required', 'boolean'], // 👈 nuevo campo
+            'multiples_referencias' => ['nullable', 'boolean'],
         ]);
 
         // Normalizaciones
         $data['demo']          = $request->input('demo', 'off');
         $data['dashboard']     = $request->boolean('dashboard');
         $data['mostrargenero'] = $request->boolean('mostrargenero'); // 👈 guardar flag
+        $data['multiples_referencias'] = $request->boolean('multiples_referencias');
         $data['doc_yeminus']   = (int) $request->input('doc_yeminus', 0);
         $data['boton_login_color'] = $request->filled('boton_login_color') ? strtoupper((string) $request->input('boton_login_color')) : null;
         $data['boton_login_texto'] = trim((string) $request->input('boton_login_texto')) ?: null;
